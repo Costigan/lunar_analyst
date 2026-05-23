@@ -1,0 +1,684 @@
+{
+  "responseHeader": {
+    "status": 0,
+    "QTime": 1,
+    "params": {
+      "facet.field": [
+        "productCat1",
+        "productCat2",
+        "productCat3",
+        "productType",
+        "mission",
+        "instrument"
+      ],
+      "indent": "on",
+      "start": "0",
+      "fq": "{!join from=item_UUID fromIndex=acl_core to=item_UUID}group:public",
+      "sort": "sortPriority desc,itemType desc, resolution asc,title asc",
+      "rows": "1000",
+      "version": "2.2",
+      "q": "trekProjection:\"urn\\:ogc\\:def\\:crs\\:IAU2000\\:\\:30120\" AND itemType:(\"nomenclature\",\"product\",\"bookmark\",\"autolayer\",\"tour\",\"dataset\",\"annotation\",\"zannotation\") AND -searchable:false",
+      "facet.limit": "250",
+      "facet.mincount": "0",
+      "wt": "json",
+      "facet": "true",
+      "facet.sort": "title asc,productCat1 asc,productCat2 asc,productCat3 asc,productType asc"
+    }
+  },
+  "response": {
+    "numFound": 883,
+    "start": 0,
+    "docs": [
+      {
+        "productLabel": "tour",
+        "itemType": "tour",
+        "mediaURL": [
+          "https://trek.nasa.gov/tiles/Earth/files/d80e15ff-b66c-48f2-9382-9df1d7eb4e90.jpeg"
+        ],
+        "shape": "POLYGON((23654.6572 -881702.7038,23654.6572 -30235.0392,383170 -30235.0392,383170 -881702.7038,23654.6572 -881702.7038))",
+        "bbox": "23654.6572,-30235.0392,383170,-881702.7038",
+        "description": "Endurance-A would land on a CLPS lander in central SPA, traverse out of SPA through the Poincar&eacute; and Schr&ouml;dinger basins, collect a total of 100-kg of samples from 12 sites, and deliver those samples to Artemis astronauts at the south pole, who retrieve the samples and bring them to Earth.<br/><br/>This tour visits 11 of these sites and is available in both EQ and SP projections. The EQ projection (Global Map) covers all 11 sites whereas the SP projection (South Pole Map) encompasses only 5 of the 11 sites but without the distortion which occurs in polar regions of the Global Map. To change projections, use the <span class=\"fas fa-globe\"></span> icon in the bottom left of the screen.<br/><br/>The path and science stations used in this tour are available as individual data products that can be added to and viewed in the map, independently of the tour. Use the <span class=\"fas fa-layer-group\"></span> icon to open the data panel and search for \"Endurance-A\".",
+        "isContainer": true,
+        "mediaType": "image",
+        "title": "Endurance-A Concept",
+        "searchable": true,
+        "children": [
+          "4e6cbff5-533b-4b58-8740-70d76d445a59",
+          "48722c73-459d-4420-8db8-aa228b9f52ac",
+          "40255839-b1f1-4972-a47e-a8c77da3f28a",
+          "7cab2a46-a3a6-4d0b-bbbc-369549c386de",
+          "e853ccee-c05b-4558-8289-f2c49c8cf6be",
+          "a9dd37aa-7b04-4208-8203-838206b1b273",
+          "5e431406-9a5b-4f62-a255-9b10e98e252d",
+          "71ae0970-847c-42f4-bded-beec8809aa2a"
+        ],
+        "item_UUID": "a88fc299-b412-4aa9-af0c-9c1de7d9edf9",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "productType": "tour",
+        "_version_": 1777135638955425800
+      },
+      {
+        "productLabel": "tour",
+        "itemType": "tour",
+        "mediaURL": [
+          "https://trek.nasa.gov/tiles/Earth/files/ffe09309-df1f-4b89-9af4-0d8d5ccfb962.jpg"
+        ],
+        "shape": "POLYGON((-931100 -931100,-931100 931100,931100 931100,931100 -931100,-931100 -931100))",
+        "bbox": "-931100,931100,931100,-931100",
+        "description": "<a href=\"https://trailblazer.caltech.edu/\" target=\"_blank\" rel=\"noopener noreferrer\">Lunar Trailblazer</a> is a pioneering small satellite mission for lunar water and lunar geology. Its <a href=\"https://trailblazer.caltech.edu/objectives.html\" target=\"_blank\" rel=\"noopener noreferrer\">goal</a> is to map the form, abundance, and distribution of water on the Moon to understand the lunar water cycle. Lunar Trailblazer’s data will provide key information for future lunar surface exploration by mapping water ice and geologic units at high spatial resolution important to robotic and human exploration. Trailblazer will simultaneously measure composition (water and mineralogy), temperature, and thermophysical properties from a 100&plusmn;30 km lunar polar orbit.<br/><br/>\n\nLunar Trailblazer carries <a href=\"https://trailblazer.caltech.edu/instruments.html\" target=\"_blank\" rel=\"noopener noreferrer\">two instruments</a> to achieve its science objectives: the High-resolution Volatiles and Minerals Moon Mapper (HVM<sup>3</sup>) from NASA's Jet Propulsion Laboratory (JPL), and the Lunar Thermal Mapper (LTM) from the University of Oxford, contributed by the United Kingdom Space Agency (UKSA). When used in conjunction, these two instruments provide the ability to simultaneously identify the various forms of water on the Moon, mineralogy, and temperature.<br/><br/>\n\nThe HVM<sup>3</sup> instrument is a pushbroom short-wave infrared imaging spectrometer based on the design of the Moon Mineralogy Mapper (M<sup>3</sup>) instrument previously flown on the Chandraayan-1 probe. M<sup>3</sup> advanced our understanding of lunar mineralogy and was one of the first instruments to detect signs of hydration (water and hydroxyl) in sunlit regions of the Moon. HVM<sup>3</sup> will build upon and extend M<sup>3</sup>’s legacy by extending the range of wavelengths over which data will be collected to determine the form of water and by using its enhanced sensitivity for measuring water ice in permanently shadowed regions of the Moon.<br/><br/>\n\nThe LTM instrument will gather mid-wave infrared data to derive mineralogical composition and measure lunar surface temperatures. Measuring water and temperature at the same time will lead to improved understanding of factors that control the distribution of water. Lunar Trailblazer will be launched as a rideshare payload on Intuitive Machines’ second lunar lander (IM-2) launch.<br/><br/>\n\n<hr/>\n\nThis tour visits 8 sites of interest and is available in all 3 projections - EQ, SP, and NP. The EQ projection (Global Map) covers all 8 sites whereas the SP projection (South Pole Map) encompasses only 3 of the 8 sites and the NP projection (North Pole Map) only 1 site. However, the polar projections offer views of the data without the distortion which occurs in polar regions of the Global Map. To change projections, use the <span class=\"fas fa-globe\"></span> icon in the bottom left of the screen.",
+        "isContainer": true,
+        "mediaType": "image",
+        "title": "Lunar Trailblazer",
+        "searchable": true,
+        "children": [
+          "92800b68-7b3f-4bf2-8844-38b567efacb5",
+          "be3380a9-78c4-405c-bf0b-d96f61bbf746",
+          "8aa93081-bbcd-4dc9-8886-ab68781dfafb",
+          "23b4329b-4730-4f6c-87eb-1903a071cd68"
+        ],
+        "item_UUID": "3d408605-fe04-45a9-927b-874812f18652",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "productType": "tour",
+        "_version_": 1779584530100781000
+      },
+      {
+        "bbox": "-170436.37939453096,-208965.16845703134,224483.70849609346,268898.8403320305",
+        "children": [
+          "0343cab4-6df2-4811-ab13-fc6dd35f27fe",
+          "c90ffac8-01a8-4183-b98a-5dceaa87d9fe",
+          "b71b01c5-1937-436f-bafc-0d08226478e5",
+          "8da1325f-279e-4cfb-989c-2738146e9f4d",
+          "f1158ab9-cbe3-488e-9446-b79382f97521",
+          "56e9fe54-6b9d-44a1-98f5-02b3cff62e5a",
+          "c9566cb4-9736-4abb-9bc3-4dfa52ac9813",
+          "cd8a60e1-55a8-4a23-be49-af4876933661",
+          "f7315027-a57d-4258-b976-2cf46dbd471d",
+          "4ebaabf6-ba55-4f3a-ac28-27290af78467",
+          "9f9d8f2a-3036-49b5-b2f2-d9de14ac47bc"
+        ],
+        "description": "<p>On August 19, 2022, NASA announced 13 candidate landing regions near the lunar South Pole as it continued preparations to send astronauts in a new generation of explorations of the Moon as part of the Artemis missions. Each region contains multiple potential landing sites for Artemis III, which will be the first of the Artemis missions to bring crew to the lunar surface, including the first woman to set foot on the Moon. Each of these regions is located within six degrees of latitude of the lunar South Pole. These areas were selected based upon a variety of factors including proximity to key geologic features (particularly permanently shadowed regions often found in near-polar craters), slope and smoothness of terrain enabling safe landing, lighting conditions, and windows for communication with Earth.</p><p>The 13 regions identified are:<ul><li> Faustini Rim A</li><li>Peak Near Shackleton</li><li>Connecting Ridge</li><li>Connecting Ridge Extension</li><li>de Gerlache Rim 1</li><lide Gerlache Rim 2</li><li>de Gerlache-Kocher Massif</li><li>Haworth</li><li>Malapert Massif</li><li>Mons Mouton Plateau</li><li>Nobile Rim 1</li><li>Nobile Rim 2</li><li>Amundsen Rim</li>",
+        "isContainer": true,
+        "itemType": "tour",
+        "mediaType": "image",
+        "mediaURL": [
+          "https://trek.nasa.gov/tiles/Earth/files/2c6bd1a5-67f7-4d68-814d-01b70fac3381.jpg"
+        ],
+        "productLabel": "tour",
+        "productType": "tour",
+        "searchable": true,
+        "shape": "POLYGON((-170436.37939453096 -208965.16845703134,-170436.37939453096 268898.8403320305,224483.70849609346 268898.8403320305,224483.70849609346 -208965.16845703134,-170436.37939453096 -208965.16845703134))",
+        "title": "The Artemis Regions",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "item_UUID": "6e0689bf-a852-4ab6-8608-2a3eb730627a",
+        "_version_": 1759018463099093000
+      },
+      {
+        "item_DBID": "292022",
+        "item_UUID": "2a261565-52ca-42e2-ab67-01427512dbea",
+        "productLabel": "A3_Named_regions_SP",
+        "title": "Artemis III Candidate Landing Regions, S Pole",
+        "fileSize": [
+          3565
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Landing Site",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2022-08-22T21:24:58Z",
+        "description": "This layer depicts the 13 candidate landing regions for Artemis III announced by NASA on August 19 2022. Each region contains multiple potential landing sites for Artemis III, which will be the first of the Artemis missions to bring crew to the lunar surface, including the first woman to set foot on the Moon.\n\nEach of these regions is located within six degrees of latitude of the lunar South Pole and, collectively, contain diverse geologic features. Together, the regions provide landing options for all potential Artemis III launch opportunities. Specific landing sites are tightly coupled to the timing of the launch window, so multiple regions ensure flexibility to launch throughout the year.\n\nTo select the regions, an agencywide team of scientists and engineers assessed the area near the lunar South Pole using data from NASA’s Lunar Reconnaissance Orbiter and decades of publications and lunar science findings. In addition to considering launch window availability, the team evaluated regions based on their ability to accommodate a safe landing, using criteria including terrain slope, ease of communications with Earth, and lighting conditions. To determine accessibility, the team also considered combined capabilities of the Space Launch System rocket, the Orion spacecraft, and the SpaceX-provided Starship human landing system.\n\nAll regions considered are scientifically significant because of their proximity to the lunar South Pole, which is an area that contains permanently shadowed regions rich in resources and in terrain unexplored by humans.\n\nThe analysis team weighed other landing criteria with specific Artemis III science objectives, including the goal to land close enough to a permanently shadowed region to allow crew to conduct a moonwalk, while limiting disturbance when landing. This will allow crew to collect samples and conduct scientific analysis in an uncompromised area, yielding important information about the depth, distribution, and composition of water ice that was confirmed at the Moon’s South Pole.\n\nThe team identified regions that can fulfill the moonwalk objective by ensuring proximity to permanently shadowed regions, and also factored in other lighting conditions. All 13 regions contain sites that provide continuous access to sunlight throughout a 6.5-day period – the planned duration of the Artemis III surface mission. Access to sunlight is critical for a long-term stay at the Moon because it provides a power source and minimizes temperature variations.\n\nSeveral of the proposed sites within the regions are located among some of the oldest parts of the Moon, and together with the permanently shadowed regions, provide the opportunity to learn about the history of the Moon through previously unstudied lunar materials. \n\nNASA will select sites within regions for Artemis III after it identifies the mission’s target launch dates, which dictate transfer trajectories and surface environment conditions.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Feature",
+          "Mosaic"
+        ],
+        "shape": "POLYGON((-123400.000 132000.000,-123400.000 -66099.999,173999.999 -66099.999,173999.999 132000.000,-123400.000 132000.000))",
+        "bbox": "-123400,-66099.999,173999.999,132000",
+        "_version_": 1741898119751139300
+      },
+      {
+        "item_DBID": "292466",
+        "item_UUID": "885ad6cd-e981-428f-a11c-9e88a30344c9",
+        "productLabel": "Endurance_A_Concept_AZ_Filter_Path_Coverage_SP",
+        "title": "Endurance-A Concept Azimuth Filter Path Coverage",
+        "fileSize": [
+          288300
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:34Z",
+        "description": "This layer represents the NAC coverage along the Endurance-A concept path that overlap and have a similar azimuth. When creating mosaics, lighting conditions should be similar for best results. Ideally difference in azimuth should not be more than a 20-degree difference. All 8,999 NACs have been filtered by azimuths of 165&deg; &le; to &le; 185&deg;. There are 1,282 fit the solar azimuth angle constrains resulting in 66.7% of the path covered with images within this filtering constraint.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930650.000000,383170.000019 -930650.000000,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "trekBbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "bbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "_version_": 1782022547824443400
+      },
+      {
+        "item_DBID": "292469",
+        "item_UUID": "2f27a4e0-1ba2-4bce-90f7-c932622d9e0d",
+        "productLabel": "Endurance_A_Concept_EM_Filter_Path_Coverage_SP",
+        "title": "Endurance-A Concept Emission Filter Path Coverage",
+        "fileSize": [
+          193995
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:46Z",
+        "description": "This layer represents all overlapping NACs along the Endurance-A concept path in which the emission angles of the overlaps varied by over 2 degrees. It is recommended to have an emission angle difference of at least 2 degrees over overlapping images to create DEMs. Approximately 14.8% of the path is covered when considering emission angle variance.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930650.000000,383170.000019 -930650.000000,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "trekBbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "bbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "_version_": 1782022560185057300
+      },
+      {
+        "item_DBID": "292461",
+        "item_UUID": "9fc596a0-51b1-4e8c-a7f6-bccc1e60ab77",
+        "productLabel": "Endurance_A_Concept_NAC_Crater_Path_Coverage_SP",
+        "title": "Endurance-A Concept NAC Crater Path Coverage",
+        "fileSize": [
+          263074
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:25Z",
+        "description": "This layer represents NAC coverage along the Endurance-A concept path that would be most suitable for crater detection. It is recommended to have a solar incidence angle between 50&deg; and 75&deg; for best crater detection results. Approximately 77.5% of the path is covered when considering incidence angle constraints.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930650.000000,383170.000019 -930650.000000,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "trekBbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "bbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "_version_": 1782022539202003000
+      },
+      {
+        "item_DBID": "292465",
+        "item_UUID": "ae60888b-ccd6-45e7-acc0-789fc6dac24d",
+        "productLabel": "Endurance_A_Concept_NAC_Cropped_Footprint_Path_Coverage_SP",
+        "title": "Endurance-A Concept NAC Cropped Footprint Path Coverage",
+        "fileSize": [
+          14265701
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:33Z",
+        "description": "This layer represents the NAC coverage along the Endurance-A concept path that are within 0&deg; &lt; incidence &lt; 90&deg; and 0&deg; &le; emission &le; 25&deg;. A total of 8,999 NAC strips cover the traverse path. This layer has been cropped to fit a 2km distance around the path to ensure overlapping images are constrained to overlap on the path.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((21654.657200 -28235.039200,21654.657200 -930650.000000,385170.000000 -930650.000000,385170.000000 -28235.039200,21654.657200 -28235.039200))",
+        "trekBbox": "21654.6572,-930650,385170,-28235.0392",
+        "bbox": "21654.6572,-930650,385170,-28235.0392",
+        "_version_": 1782022546518966300
+      },
+      {
+        "item_DBID": "292463",
+        "item_UUID": "adc2ec19-5c4c-44b7-81d8-8e3195827562",
+        "productLabel": "Endurance_A_Concept_NAC_Footprint_Path_Coverage_SP",
+        "title": "Endurance-A Concept NAC Footprint Path Coverage",
+        "fileSize": [
+          1858734
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:30Z",
+        "description": "This layer represents the NAC coverage along the Endurance-A concept path that are within 0&deg; &lt; incidence &lt; 90&deg; and 0&deg; &le; emission &le; 25&deg;. A total of 8,999 NAC strips cover the traverse path.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((-288475.731225 97210.135457,-288475.731225 -931050.001343,468985.777957 -931050.001343,468985.777957 97210.135457,-288475.731225 97210.135457))",
+        "trekBbox": "-288475.731225,-931050.001343,468985.777957,97210.135457",
+        "bbox": "-288475.731225,-931050.001343,468985.777957,97210.135457",
+        "_version_": 1782022543686762500
+      },
+      {
+        "item_DBID": "292468",
+        "item_UUID": "d38d0c36-95bd-4c57-b3df-32bb9ed7c7b0",
+        "productLabel": "Endurance_A_Concept_NAC_Overlap_Path_Coverage_SP",
+        "title": "Endurance-A Concept NAC Overlap Path Coverage",
+        "fileSize": [
+          291784
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:37Z",
+        "description": "This layer represents the NAC pair overlaps along the Endurance-A concept path. The path exhibits 32.65% NAC overlap coverage. Note that while the path looks entirely covered, the close-up on the right shows the path contains many gaps with no coverage.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930650.000000,383170.000019 -930650.000000,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "trekBbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "bbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "_version_": 1782022550363046000
+      },
+      {
+        "item_DBID": "292462",
+        "item_UUID": "4a833e9d-86aa-4e53-9eec-7677df582816",
+        "productLabel": "Endurance_A_Concept_NAC_Rock_Path_Coverage_SP",
+        "title": "Endurance-A Concept NAC Rock Path Coverage",
+        "fileSize": [
+          315513
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:29Z",
+        "description": "This layer represents NAC coverage along the Endurance-A concept path that would be most suitable for rock detection. It is recommended to have a solar incidence angle between 65&deg; and 85&deg; for best rock detection results. Approximately 98.1% of the path is covered when considering incidence angle constraints.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930650.000000,383170.000019 -930650.000000,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "trekBbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "bbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "_version_": 1782022541905232000
+      },
+      {
+        "item_DBID": "292467",
+        "item_UUID": "03702683-ce2b-4cf8-b3b9-b6351753899f",
+        "productLabel": "Endurance_A_Concept_NAC_Unfiltered_Path_Coverage_SP",
+        "title": "Endurance-A Concept NAC Unfiltered Path Coverage",
+        "fileSize": [
+          319376
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:35Z",
+        "description": "This layer represents the NAC coverage along the Endurance-A concept path that are within 0&deg; &lt; incidence &lt; 90&deg; and 0&deg; &le; emission &le; 25&deg;. A total of 8,999 NAC strips cover the traverse path. From these NAC strips we find all regions along the traverse with multiple strips that overlap. This results in 94.85% of the path has multiple image overlap.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930650.000000,383170.000019 -930650.000000,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "trekBbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "bbox": "23654.657242,-930650,383170.000019,-30235.039214",
+        "_version_": 1782022549080637400
+      },
+      {
+        "item_DBID": "292583",
+        "item_UUID": "8ea71241-0ea3-4917-a9f0-61aa2ee5742f",
+        "productLabel": "EnduranceA_Path_SouthernTraverse_SP",
+        "title": "Endurance-A Concept Path, Version 1",
+        "fileSize": [
+          217185
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_sp\",GEOGCS[\"GCS_Moon_2000\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",0.0],PARAMETER[\"Scale_Factor\",1.0],PARAMETER[\"Latitude_Of_Origin\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2024-04-18T02:25:31Z",
+        "description": "Endurance is a mission concept for a long-range rover (capable of traversing nearly 2,000 km) designed to explore and ultimately collect, cache, and return 12 samples from the South Pole-Aitken (SPA) basin on the farside of the Moon. SPA is the largest and oldest (undisputed) impact basin on the Moon, and holds critical answers to Solar System chronology and planetary evolution. For the science stations selected along the Southern traverse a traversable path between each of these sites was constructed. This path accounts for several conditions including: solar illumination (lighting), topography, slope, rocks, craters, and communication windows.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Feature",
+          "Mosaic"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -930691.156439,383170.000019 -930691.156439,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "bbox": "23654.657242,-930691.156439,383170.000019,-30235.039214",
+        "AUTO_LAYER": [
+          false
+        ],
+        "_version_": 1796637596989784000
+      },
+      {
+        "item_DBID": "292606",
+        "item_UUID": "e68abc2a-59d9-4bff-9f2c-377a55938916",
+        "productLabel": "EnduranceA_Path_SouthernTraverse_v2_SP",
+        "title": "Endurance-A Concept Path, Version 2",
+        "fileSize": [
+          3973336
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_Spole\",GEOGCS[\"GCS_Moon_2000\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",0.0],PARAMETER[\"Standard_Parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2024-04-18T20:02:11Z",
+        "description": "Endurance is a mission concept for a long-range rover (capable of traversing nearly 2,000 km) designed to explore and ultimately collect, cache, and return 12 samples from the South Pole-Aitken (SPA) basin on the farside of the Moon. SPA is the largest and oldest (undisputed) impact basin on the Moon, and holds critical answers to Solar System chronology and planetary evolution. For the science stations selected along the Southern traverse a traversable path between each of these sites was constructed. This path accounts for several conditions including: solar illumination (lighting), topography, slope, rocks, craters, and communication windows.\n\nUPDATE: This path represents updates as of 04/11/2024. This path has been regenerated to include the science site of interest Site B. This path has also been regenerated using primarily the highest resolution LOLA DEMs (community standard reference) where available and LOLA+Kaguya DEM data elsewhere. DEM data used has been acquired from the PDS. Each DEM only exhibits coverage to certain extents. As such, the LOLA DEM resolution coverage for each extent is: 5m/px = 87.5S, 10m/px = 85S, 20m/px = 80S, 30m/px = 75S, and 60m/px = 60S. LOLA+ Kaguya had been used for portions of the path above 60S. This path has been color coded to visualize the portion of the path that has been generated using the different resolution DEMs. All DEMs were converted to slope maps and values &gt; 15&ordm; were masked out as hazards; excluding these areas from path generation. This path also reflects a slight change of Site 007 location from it&rsquo;s previous location to -88.695688,140.055726 since the previous location was on a pixel that exhibited &gt; 15&ordm; slope according to the LOLA 5m/px DEM data.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Feature",
+          "Mosaic"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -1067962.993500,383170.000019 -1067962.993500,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "bbox": "23654.657242,-1067962.9935,383170.000019,-30235.039214",
+        "AUTO_LAYER": [
+          false
+        ],
+        "_version_": 1796704076759564300
+      },
+      {
+        "item_DBID": "292464",
+        "item_UUID": "d2b24336-8604-4135-b2d0-e89ab190e219",
+        "productLabel": "Endurance_A_Concept_Point_Lighting_Path_Coverage_SP",
+        "title": "Endurance-A Concept Point Lighting Path Coverage",
+        "fileSize": [
+          29667
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2023-11-08T18:45:32Z",
+        "description": "This layer represents the percent lighting received along the Endurance-A concept path. Sun visibility has been computed every 10km along the path over the period of 28 days (09/01/2029 - 09/28/2029).",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "Feature"
+        ],
+        "shape": "POLYGON((25334.265700 -30235.039200,25334.265700 -930593.243900,383110.000000 -930593.243900,383110.000000 -30235.039200,25334.265700 -30235.039200))",
+        "trekBbox": "25334.2657,-930593.2439,383110,-30235.0392",
+        "bbox": "25334.2657,-930593.2439,383110,-30235.0392",
+        "_version_": 1782022545294229500
+      },
+      {
+        "item_DBID": "292342",
+        "item_UUID": "a4887374-23c6-4a22-8d27-cf6fb56dfefe",
+        "productLabel": "EnduranceA_Waypoints_SouthernTraverse_SP",
+        "title": "Endurance-A Concept Science Stations, Version 1",
+        "fileSize": [
+          9323
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Science Station",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"false_easting\",0.0],PARAMETER[\"false_northing\",0.0],PARAMETER[\"central_meridian\",0.0],PARAMETER[\"standard_parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2024-04-18T02:25:33Z",
+        "description": "Endurance is a mission concept for a long-range rover (capable of traversing nearly 2,000 km) designed to explore and ultimately collect, cache, and return 12 samples from the South Pole-Aitken (SPA) basin on the farside of the Moon. SPA is the largest and oldest (undisputed) impact basin on the Moon, and holds critical answers to Solar System chronology and planetary evolution. Science station regions were determined by the science team setting about identifying specific candidate sample sites. These sites ranged from generalized regions (e.g., Site O: sample the ejecta of Lyman), to sites defined by single pixels of remote sensing data (e.g., Site C: sample the highest thorium anomaly outside of Abbe M crater; Site F: sample noritic material identified by M3). Details about these sites are displayed by clicking each science station on the map.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Feature"
+        ],
+        "shape": "POLYGON((25411.758474 -30235.452470,25411.758474 -888649.444998,356064.142704 -888649.444998,356064.142704 -30235.452470,25411.758474 -30235.452470))",
+        "bbox": "25411.758474,-888649.444998,356064.142704,-30235.45247",
+        "_version_": 1796637598113857500
+      },
+      {
+        "item_DBID": "292605",
+        "item_UUID": "406f3b0f-539f-43a6-b9c7-b587e4788849",
+        "productLabel": "EnduranceA_Waypoints_SouthernTraverse_v2_SP",
+        "title": "Endurance-A Concept Science Stations, Version 2",
+        "fileSize": [
+          7456
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Science Station",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_Spole\",GEOGCS[\"GCS_Moon_2000\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",0.0],PARAMETER[\"Standard_Parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2024-04-18T20:02:06Z",
+        "description": "Endurance is a mission concept for a long-range rover (capable of traversing nearly 2,000 km) designed to explore and ultimately collect, cache, and return 12 samples from the South Pole-Aitken (SPA) basin on the farside of the Moon. SPA is the largest and oldest (undisputed) impact basin on the Moon, and holds critical answers to Solar System chronology and planetary evolution. Science station regions were determined by the science team setting about identifying specific candidate sample sites. These sites ranged from generalized regions (e.g., Site O: sample the ejecta of Lyman), to sites defined by single pixels of remote sensing data (e.g., Site C: sample the highest thorium anomaly outside of Abbe M crater; Site F: sample noritic material identified by M3). Details about these sites are displayed by clicking each science station on the map.\n\nUPDATE: This version of the Endurance-A science stations represents updates as of 04/11/2024. This layer has been updated to include the science site of interest Site B. This path also reflects a slight change of Site 007 location from it&rsquo;s previous location to -88.695688,140.055726 since the previous location was on a pixel that exhibited &gt; 15&ordm; slope according to the LOLA 5m/px DEM data.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Feature",
+          "Mosaic"
+        ],
+        "shape": "POLYGON((25411.758474 -30235.452470,25411.758474 -888649.444998,356064.142704 -888649.444998,356064.142704 -30235.452470,25411.758474 -30235.452470))",
+        "bbox": "25411.758474,-888649.444998,356064.142704,-30235.45247",
+        "_version_": 1796704071336329200
+      },
+      {
+        "item_DBID": "292604",
+        "item_UUID": "00a83c0f-f766-46c6-b687-1c95be2d5d86",
+        "productLabel": "EnduranceA_DEM_Resolution_Path_SouthernTraverse_v2_SP",
+        "title": "Endurance-A DEM Resolution Concept Path, Version 2",
+        "fileSize": [
+          18142
+        ],
+        "productCat1": "Feature",
+        "productCat2": "Traverse Path",
+        "mission": "Endurance-A Concept",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"Moon2000_spole\",GEOGCS[\"GCS_Moon\",DATUM[\"D_Moon_2000\",SPHEROID[\"Moon_2000_IAU_IAG\",1737400.0,0.0]],PRIMEM[\"Reference_Meridian\",0.0],UNIT[\"Degree\",0.0174532925199433]],PROJECTION[\"Stereographic_South_Pole\"],PARAMETER[\"False_Easting\",0.0],PARAMETER[\"False_Northing\",0.0],PARAMETER[\"Central_Meridian\",0.0],PARAMETER[\"Standard_Parallel_1\",-90.0],UNIT[\"Meter\",1.0]]\n",
+        "data_created_date": "2024-04-18T20:01:50Z",
+        "description": "Endurance is a mission concept for a long-range rover (capable of traversing nearly 2,000 km) designed to explore and ultimately collect, cache, and return 12 samples from the South Pole-Aitken (SPA) basin on the farside of the Moon. SPA is the largest and oldest (undisputed) impact basin on the Moon, and holds critical answers to Solar System chronology and planetary evolution. For the science stations selected along the Southern traverse a traversable path between each of these sites was constructed. This path accounts for several conditions including: solar illumination (lighting), topography, slope, rocks, craters, and communication windows.\n\nUPDATE: This path represents updates as of 04/11/2024. This path has been regenerated to include the science site of interest Site B. This path has also been regenerated using primarily the highest resolution LOLA DEMs (community standard reference) where available and LOLA+Kaguya DEM data elsewhere. DEM data used has been acquired from the PDS. Each DEM only exhibits coverage to certain extents. As such, the LOLA DEM resolution coverage for each extent is: 5m/px = 87.5S, 10m/px = 85S, 20m/px = 80S, 30m/px = 75S, and 60m/px = 60S. LOLA+ Kaguya had been used for portions of the path above 60S. This path has been color coded to visualize the portion of the path that has been generated using the different resolution DEMs. All DEMs were converted to slope maps and values &gt; 15&ordm; were masked out as hazards; excluding these areas from path generation. This path also reflects a slight change of Site 007 location from it&rsquo;s previous location to -88.695688,140.055726 since the previous location was on a pixel that exhibited &gt; 15&ordm; slope according to the LOLA 5m/px DEM data.",
+        "itemType": "product",
+        "resolution": 0,
+        "isContainer": false,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Feature",
+          "Mosaic"
+        ],
+        "shape": "POLYGON((23654.657242 -30235.039214,23654.657242 -1067962.993500,383170.000019 -1067962.993500,383170.000019 -30235.039214,23654.657242 -30235.039214))",
+        "bbox": "23654.657242,-1067962.9935,383170.000019,-30235.039214",
+        "AUTO_LAYER": [
+          false
+        ],
+        "_version_": 1796704054716399600
+      },
+      {
+        "item_DBID": "289184",
+        "item_UUID": "0e1139c6-8d71-4fbc-b191-06b373acf69c",
+        "productLabel": "LRO_LOLA_Count_SPole45_100mp_v04",
+        "title": "LRO LOLA DEM S Pole, 45 deg, Count",
+        "fileSize": [
+          197346871
+        ],
+        "productCat1": "Topography",
+        "productCat2": "Confidence",
+        "mission": "Lunar Reconnaissance Orbiter",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "TBD",
+        "data_created_date": "2022-05-25T18:11:29Z",
+        "itemType": "product",
+        "resolution": 0,
+        "thumbnailURLDir": "https://trek.nasa.gov/tiles/Moon/SP/LRO_LOLA_Count_SPole45_100mp_v04/thumbnail/LRO_LOLA_Count_SPole45_100mp_v04-",
+        "isContainer": true,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "raster"
+        ],
+        "shape": "POLYGON ((-1440000 1440000,-1440000 -1440000,1440000 -1440000,1440000 1440000,-1440000 1440000))",
+        "bbox": "-1095930,-1095930,1095930,1095930",
+        "RASTER_TYPE": "raw",
+        "PIXEL_DEPTH": "Int16",
+        "BANDS": 1,
+        "instrument": "Laser Altimeter",
+        "_version_": 1733822817080705000
+      },
+      {
+        "item_DBID": "289370",
+        "item_UUID": "800bd334-7f91-4c9f-a33c-9b00d2dd64d8",
+        "productLabel": "LRO_LOLA_Count_SPole875_5mp_v04",
+        "title": "LRO LOLA DEM, S Pole, 87.5 deg, Count",
+        "fileSize": [
+          47333468
+        ],
+        "productCat1": "Topography",
+        "productCat2": "Confidence",
+        "mission": "Lunar Reconnaissance Orbiter",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "TBD",
+        "data_created_date": "2022-05-25T18:11:49Z",
+        "itemType": "product",
+        "resolution": 0,
+        "thumbnailURLDir": "https://trek.nasa.gov/tiles/Moon/SP/LRO_LOLA_Count_SPole875_5mp_v04/thumbnail/LRO_LOLA_Count_SPole875_5mp_v04-",
+        "isContainer": true,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic",
+          "raster"
+        ],
+        "shape": "POLYGON ((-75840 75840,-75840 -75840,75840 -75840,75840 75840,-75840 75840))",
+        "bbox": "-75840,-75840,75840,75840",
+        "RASTER_TYPE": "raw",
+        "PIXEL_DEPTH": "Int16",
+        "BANDS": 1,
+        "instrument": "Laser Altimeter",
+        "_version_": 1733822838192734200
+      },
+      {
+        "item_DBID": "290022",
+        "item_UUID": "9c61f744-760e-420a-bb35-227b93e42f93",
+        "productLabel": "LRO_NAC_Mosaic_86S356E_50cmp",
+        "title": "LRO LROC Image Mosaic, Malapert Massif",
+        "fileSize": [
+          4612336912
+        ],
+        "productCat1": "Imagery",
+        "productCat2": "Mosaic",
+        "mission": "Lunar Reconnaissance Orbiter",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "PROJCS[\"PolarStereographic MOON\",GEOGCS[\"GCS_MOON\",DATUM[\"D_MOON\",SPHEROID[\"MOON\",1737400,0]],PRIMEM[\"Reference_Meridian\",0],UNIT[\"degree\",0.0174532925199433]],PROJECTION[\"Polar_Stereographic\"],PARAMETER[\"latitude_of_origin\",-90],PARAMETER[\"central_meridian\",0],PARAMETER[\"scale_factor\",0],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]]]",
+        "data_created_date": "2022-09-02T22:38:13Z",
+        "itemType": "product",
+        "thumbnailURLDir": "https://trek.nasa.gov/tiles/Moon/SP/LRO_NAC_Mosaic_86S356E_50cmp/thumbnail/LRO_NAC_Mosaic_86S356E_50cmp-",
+        "isContainer": true,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic"
+        ],
+        "shape": "POLYGON ((-33245 147083,-33245 104242,15004.5 104242.0,15004.5 147083.0,-33245 147083))",
+        "bbox": "-33245,104242,15004.5,147083",
+        "resolution": 0,
+        "RASTER_TYPE": "grayscale",
+        "PIXEL_DEPTH": "Byte",
+        "BANDS": 1,
+        "AUTO_LAYER": [
+          true
+        ],
+        "instrument": "Narrow Angle Camera",
+        "_version_": 1742899294889836500
+      },
+      {
+        "item_DBID": "290997",
+        "item_UUID": "11326a37-b6cb-4f13-a878-76a5f8bb909d",
+        "productLabel": "SchrodingerCraterMareUnit_50cmV1.0.sp",
+        "title": "LROC NAC Uncontrolled Mosaic of Mare Unit in Schrodinger Crater",
+        "fileSize": [
+          27079252720
+        ],
+        "productCat1": "Imagery",
+        "productCat2": "Mosaic",
+        "mission": "Lunar Reconnaissance Orbiter",
+        "trekProjection": "urn:ogc:def:crs:IAU2000::30120",
+        "projection": "urn:ogc:def:crs:IAU2000::30120",
+        "data_created_date": "2022-05-25T18:11:32Z",
+        "description": "This is a 50cm/px uncontrolled visible image mosaic generated using Lunar Reconnaissance Orbiter Camera (LROC) Narrow Angle Camera (NAC) images from the Lunar Reconnaissance Orbiter mission. Each NAC image was registered horizontally to the LRO's Lunar Orbiter Laser Altimeter (LOLA) global DEM, and then mosaicked together and color balanced. ",
+        "itemType": "product",
+        "thumbnailURLDir": "https://trek.nasa.gov/tiles/Moon/SP/SchrodingerCraterMareUnit_50cmV1.0.sp/thumbnail/SchrodingerCraterMareUnit_50cmV1.0.sp-",
+        "isContainer": true,
+        "searchable": true,
+        "coverage": "Regional",
+        "serviceTypes": [
+          "Mosaic"
+        ],
+        "shape": "POLYGON ((284824.656849199 -253435.698148446,284824.656849199 -406548.205468087,441119.803582649 -406548.205468087,441119.803582649 -253435.698148446,284824.656849199 -253435.698148446))",
+        "bbox": "284824.657,-406548.205,441119.804,-253435.698",
+        "resolution": 0,
+        "RASTER_TYPE": "grayscale",
+        "PIXEL_DEPTH": "Byte",
+        "BANDS": 1,
+        "instrument": "Narrow Angle Camera",
+        "_version_": 1733822820226433000
+      }
+    ]
+  },
+    "facet_counts": { }
+}

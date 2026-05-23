@@ -1,0 +1,61 @@
+# ADR Status and Implementation Coverage
+
+| ADR | Title | Status | Degree of Implementation |
+|---|---|---|---|
+| ADR.0001 | Process Model Boundaries (FastAPI, Worker, Marimo) | Accepted | fully |
+| ADR.0002 | Scenario Filesystem and Catalog Conventions | Accepted | fully |
+| ADR.0003 | Adopt Option C API Contract Strategy and Stage Gates | Accepted | fully |
+| ADR.0004 | API and Event Versioning Policy | Accepted | fully |
+| ADR.0005 | Web UI Component Toolkit for Layer Controls | Superseded | superseded |
+| ADR.0006 | Raster Delivery CRS Policy | Accepted | fully |
+| ADR.0007 | Client-Side Raster Colormaps and Style Controls | Accepted | fully |
+| ADR.0008 | Deferred Custom Shader Extension Contract | Accepted | partially |
+| ADR.0009 | Path-First Product Identity with Immutable Internal IDs | Accepted | fully |
+| ADR.0010 | Adoption of Blueprint JS 6 for App Shell and Controls | Accepted | fully |
+| ADR.0011 | AI Assistant & Model Context Protocol (MCP) Integration | Accepted | fully |
+| ADR.0012 | Python/.NET Native Bridge Strategy (pythonnet) | Accepted | fully |
+| ADR.0013 | Notebook Integration Choice (Marimo vs. Jupyter) | Accepted | fully |
+| ADR.0014 | Persistent External Agent Sessions and Context Caching | Accepted | fully |
+| ADR.0015 | Rich Assistant Outputs via Typed Artifact Contracts | Accepted | fully |
+| ADR.0016 | Restricted Map Algebra DSL via Typed Job Handler | Accepted | fully |
+| ADR.0017 | Flexible Workspace Layout with FlexLayout-React | Accepted | fully |
+| ADR.0018 | Worker-Hosted Raster Transform Scripts | Accepted | fully |
+| ADR.0019 | Unified Tool Model Across UI, Assistant, and Notebooks | Accepted | fully |
+| ADR.0020 | Persist Moon Trek Catalog Metadata Cache | Accepted | fully |
+| ADR.0021 | Assistant RAG Wrapper Providers and Retrieval Index | Accepted | fully |
+| ADR.0022 | Hybrid Command Router with Deterministic Triggers | Accepted | fully |
+| ADR.0023 | Deterministic Router with Bounded Agent Substeps | Accepted | fully |
+| ADR.0024 | First-Turn Inventory Context Seeding | Accepted | fully |
+| ADR.0025 | Assistant Eval Pyramid for Routing and Functional Success | Accepted | fully |
+| ADR.0026 | spaCy-Based Intent Unit Segmentation | Accepted | fully |
+| ADR.0027 | Intent Classification Contract for Hybrid Routing | Accepted | fully |
+| ADR.0028 | Turn Execution Plan JSON Contract | Accepted | fully |
+| ADR.0029 | Per-Segment Execution State and Merge Policy | Accepted | fully |
+| ADR.0030 | Tool Argument Repair Policy | Accepted | fully |
+| ADR.0031 | Assistant Performance Improvement Program (Meta ADR) | Accepted | fully |
+| ADR.0032 | Read-Only vs Mutating Completion Success Policy | Accepted | fully |
+| ADR.0033 | Assistant Observability and Failure Taxonomy | Accepted | fully |
+| ADR.0034 | Assistant Eval Scoring Model and CI Quality Gates | Accepted | fully |
+| ADR.0035 | Typed Entity Memory and Reference Resolution (V1) | Proposed | partially |
+| ADR.0036 | High-Performance Lunar Viewshed Implementation | Accepted | fully |
+| ADR.0037 | Script Runtime Mode Isolation for osgeo and moonlib | Accepted | fully |
+| ADR.0038 | Agent Reliability Policy and Internal Eval Pre-Filter | Accepted | fully |
+| ADR.0039 | Linux Port Plan (Pop!_OS First, Ubuntu Second) | Accepted | fully |
+| ADR.0040 | Lazy Initialization for Providers and RAG Indexes | Accepted | fully |
+| ADR.0041 | Parallel Pop!_OS and Ubuntu Container Development | Accepted | partially |
+| ADR.0042 | Canonical File Product Dictionary and Deterministic Recipe Templates | Accepted | partially |
+| ADR.0043 | Segment Intent Classification and Structured Product Request Extraction | Accepted | fully |
+| ADR.0044 | Activity-Bar Workspace Reorganization | Accepted | fully |
+| ADR.0045 | Assistant Focus Workspace and Notebook Opening Flow | Accepted | fully |
+| ADR.0046 | Remove Windows Support and Standardize on Linux | Accepted | partially |
+| ADR.0047 | Enhanced Colormap Support and Raster Tone Semantics | Accepted | fully |
+| ADR.0048 | Semantic Intent Family Extraction and Property Mapping | Accepted | fully |
+| ADR.0049 | Python Core Modularization + CI and Leak-Free Reliability Program | Accepted | fully |
+| ADR.0050 | Local Lunar Nomenclature and Feature Navigation | Accepted | fully |
+| ADR.0051 | Entity Reference Resolution for Segment Processing | Accepted | fully |
+| ADR.0052 | Assistant Bug Report Capture and Offline Analysis | Accepted | fully |
+| ADR.0053 | Entity-Kind-Aware Deterministic Routing and Domain Entity Context for LLM Fallback | Accepted | partially |
+| ADR.0054 | Deterministic Segment Routing Simplification and Assistant Flag Reduction | Accepted | partially |
+| ADR.0055 | Deterministic Noun-Phrase Product-Type Matching for Recipe-Backed Create-Product Segments | Accepted | fully |
+| ADR.0056 | Isolated Worker Protocol for Long-Running Compute | Accepted | partially |
+| ADR.0057 | Stand-Alone GeoTIFF Layer Stack Desktop Viewer | Accepted | fully |

@@ -1,0 +1,45 @@
+Bug: Fatal native bootstrap crash after pytest completion (0xc0000139)
+
+Date observed: 2026-03-10
+
+Summary
+- Running assistant/contract pytest suites succeeds (tests report passed), but the Python process then crashes with a Windows fatal exception.
+- Crash signature is deterministic in this environment and appears after test output completion.
+
+Observed error
+- `Windows fatal exception: code 0xc0000139`
+- Stack shows crash path:
+  - `ctypes.WinDLL(...)`
+  - `backend/worker/native_bootstrap.py` in `_configure_native_dll_search_paths` (DLL preload loop)
+  - `bootstrap_pythonnet(...)`
+  - import-time preflight in `backend/api/app.py` (`_best_effort_native_preflight_before_backend_imports`)
+
+Reproduction
+1. Activate env:
+   - `cmd /c "D:\projects\env_311\Scripts\activate.bat && python --version"`
+2. Run test bundle (example that reproduces):
+   - `python -m pytest backend/tests/worker/test_rag_ingest_handler.py backend/tests/worker/test_rag_wrapper_provider.py backend/tests/worker/test_rag_index_path_safety.py backend/tests/worker/test_rag_chunking_policy.py backend/tests/worker/test_rag_startup_refresh.py backend/tests/worker/test_assistant_tool_loop.py backend/tests/worker/test_assistant_provider_tool_contract.py backend/tests/contract/test_assistant_provider_catalog_rag.py backend/tests/contract/test_phase6_assistant_api.py backend/tests/contract/test_phase6_assistant_ws.py backend/tests/contract/test_phase6_openapi_assistant.py -q`
+3. Observe:
+   - pytest reports passing tests
+   - process then emits fatal crash stack and terminates
+
+What is known
+- This is not parallel-test related (single pytest invocation, no xdist workers).
+- This is not caused by RAG logic execution paths directly; crash occurs in native bootstrap preload/import path.
+- Exact failing DLL is not identified by current traceback. Candidate configured resolver imports include:
+  - `sqlite3.dll`, `proj_9.dll`, `gdal.dll`, `gdal_wrap.dll`, `gdalconst_wrap.dll`, `osr_wrap.dll`, `ogr_wrap.dll`, `cspice.dll`
+
+Impact
+- Test reliability signal is degraded because tests can pass while process still crashes at teardown/import lifecycle.
+- Potentially masks native runtime instability in CI/local developer workflows.
+
+Suspected cause
+- Native DLL preload/import-order conflict during import-time preflight (`backend/api/app.py`) when pytest imports contract modules that import app creation path.
+- Could also involve transitive dependency mismatch for one preloaded native DLL.
+
+Suggested next diagnostics
+1. Add temporary debug logging around each `ctypes.WinDLL` preload attempt (DLL name/path before and after load).
+2. Add an env-guard to disable import-time native preflight during tests, then compare crash behavior.
+3. Run minimal reproducer importing only `backend.api.app` under the same environment.
+4. Validate each configured DLL with `dumpbin /dependents` or equivalent dependency checker to find unresolved symbols.
+5. Bisect preload list by temporarily disabling resolver imports one-by-one to isolate offending DLL.

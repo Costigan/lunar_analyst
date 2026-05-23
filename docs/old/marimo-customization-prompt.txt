@@ -1,0 +1,14 @@
+Consider customizing marimo in the following way:
+
+1. Remove the language model panel on the left
+2. Define a new kind of notebook cell that contains a language model prompt.
+   The model's response will then fill a new cell containing text or a cell containing python code that will do a calculation and display a result.
+
+My goal is to approximate the user experience that is possible in the Libro notebook, but using Marimo.
+
+Think through options for doing this.
+Can this be done?
+
+If it can, how?
+
+Doing this without creating a fork of Marimo is preferable.

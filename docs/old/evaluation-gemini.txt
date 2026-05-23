@@ -1,0 +1,74 @@
+# Lunar Analyst Application Evaluation - Gemini CLI (Integrated)
+
+## Overview
+Lunar Analyst is a sophisticated toolkit for lunar south pole analysis, integrating high-performance C# compute with a Python/FastAPI backend and a React/OpenLayers frontend. While the system is functional, it currently resides in a transitional architecture with significant structural risks that threaten its long-term viability and scalability.
+
+## 1. Critical Architectural Risks
+
+### 1.1 Synchronous "Queued" Jobs (Architectural Dead-end)
+The application defines a "queued" job contract, but the implementation in `StubJobService` (within `dependencies.py`) executes these handlers synchronously in the request path. 
+- **Impact:** Long-running native jobs block API threads, preventing the backend from handling other requests.
+- **Dead-end:** The cancellation API is effectively broken for these jobs because the job ID is often only returned after the task completes.
+
+### 1.2 Violation of Process Isolation for Native Compute
+The design intent is for heavy compute to run in separate worker processes, but `JobHandlers` and the `LightmapStreamingClient` load `pythonnet`/`moonlib` directly within the FastAPI process.
+- **Impact:** DLL lifetime conflicts and failure containment issues within the core API process. 
+- **Risk:** A crash in a native compute kernel can take down the entire web server.
+
+### 1.3 Polling-based, Unbounded Event Model
+The WebSocket event system uses a "poll-and-sleep" model on unbounded in-memory lists (`stores.ws_events`).
+- **Impact:** Memory consumption grows linearly with uptime, and fan-out performance degrades as list sizes increase.
+- **Scalability:** This model cannot support multi-process deployments, as each worker would have a fragmented view of the system state.
+
+### 1.4 Assistant Persistence Scaling
+The `AssistantSessionStore` serializes and rewrites the entire JSON session file on every single mutation (message added, turn updated).
+- **Impact:** Severe write amplification and performance degradation as session history grows.
+- **Risk:** High potential for data corruption if a write is interrupted.
+
+## 2. God Objects & Code Smells
+
+### 2.1 The "God Object" Dependency File
+`backend/api/dependencies.py` (4000+ lines) is a monolithic hub that mixes scenario management, product registry, persistence logic, and FastAPI injection. 
+- **Stub Naming:** Core production services are prefixed with `Stub` (e.g., `StubScenarioService`), creating cognitive overhead and suggesting a "temporary" architecture that became permanent.
+
+### 2.2 Frontend Monolith (`App.tsx`)
+The React frontend is anchored by a ~1200 line `App.tsx` component that orchestrates state, effects, and socket logic for the entire application.
+- **Impact:** Hard to test, difficult to reason about side effects, and high risk of regressions during UI updates.
+
+### 2.3 Mixed Persistence and Business Logic
+Service classes frequently interleave direct SQLite queries with business logic. The lack of a dedicated **Repository Layer** makes unit testing difficult and ties the application strictly to SQLite.
+
+## 3. Operational & Security Findings
+
+### 3.1 Security: Arbitrary Path Access in Artifact Inspection
+The assistant's artifact inspection tools (`_resolve_artifact_path`) accept raw absolute paths without enforcing a scenario-root allowlist. 
+- **Risk:** Potential for data-safety breaches, especially when accessed via MCP or external agents.
+
+### 3.2 Public Exposure of Draft Handlers
+Several job handlers (e.g., `generate_horizon_profile`) are exposed as runnable routes via auto-discovery but throw `NotImplementedError` when called.
+
+### 3.3 Configuration and Constant Duplication
+Multiple implementations of `_resolve_config_path` exist across the codebase, and critical constants like the ESRI:103878 WKT are repeated in several modules, increasing the risk of configuration drift.
+
+## 4. Prioritized Refactoring Plan
+
+### Priority 0: Immediate Risk Mitigation
+1.  **Secure Artifact Access:** Enforce scenario-root allowlist for all assistant path resolution.
+2.  **Gate Draft Jobs:** Prevent non-functional handlers from being exposed in public job routes.
+3.  **Bounded Eventing:** Implement bounded ring buffers or TTL-based pruning for in-memory event lists.
+4.  **Centralize Constants:** Move config loading and CRS definitions to a single source of truth.
+
+### Priority 1: Core Architectural De-coupling
+1.  **True Async Jobs:** Introduce a real task queue and worker process to decouple API request lifetime from native compute execution.
+2.  **Process Boundary Enforcement:** Move all `moonlib`/`pythonnet` heavy compute behind the worker process boundary.
+3.  **Service Extraction:** Split `backend/api/dependencies.py` into domain-specific modules (Scenario, Product, Layer, Job).
+4.  **Introduce Repository Layer:** Abstract SQLite queries into repositories to separate domain logic from persistence.
+5.  **Rename "Stub" Classes:** Standardize production service names to reflect their real roles.
+
+### Priority 2: Stability and Scalability
+1.  **Transactional Session Store:** Replace the monolithic assistant JSON store with a transactional SQLite implementation.
+2.  **Event Streaming:** Replace polling WS endpoints with a proper pub/sub or cursor-based streaming model.
+3.  **Frontend Decomposition:** Refactor `App.tsx` into domain-specific hooks and smaller, testable components.
+
+## Conclusion
+Lunar Analyst has exceptional domain capabilities but is currently hindered by "monolithic debt." The transition from a transitional "stub-based" architecture to a robust, process-isolated, and repository-backed system is essential to avoid the architectural dead-ends of synchronous compute and per-process memory state.

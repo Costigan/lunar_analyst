@@ -1,0 +1,494 @@
+﻿using moonlib.horizon;
+using moonlib.pipeline;
+using moonlib.spice;
+using moonlib.util;
+using OSGeo.GDAL;
+using Serilog;
+using System.Diagnostics;
+using System.Drawing.Drawing2D;
+using System.Security.Cryptography;
+
+namespace moonlib.mapops
+{
+    public class MapOperations
+    {
+        const int HorizonSamples = 1440;
+        public static void GenerateHorizons(AnalysisContext context)
+        {
+
+        }
+
+        /// <summary>
+        /// Generate and write a permanent shadow file.  The horizon files need to already exist.
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="output_path"></param>
+        /// <param name="progress"></param>
+        /// <param name="isCancellationRequested"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
+        /// <exception cref="Exception"></exception>
+        public static async Task GeneratePermanentShadowMap(
+            AnalysisContext context,
+            string output_path,
+            IProgress<float>? progress = null,
+            Func<bool>? isCancellationRequested = null)
+        {
+            void ThrowIfCancelled()
+            {
+                if (isCancellationRequested != null && isCancellationRequested())
+                    throw new OperationCanceledException("Permanent shadow map generation was cancelled.");
+            }
+
+            Debug.Assert(context.DEM_path != null, "DEM_path must be loaded in context for PSR generation.");
+            Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
+            ThrowIfCancelled();
+            var dem = new ElevationMap(context.DEM_path);
+
+            ThrowIfCancelled();
+            var all_sunvecs_me = ViperDate.GetTimes(ViperDate.New(1970, 1, 1), ViperDate.New(2044, 1, 1), TimeSpan.FromHours(6))
+                .Select(t => SpiceManager.SunPosition_meters(t)).ToList();
+
+            var sunvecs_me = GenerateReducedSunVectorListForPermanentShadowCalculation(dem, all_sunvecs_me);
+            Console.WriteLine($"Generated reduced sun vector list for permanent shadow calculation. From {all_sunvecs_me.Count} to {sunvecs_me.Count}");
+
+            // Initialize GDAL if not already (assuming calling app does, but safe to check)
+            // In a library, we might assume the app has configured GDAL.
+            var geotiff_driver = Gdal.GetDriverByName("GTiff");
+            if (geotiff_driver == null) throw new Exception("GDAL GTiff driver not found.");
+
+            if (File.Exists(output_path))
+                File.Delete(output_path);
+
+            var psr_image = LightmapPipeline.OpenDataset(geotiff_driver, output_path, DataType.GDT_Byte, -1, dem.Width, dem.Height, dem.Projection, dem.GeoTransform);
+            progress ??= new Progress<float>(percent => Console.WriteLine($"Progress: {100 * percent}%"));
+
+            await ExecuteAsync(context, output_path, progress);
+
+            // Filter the long list of sun vectors to a smaller set.  Keep only those that are the highest elevation in their azimuth bin
+            // for at least one of 5 points on the map (the 4 corners and the center).  This is a heuristic to reduce the number of sun
+            // vectors we need to consider for permanent shadow calculation.
+            List<math.Vector3d> GenerateReducedSunVectorListForPermanentShadowCalculation(ElevationMap dem, List<math.Vector3d> input_sunvecs_me)
+            {
+                var matrices = new math.Matrix4d[5]
+                {
+                    dem.GetMoonMEToENU(0, 0),
+                    dem.GetMoonMEToENU(0, dem.Width - 1),
+                    dem.GetMoonMEToENU(dem.Height - 1, 0),
+                    dem.GetMoonMEToENU(dem.Height - 1, dem.Width - 1),
+                    dem.GetMoonMEToENU(dem.Height / 2, dem.Width / 2)
+                };
+
+                var maximum_elevation = Enumerable.Range(0, 5).Select(u => Utilities.PreloadArray(1440, float.NegativeInfinity)).ToArray();
+                var vector_indices = Enumerable.Range(0, 5).Select(u => Utilities.PreloadArray(1440, (int)-1)).ToArray();
+
+                for (var i = 0; i < input_sunvecs_me.Count; i++)
+                {
+                    var sunvec = input_sunvecs_me[i];
+                    for (var u = 0; u < 5; u++)
+                    {
+                        var (az_rad, el_rad) = dem.GetAzEl(sunvec, matrices[u]);
+                        float az_deg = az_rad * 57.2957795f;
+                        float el_deg = el_rad * 57.2957795f;
+                        int az_bin = (int)(az_deg / 360f * HorizonSamples) % HorizonSamples;
+                        if (el_deg > maximum_elevation[u][az_bin])
+                        {
+                            maximum_elevation[u][az_bin] = el_deg;
+                            vector_indices[u][az_bin] = i;
+                        }
+                    }
+                }
+
+                var unique_indices = new HashSet<int>(vector_indices.SelectMany(arr => arr).Where(idx => idx >= 0));
+                var sunvecs_me = unique_indices.Select(idx => input_sunvecs_me[idx]).ToList();
+
+                return sunvecs_me;
+            }
+
+            async Task ExecuteAsync(AnalysisContext context, string output_path, IProgress<float>? progress = null)
+            {
+                ThrowIfCancelled();
+                var pipeline = new Pipeline<HorizonProcessingToken>();
+
+                pipeline.AddStep(LightmapPipeline.ReadHorizons, maxDegreeOfParallelism: 24, boundedCapacity: 40);
+                pipeline.AddStep(GeneratePermanentShadow, maxDegreeOfParallelism: 24, boundedCapacity: 40);
+
+                int processedCount = 0;
+                int totalCount = 0;
+
+                pipeline.AddTerminalStep(async token =>
+                {
+                    ThrowIfCancelled();
+                    if (progress != null)
+                    {
+                        int current = Interlocked.Increment(ref processedCount);
+                        progress.Report((float)current / totalCount);
+                    }
+                }, maxDegreeOfParallelism: 4, boundedCapacity: 40);
+
+                Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
+                var horizon_filenames = Directory.EnumerateFiles(context.HorizonDirectory, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+                totalCount = horizon_filenames.Count;
+
+                Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");
+
+                ThrowIfCancelled();
+                await pipeline.ProcessAsync(horizon_filenames.Select(f => new HorizonProcessingToken { filename = f }));
+
+                psr_image.Close();
+            }
+
+            unsafe Task<HorizonProcessingToken> GeneratePermanentShadow(HorizonProcessingToken token)
+            {
+                ThrowIfCancelled();
+                var col = token.col;
+                var row = token.row;
+                int width = 128;
+                int height = 128;
+                int numPixels = width * height;
+
+                //Console.WriteLine($"row={row}, col={col}, width={width}, height={height}");
+
+                var psr_buffer = new byte[height * width];
+
+                var horizons_for_patch = token.horizons;
+                Debug.Assert(horizons_for_patch != null, "Horizons must be loaded in token for permanent shadow generation.");
+
+                for (int y = 0; y < height; y++)
+                {
+                    ThrowIfCancelled();
+                    for (int x = 0; x < width; x++)
+                    {
+                        int psr_buffer_index = y * width + x;
+                        var (line, sample) = (row + y, col + x);
+                        var horizon_base = psr_buffer_index * HorizonSamples;  // in units of horizons
+                        var mat = dem.GetMoonMEToENU(line, sample);
+
+                        byte val = 255;
+
+                        for (var i = 0; i < sunvecs_me.Count; i++)
+                        {
+                            var (az_rad, el_rad) = dem.GetAzEl(sunvecs_me[i], mat);
+                            float az_deg = az_rad * 57.2957795f;
+                            float el_deg = el_rad * 57.2957795f;
+
+                            var upper_limb_elevation = el_deg + 0.545f / 2f; // Add ~0.25 degrees to account for the sun's upper limb
+                            var over_horizon = LightmapGenerator.OverHorizon(horizons_for_patch, horizon_base, az_deg, el_deg);
+                            if (over_horizon >= 0f)
+                                val = 0;
+
+                            //float frac = LightmapGenerator.BuilderSunFraction(horizons_for_patch, horizon_base, az_deg, el_deg);
+                            //if (frac > 0f)
+                            //   val = 0;
+
+                        }
+
+                        psr_buffer[psr_buffer_index] = val;
+                    }
+                }
+
+                lock (psr_image)
+                {
+                    psr_image.GetRasterBand(1).WriteRaster(token.col, token.row, width, height, psr_buffer, width, height, 0, 0);
+                }
+
+                return Task.FromResult(token);
+            }
+        }
+
+        /// <summary>
+        /// Generate a set of safe haven duration files.
+        /// Safe havens are locations where a rover can park safely during communications
+        /// outages.  This method considers outages to be periods when the Earth is less than
+        /// 
+        /// </summary>
+        /// <param name="context"></param>
+        /// <param name="output_path"></param>
+        /// <param name="earth_threshold_deg"></param>
+        /// <param name="progress"></param>
+        /// <param name="isCancellationRequested"></param>
+        /// <returns></returns>
+        /// <exception cref="OperationCanceledException"></exception>
+        /// <exception cref="Exception"></exception>
+        public static async Task GenerateSafeHavenDurations(
+            AnalysisContext context,
+            string output_directory,
+            DateTime start_time,
+            DateTime stop_time,
+            float time_step_hours = 2f,
+            float earth_threshold_deg = 2f,
+            float sun_fraction_threshold = 0.2f,
+            IProgress<float>? progress = null,
+            Func<bool>? isCancellationRequested = null)
+        {
+            void ThrowIfCancelled()
+            {
+                if (isCancellationRequested != null && isCancellationRequested())
+                    throw new OperationCanceledException("Permanent shadow map generation was cancelled.");
+            }
+
+            Debug.Assert(context.DEM_path != null, "DEM_path must be loaded in context for PSR generation.");
+            Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
+
+            // Initialize GDAL if not already (assuming calling app does, but safe to check)
+            // In a library, we might assume the app has configured GDAL.
+            var geotiff_driver = Gdal.GetDriverByName("GTiff") ?? throw new Exception("GDAL GTiff driver not found.");
+
+            Debug.Assert(context.DEM_path != null, "DEM_path must be loaded in context for PSR generation.");
+            Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
+            ThrowIfCancelled();
+            
+            var dem = new ElevationMap(context.DEM_path);
+            var center_mat = dem.GetMoonMEToENU(dem.Height / 2, dem.Width / 2);
+
+            start_time = ViperDate.New(start_time);
+            stop_time = ViperDate.New(stop_time);
+
+            var times = ViperDate.GetTimes(start_time, stop_time, TimeSpan.FromHours(time_step_hours));
+            var sunvecs_me = times.Select(t => SpiceManager.SunPosition_meters(t)).ToList();
+	        var earthvecs_me = times.Select(t => SpiceManager.EarthPosition_meters(t)).ToList();
+
+            ThrowIfCancelled();
+
+            var earth_elevations = GetEarthElevations(earthvecs_me, dem, center_mat);
+	        var min_earth_indices = GetMinElevationIndices(earth_elevations);
+            var earth_below_threshold_regions = GetRegionsWhereEarthIsBelowThreshold(earth_elevations, min_earth_indices, earth_threshold_deg);
+            Debug.Assert(min_earth_indices.Count == earth_below_threshold_regions.Count, "Expected the number of Earth elevation minima to match the number of regions where Earth is below the threshold.");
+
+            var output_file_count = min_earth_indices.Count;
+            Console.WriteLine($"Identified {output_file_count} safe haven files to generate based on Earth elevation minima.");
+            if (output_file_count == 0) throw new Exception("No safe haven files to generate. Check the specified time range and Earth elevation threshold.");
+
+            var min_earth_times = min_earth_indices.Select(idx => times[idx]).ToList();
+            var filenames = min_earth_times.Select(t => GetHavenOutputPath(output_directory, t)).ToList();
+            var datasets = filenames.Select(f => LightmapPipeline.OpenDataset(geotiff_driver, f, DataType.GDT_Byte, -1, dem.Width, dem.Height, dem.Projection, dem.GeoTransform)).ToList();
+            Trace.Assert(datasets.Count == earth_below_threshold_regions.Count, "Expected the number of datasets to match the number of Earth below threshold regions.");
+
+            progress ??= new Progress<float>(percent => Console.WriteLine($"Progress: {100 * percent}%"));
+
+            await ExecuteAsync(context, progress);
+
+            async Task ExecuteAsync(AnalysisContext context, IProgress<float>? progress = null)
+            {
+                ThrowIfCancelled();
+                var pipeline = new Pipeline<HorizonProcessingToken>();
+
+                pipeline.AddStep(LightmapPipeline.ReadHorizons, maxDegreeOfParallelism: 24, boundedCapacity: 40);
+                pipeline.AddStep(GenerateSafeHavens, maxDegreeOfParallelism: 24, boundedCapacity: 40);
+
+                int processedCount = 0;
+                int totalCount = 0;
+
+                pipeline.AddTerminalStep(async token =>
+                {
+                    ThrowIfCancelled();
+                    if (progress != null)
+                    {
+                        int current = Interlocked.Increment(ref processedCount);
+                        progress.Report((float)current / totalCount);
+                    }
+                }, maxDegreeOfParallelism: 4, boundedCapacity: 40);
+
+                Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
+                var horizon_filenames = Directory.EnumerateFiles(context.HorizonDirectory, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+                totalCount = horizon_filenames.Count;
+
+                Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");
+
+                ThrowIfCancelled();
+                await pipeline.ProcessAsync(horizon_filenames.Select(f => new HorizonProcessingToken { filename = f }));
+
+                datasets.ForEach(ds => { ds.Dispose(); } );
+            }
+
+            unsafe Task<HorizonProcessingToken> GenerateSafeHavens(HorizonProcessingToken token)
+            {
+                ThrowIfCancelled();
+                var col = token.col;
+                var row = token.row;
+                int width = 128;
+                int height = 128;
+                int numPixels = width * height;
+
+                int test_line = 762, test_sample = 1030;
+
+                var horizons_for_patch = token.horizons;
+                Debug.Assert(horizons_for_patch != null, "Horizons must be loaded in token for safe haven generation.");
+                var buffer = new byte[height * width];
+
+                // debugging
+                var shadow_durations = new byte[datasets.Count];
+
+                for (var region_idx = 0; region_idx < datasets.Count; region_idx++)
+                {
+                    var (low_idx, high_idx) = earth_below_threshold_regions[region_idx];
+
+                    for (int y = 0; y < height; y++)
+                    {
+                        ThrowIfCancelled();
+                        for (int x = 0; x < width; x++)
+                        {
+                            int buffer_index = y * width + x;
+                            var (line, sample) = (row + y, col + x);
+
+                            // debugging
+                            //if (line != 379 || sample != 449)
+                            //    continue;
+
+                            var horizon_base = buffer_index * HorizonSamples;  // in units of horizons
+                            var mat = dem.GetMoonMEToENU(line, sample);
+
+                            var count = 0;
+                            var max_count = -1;
+
+                            // Search the region of sun vectors where Earth is below the threshold.
+                            // Find the length of the longest contiguous sequence of sun vectors in this region
+                            // where the sun fraction is below the sun_fraction_threshold.  This is the longest
+                            // period where a rover would need to rely on battery power during a period when controllers
+                            // on Earth cannot communicate with it.
+                            for (var i = low_idx; i < high_idx; i++)
+                            {
+                                var (az_rad, el_rad) = dem.GetAzEl(sunvecs_me[i], mat);
+                                float az_deg = az_rad * 57.2957795f;
+                                float el_deg = el_rad * 57.2957795f;
+                                var sun_fraction = LightmapGenerator.BuilderSunFraction(horizons_for_patch, horizon_base, az_deg, el_deg);
+
+                                if (sun_fraction < sun_fraction_threshold)
+                                    count++;
+                                else
+                                {
+                                    if (count > max_count)
+                                        max_count = count;
+                                    count = 0;
+                                }
+                            }
+
+                            max_count = Math.Max(max_count, count); // In case the longest sequence ends at the end of the region
+
+                            var shadow_duration_hours = max_count * time_step_hours;
+                            byte val = (byte)Math.Clamp((int)shadow_duration_hours, 0, 255);
+
+                            buffer[buffer_index] = val;
+
+                            // debugging
+                            if (line == test_line && sample == test_sample)
+                            {
+                                shadow_durations[region_idx] = val;
+                                Console.WriteLine($"Debug safe haven duration at line={line}, sample={sample} for region {region_idx} with Earth below threshold from {times[low_idx]} to {times[high_idx]}: {shadow_duration_hours} hours (max_count={max_count})");
+                            }
+                        }
+                    }
+
+                    lock (datasets[region_idx])
+                    {
+                        datasets[region_idx].GetRasterBand(1).WriteRaster(token.col, token.row, width, height, buffer, width, height, 0, 0);
+                        //Console.WriteLine($"  Wrote safe haven durations for region={region_idx} row={token.row}, col={token.col}");
+                    }
+                }
+
+                // debugging
+                if (true)
+                {
+                    var line = test_line;
+                    var sample = test_sample;
+                    var token_line = 128 * (line / 128);
+                    var token_sample = 128 * (sample / 128);
+                    if (token.row == token_line && token.col == token_sample)
+                    {
+                        // Write light curve for this location
+                        var y = line % 128;
+                        var x = sample % 128;
+                        int buffer_index = y * width + x;                            
+                        var horizon_base = buffer_index * HorizonSamples;  // in units of horizons
+                        var mat = dem.GetMoonMEToENU(line, sample);
+                        var light_curve_path = Path.Combine(output_directory, $"light_curve_{line}_{sample}.csv");
+                        using (var writer = new StreamWriter(light_curve_path))
+                        {
+                            writer.WriteLine("Time,SunFraction,EarthElevation");
+                            for (var i = 0; i < times.Count; i++)
+                            {
+                                var (az_rad, el_rad) = dem.GetAzEl(sunvecs_me[i], mat);
+                                float az_deg = az_rad * 57.2957795f;
+                                float el_deg = el_rad * 57.2957795f;
+                                var sun_fraction = LightmapGenerator.BuilderSunFraction(horizons_for_patch, horizon_base, az_deg, el_deg);
+                                var earth_elevation = earth_elevations[i];
+                                writer.WriteLine($"{times[i]},{sun_fraction},{earth_elevation}");
+                            }
+                        }
+
+                        using (var writer = new StreamWriter(Path.Combine(output_directory, $"debug_durations.csv")))
+                        {
+                            writer.WriteLine("RegionIndex,EarthBelowThresholdStart,EarthBelowThresholdEnd,SafeHavenDurationHours,DebugDurationHours");
+                            for (var region_idx = 0; region_idx < datasets.Count; region_idx++)
+                            {
+                                var (low_idx, high_idx) = earth_below_threshold_regions[region_idx];
+                                var earth_below_threshold_start = times[low_idx];
+                                var earth_below_threshold_end = times[high_idx];
+                                var shadow_duration_hours = shadow_durations[region_idx];
+                                var hibernation_hours = (high_idx - low_idx) * time_step_hours;
+                                writer.WriteLine($"{region_idx},{earth_below_threshold_start},{earth_below_threshold_end},{hibernation_hours},{shadow_duration_hours}");
+                            }
+                        }
+                    }
+                }
+
+                return Task.FromResult(token);
+            }
+
+            string GetHavenOutputPath(string directory, DateTime time)
+            {
+                string timestamp = time.ToString("yyyy-MM-dd-HH-mm-ss");
+                return Path.Combine(directory, $"safe_haven_{timestamp}.tif");
+            }
+
+            List<float> GetEarthElevations(List<math.Vector3d> sunvecs_me, ElevationMap dem, math.Matrix4d mat)
+            {
+                var result = new List<float>(sunvecs_me.Count);
+                for (var i = 0; i < sunvecs_me.Count; i++)
+                {
+                    var vec = sunvecs_me[i];
+                    var (_, el_rad) = dem.GetAzEl(vec, mat);
+                    result.Add(el_rad * 57.2957795f);
+                }
+                return result;
+            }
+
+            List<int> GetMinElevationIndices(List<float> elevations)
+            {
+                var minima_indices = new List<int>();
+                for (var i = 1; i < elevations.Count - 1; i++)
+                    if (elevations[i - 1] > elevations[i] && elevations[i] <= elevations[i + 1])
+                        minima_indices.Add(i);
+
+                return minima_indices;
+            }
+
+            List<(int low, int high)> GetRegionsWhereEarthIsBelowThreshold(List<float> elevations, List<int> minima_indices, float threshold)
+            {
+                var regions = new List<(int low, int high)>();
+                bool in_region = false;
+                int region_start = 0;
+
+                for (var i = 0; i < elevations.Count; i++)
+                {
+                    if (!in_region && elevations[i] < threshold)
+                    {
+                        in_region = true;
+                        region_start = i;
+                    }
+                    else if (in_region && elevations[i] >= threshold)
+                    {
+                        in_region = false;
+                        regions.Add((region_start, i - 1));
+                    }
+                }
+
+                // Handle case where we end while still in a region
+                if (in_region)
+                    regions.Add((region_start, elevations.Count - 1));
+
+                return regions;
+            }
+        }  
+    }
+}

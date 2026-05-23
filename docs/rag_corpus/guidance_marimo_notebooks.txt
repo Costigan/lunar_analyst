@@ -1,0 +1,69 @@
+title: Marimo Notebook Authoring Guidance for Lunar Analyst
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: marimo, notebooks, reactive, scenario, geotiff, analysis, safety
+
+# Purpose
+Use this guidance when creating Marimo notebooks for Lunar Analyst scenarios.
+Notebooks should be reactive, reproducible, and safe for scenario-scoped execution.
+
+# Core Marimo Principles
+- Keep cells idempotent: rerunning should produce the same result for the same inputs.
+- Prefer immutable data flow between cells; avoid hidden mutable global state.
+- Keep the notebook namespace small and explicit so dependencies are easy to reason about.
+- Use clear, single-purpose cells instead of large mixed-responsibility cells.
+
+# Managing Expensive Computation
+- Avoid triggering heavy compute automatically from lightweight UI changes.
+- Gate expensive steps behind explicit user actions (for example, a run button pattern).
+- Use conditional guards (for example, early-stop logic) so expensive cells do not run unnecessarily.
+- Cache or persist stable intermediate outputs when recomputation is expensive.
+
+# Scenario-Scoped Paths And Artifacts (Required)
+- Assume notebook execution with the scenario root as working directory.
+- Use scenario-relative paths for all read/write operations whenever possible.
+- Do not hardcode machine- or user-specific absolute paths.
+- Write outputs to predictable filenames in scenario space so artifacts are easy to inspect.
+
+# CRS And Raster Discipline
+- Preserve CRS metadata on raster outputs.
+- Never silently reproject or change units.
+- If reprojection is required, make it explicit in parameters and markdown explanation.
+- Record key raster metadata (shape, dtype, CRS, transform) for produced artifacts.
+
+# Notebook Structure Pattern
+- Start with a short markdown overview: goal, inputs, outputs.
+- Add a parameter cell for user-configurable values.
+- Add validation cells that fail fast with actionable error messages.
+- Add compute cells separated by logical stage.
+- End with inspection/reporting cells (quick-look previews, stats, summary table).
+
+# UI And Interaction Guidance
+- Keep interactive controls minimal and tied to clear outputs.
+- Avoid coupling multiple unrelated controls to one expensive compute cell.
+- Use markdown cells to explain assumptions and interpretation of results.
+- Make units explicit in labels, tables, and plots.
+
+# Integration With Lunar Analyst APIs
+- Prefer FastAPI-backed workflows for scenario state changes; do not mutate backend state out-of-band.
+- When possible, register and inspect outputs through standard tools/workflows instead of ad-hoc assumptions.
+- Keep notebook code compatible with backend-managed Marimo launch behavior.
+
+# Robustness Checklist
+Before considering a notebook complete, verify:
+1. Cells are idempotent and safe to rerun.
+2. Expensive compute is explicitly gated.
+3. Paths are scenario-relative.
+4. Output names are deterministic and discoverable.
+5. CRS handling is explicit and documented.
+6. Outputs include quick validation (preview/stats/summary).
+
+# Anti-Patterns To Avoid
+- Hidden mutable globals shared across many cells.
+- Automatic reruns that repeatedly launch heavy raster computation.
+- Hardcoded absolute local paths.
+- Silent reprojection, clipping, or unit conversion.
+- Large monolithic cells that mix UI, IO, compute, and reporting.
+- Concluding success without inspecting produced artifacts.

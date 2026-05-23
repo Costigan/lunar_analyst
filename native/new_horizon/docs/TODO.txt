@@ -1,0 +1,4 @@
+# TODO
+- Insert callbacks after each DEM pass that can optionally capture the horizon buffers
+- Ask for a detailed check that the emulators match the production code
+- Look into how north is handled across DEM passes and across patch pixels

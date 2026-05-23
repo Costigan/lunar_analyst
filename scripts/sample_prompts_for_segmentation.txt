@@ -1,0 +1,22 @@
+# One prompt per line. Blank lines and lines starting with # are ignored.
+Switch to Shackleton scenario. Turn on slope and hillshade. Then explain the tradeoffs.
+Turn on slope and hillshade
+Show illumination map, and if coverage is low near the rim, suggest alternatives.
+Create a slope mask at <= 5 degrees and save it as landing_sites.tif
+Describe capabilities
+Use the current scenario and compare the best landing zones near the rim versus the crater floor.
+Run "analyze_slope.py" and then get logs for job_123
+# Examples from the scenario 1
+Show me the south pole of the moon.
+Overlay elevation and add place names. I want to look for high points.
+What is this color map?
+Zoom in on the top of Mons Malapert and map slope to the same color map.
+What is the range of the slope data?
+Limit the colormap to 20 degrees.
+Switch to an operations color map with a landing threshold of 10 degrees and a movement threshold of 15 degrees.
+Are there any safe landing sites?
+A landing site is a circle of 100 meters radius with 10 degrees slope or less and no visible rocks.
+Add permanent shadow
+Show me areas that get more than 100 hours of sun continuous sun at any time in 2030?
+What is the range of sunlight hours?
+Filter these points to include only points more than 500 meters and less than 1 km from a large PSR.

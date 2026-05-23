@@ -1,0 +1,3 @@
+Read @docs/NEW_DESIGN.md for context.
+
+The analysis process this tool is designed for is based on scenarios. c

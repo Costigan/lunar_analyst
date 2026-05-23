@@ -1,0 +1,51 @@
+Use these three acceptance tests in the assistant UI.
+
+1. Table preview
+   Prompt:
+
+Describe table "outputs/sample_stats.csv"
+
+Setup:
+
+- Put a small CSV in the active scenario, for example outputs/sample_stats.csv.
+
+Expected:
+
+- Assistant prose summary.
+- Rendered table preview with column headers and sampled rows.
+- Artifact card showing file metadata.
+- No raw CSV dump in the main response body.
+
+2. GeoTIFF preview
+   Prompt:
+
+Describe GeoTIFF "outputs/hillshade.tif"
+
+Setup:
+
+- Put a GeoTIFF in the active scenario, for example outputs/hillshade.tif.
+
+Expected:
+
+- Assistant prose summary.
+- Rendered image preview of the raster.
+- Artifact card with width, height, band count, dtype, CRS/bounds when available.
+- No need to open the file separately to see the preview.
+
+3. Script-produced artifact workflow
+   Prompt:
+
+Write a Python script named "make_demo_table.py" in the current scenario that creates "outputs/generated_stats.csv" with a few rows of numeric
+data, run it, then describe the generated table.
+
+Expected:
+
+- Confirmation for script write/run if policy requires it.
+- Script executes successfully.
+- Final assistant response includes:
+    - prose summary
+    - rendered table preview for generated_stats.csv
+    - artifact card
+- This proves the write-script -> run-script -> inspect-artifact pattern works end to end.
+
+4. Create a histogram of raster values from "slope.tif". Save the plot to "slope_histogram.png", run whatever is needed to generate it, then show me the resulting plot and summarize the distribution.

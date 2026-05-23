@@ -1,0 +1,10 @@
+{
+  "id": "elevation_continuous",
+  "name": "Elevation Continuous",
+  "mode": "continuous",
+  "stops": [
+    { "value": 0.0, "color": [18, 42, 88, 1] },
+    { "value": 0.5, "color": [138, 189, 106, 1] },
+    { "value": 1.0, "color": [246, 232, 195, 1] }
+  ]
+}

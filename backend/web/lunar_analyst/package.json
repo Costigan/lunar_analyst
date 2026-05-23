@@ -1,0 +1,30 @@
+{
+  "name": "lunar-analyst-react",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@blueprintjs/core": "^6.8.0",
+    "@blueprintjs/icons": "^6.5.2",
+    "@blueprintjs/select": "^6.1.0",
+    "flexlayout-react": "^0.8.18",
+    "ol": "^10.7.0",
+    "proj4": "^2.12.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.8",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

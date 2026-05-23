@@ -1,0 +1,8 @@
+Read @docs/DESCRIPTION.md for context.
+Then look at the sun shadow calculation in @moonlib/pipeline/LightmapPipeline.cs .
+This code generates geotiffs that represent the amount of sunlight at each pixel in a DEM at given times.
+Currently, the geotiffs being generated are wrong in two ways.
+1. The sun does not appear to be at the correct azimuth for the given times when compared with older code that has been validated.
+2. Too many of the images show full sun in every pixel, which is not possible for locations at the latitude of the DEM.  I don't know whether the sun's elevation is wrong, or the horizon is wrong or the lighting calculation is wrong or something else.
+Pay attention to GenerateShadows on line 103 of @moonlib/pipeline/LightmapPipeline.cs.  This method fills 128 x 128 pixel tiles in geotiff tiles with the amount of sun at each pixel in the underlying DEM using the BuilderSunFraction method of @moonlib/LightmapGenerator.cs .
+Also look at GenerateMatrices on line 86, which calls the GetMatrix method of @moonlib/ElevationMap.cs .  This code, which generates a 4 x 4 rotation and translation matrix, is from the old code which had a different convention for the azimuth, and this matrix may also be wrong.

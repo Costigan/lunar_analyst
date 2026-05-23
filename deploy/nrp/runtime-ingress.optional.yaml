@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lunar-analyst
+  namespace: lunar-analyst
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "128m"
+spec:
+  rules:
+    - host: lunar-analyst.example.org
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: lunar-analyst
+                port:
+                  name: http

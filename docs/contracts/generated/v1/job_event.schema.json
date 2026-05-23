@@ -1,0 +1,57 @@
+{
+  "$defs": {
+    "JobEventName": {
+      "enum": [
+        "job_queued",
+        "job_started",
+        "job_progress",
+        "job_completed",
+        "job_failed",
+        "job_cancelled",
+        "layer_added",
+        "layer_updated",
+        "layer_removed",
+        "map_zoom_requested"
+      ],
+      "title": "JobEventName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "event_name": {
+      "$ref": "#/$defs/JobEventName"
+    },
+    "timestamp_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Timestamp Utc",
+      "type": "string"
+    },
+    "data": {
+      "additionalProperties": true,
+      "title": "Data",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event_id",
+    "job_id",
+    "scenario_id",
+    "event_name",
+    "timestamp_utc"
+  ],
+  "title": "JobEvent",
+  "type": "object"
+}

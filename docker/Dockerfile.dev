@@ -1,0 +1,73 @@
+ARG BASE_IMAGE=lunar-analyst-base
+FROM ${BASE_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LUNAR_ANALYST_DEV_WORKDIR=/workspace/lunar_analyst
+ENV LUNAR_ANALYST_DEV_CONFIG=/workspace/lunar_analyst/config/lunar_analyst.devcontainer.toml
+ENV LUNAR_ANALYST_WORKSPACE_ROOT=/var/lib/lunar-analyst/workspace
+ENV LUNAR_ANALYST_DEV_UID=1000
+ENV LUNAR_ANALYST_DEV_GID=1000
+
+RUN set -euxo pipefail \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gosu \
+        sqlite3 \
+        libsqlite3-dev \
+        pkg-config \
+        unzip \
+        jq \
+        less \
+        nano \
+        vim \
+        procps \
+        iproute2 \
+        iputils-ping \
+        netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -euxo pipefail \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm install -g npm@10 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -euxo pipefail \
+    && python -m pip install --no-cache-dir \
+        uvicorn \
+        pytest \
+        jsonschema \
+        numpy \
+        pyproj \
+        pyyaml \
+        requests \
+        msgspec \
+        marimo \
+        anywidget \
+        matplotlib \
+        pandas \
+        scipy \
+        scikit-image \
+        shapely \
+        fiona \
+        pyogrio \
+        pillow \
+        openpyxl \
+        watchdog \
+        tomlkit \
+        spacy \
+    && python -m spacy download en_core_web_sm
+
+COPY docker/entrypoints/run-dev.sh /usr/local/bin/run-dev.sh
+COPY docker/entrypoints/docker-smoke.sh /usr/local/bin/docker-smoke.sh
+RUN chmod +x /usr/local/bin/run-dev.sh /usr/local/bin/docker-smoke.sh
+
+WORKDIR /workspace/lunar_analyst
+
+ENTRYPOINT ["/usr/local/bin/run-dev.sh"]
+CMD ["bash"]

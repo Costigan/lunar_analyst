@@ -1,0 +1,3 @@
+Implement the python package described in #specification.md in this folder.
+Follow the specification carefully.
+If you have questions, ask them.

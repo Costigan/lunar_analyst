@@ -1,0 +1,18 @@
+Read @docs/DESCRIPTION.md for context.  Then, I need a careful
+analysis of how elevation and particularly azimuth are handled in this
+application.  The horizons that @moonlib/QuadTreeHorizonGenerator.cs
+generates are consistent enough with the reference algorithm and an
+older implementation, but when I calculate lighting maps from them,
+they are wildly different from the lighting maps that the older
+implementation generates.
+
+@moonlib/pipeline/LightmapPipeline.cs contains the code that writes
+the lightmaps.  It uses NASA's spice library to calculate the sun's
+position in moon mean earth frame and then rotates that to a
+coordinate system for each pixel.  The problem could like in that code
+or in something else.  
+
+That older implementation is in d:/projects/mapbuilder .
+Look particularly at d:/projects/mapbuilder/build/builder/LightingMapBuilder.cs .
+
+Write a description of how azimuth and elevation are handled into docs/AZEL.md

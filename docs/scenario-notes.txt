@@ -1,0 +1,36 @@
+Lunar Analyst Use Case Scenarios
+Ideas
+    • LLM control of basic tool functions. Ideally voice control.
+    • 
+Scenario 1
+ PROMPT: Show me the south pole of the moon. (needs scale)
+
+PROMPT: Overlay elevation and add place names. I want to look for high points.
+
+PROMPT: What is this color map?
+RESPONSE: Turbo
+PROMPT: Zoom in on the top of Mons Malapert and map slope to the same color map.
+
+PROMPT: What is the range of the slope data?
+RESPONSE: 0 to 69 degrees 
+PROMPT: Limit the colormap to 20 degrees.
+
+ PROMPT: Switch to an operations color map with a landing threshold of 10 degrees and a movement threshold of 15 degrees.
+
+PROMPT: Are there any safe landing sites?
+RESPONSE: What are your criteria for a landing site?  Typical criteria are slope and roughness over a circular region, presence of rocks.  Some fraction of the region, like 90%, needs to meet the criteria.
+PROMPT: A landing site is a circle of 100 meters radius with 10 degrees slope or less and no visible rocks.
+ TODO: Ignoring rocks for now.
+
+PROMPT: Add permanent shadow
+
+
+PROMPT: Show me areas that get more than 100 hours of sun continuous sun at any time in 2030?
+
+PROMPT: What is the range of sunlight hours?
+RESPONSE: 100 to 456 hours
+PROMPT: Filter these points to include only points more than 500 meters and less than 1 km from a large PSR.
+RESPONSE: How do you define a large PSR?
+PROMPT: 300 by 300 meters
+
+

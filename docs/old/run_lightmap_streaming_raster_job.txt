@@ -1,0 +1,49 @@
+ run_lightmap_streaming_raster_job is a high-level orchestration function used in notebooks and scripts to generate time-aggregated lunar
+  lighting maps (GeoTIFFs). It coordinates between a high-performance C# streaming engine and Python-based scientific logic.
+
+  Core Workflow
+
+
+   1. Initialization & Configuration:
+       * Resolves the scenario context (scenario ID, root directory, and parameters).
+       * Bootstraps the Native Bridge (pythonnet + moonlib.dll) via LightmapStreamingClient.
+       * Prepares the output GeoTIFF using GDAL, matching the dimensions and projection of the source DEM.
+
+
+   2. Request Setup:
+       * Constructs a LightmapStreamRequestPy containing parameters like time range (start/stop UTC), time step, observer elevation, and
+         parallelism controls (max_read_parallelism, max_compute_parallelism).
+       * Defines "patch" (tile) dimensions (e.g., 128x128 pixels).
+
+
+   3. The Streaming Loop (`stream_tiles`):
+       * Memory Management: Allocates a pool of 3D NumPy buffers (Shape: [Time, Height, Width], Type: uint8) in Python.
+       * Native Execution: Passes memory pointers for these buffers to the C# LightmapArrayStreamingBridge.
+       * Background Compute: The C# engine runs a multi-stage pipeline:
+           * Stage 1: Reads horizon data from disk in parallel.
+           * Stage 2: Computes pixel-wise lighting for every time step in the requested range (using GPU/CUDA if available).
+           * Stage 3: Populates one of the registered Python buffers with the result for a specific spatial tile.
+       * Polling: Python calls poll_next_tile to wait for the next completed tile.
+
+
+   4. Scientific Transformation (`tile_transform`):
+       * As each 3D tile (Time x Height x Width) is received in Python, it is passed to a user-provided tile_transform function.
+       * This function performs time-aggregation (e.g., np.mean(), np.max(), or custom "percent lit" logic) to reduce the 3D data into a 2D tile.
+
+
+   5. Output Writing:
+       * The resulting 2D tile is written to the correct spatial offset in the output GeoTIFF via gdal.WriteArray.
+       * Once processing is complete, the buffer is released back to the C# engine for reuse.
+
+
+   6. Finalization:
+       * Flushes the GeoTIFF to disk.
+       * Registers the new file in the scenario's artifact catalog so it appears in the web UI.
+       * Reports final progress and returns a summary of the job (min/max values, tiles written, etc.).
+
+
+  Key Components
+   * `LightmapRunConfig`: Defines default parameters and output metadata (e.g., output_kind="lightmap").
+   * `tile_transform`: A mandatory callback where the actual "science" happens (e.g., calculating the average sun period).
+   * `LightmapStreamingClient`: Manages the low-level interop, buffer registration, and job lifecycle with the .NET runtime.
+   * `stream_tiles`: An iterator that hides the complexity of polling, buffer rotation, and error handling.

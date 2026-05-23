@@ -1,0 +1,384 @@
+/* MoonLayers Widget Styles */
+
+.moonlayers-map {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+/* Popup styles */
+.ol-popup {
+  position: absolute;
+  background-color: white;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4);
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #ccc;
+  bottom: 12px;
+  left: -50px;
+  min-width: 280px;
+  max-width: 400px;
+  z-index: 1000;
+}
+
+.ol-popup:after, .ol-popup:before {
+  top: 100%;
+  border: solid transparent;
+  content: " ";
+  height: 0;
+  width: 0;
+  position: absolute;
+  pointer-events: none;
+}
+
+.ol-popup:after {
+  border-top-color: white;
+  border-width: 10px;
+  left: 48px;
+  margin-left: -10px;
+}
+
+.ol-popup:before {
+  border-top-color: #ccc;
+  border-width: 11px;
+  left: 48px;
+  margin-left: -11px;
+}
+
+.ol-popup-closer {
+  text-decoration: none;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #999;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.ol-popup-closer:hover {
+  color: #333;
+}
+
+.ol-popup-content {
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.feature-info {
+  font-size: 13px;
+}
+
+.feature-property {
+  margin: 5px 0;
+  padding: 3px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.feature-property:last-child {
+  border-bottom: none;
+}
+
+.property-key {
+  font-weight: 600;
+  color: #555;
+  margin-right: 8px;
+}
+
+.property-value {
+  color: #333;
+}
+
+/* Mouse position control */
+.custom-mouse-position {
+  position: absolute;
+  bottom: 8px;
+  right: 48px; /* To the left of the info/fullscreen button */
+  background: rgba(255, 255, 255, 0.9);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: monospace;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  z-index: 100;
+}
+
+/* Measurement tooltips */
+.ol-tooltip {
+  position: relative;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 4px;
+  color: white;
+  padding: 6px 10px;
+  opacity: 0.9;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+  user-select: none;
+}
+
+.ol-tooltip-measure {
+  opacity: 1;
+  font-weight: bold;
+}
+
+.ol-tooltip-static {
+  background-color: #ffcc33;
+  color: black;
+  border: 1px solid white;
+}
+
+.ol-tooltip-measure:before,
+.ol-tooltip-static:before {
+  border-top: 6px solid rgba(0, 0, 0, 0.8);
+  border-right: 6px solid transparent;
+  border-left: 6px solid transparent;
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  margin-left: -7px;
+  left: 50%;
+}
+
+.ol-tooltip-static:before {
+  border-top-color: #ffcc33;
+}
+
+/* Layer switcher customization */
+.layer-switcher {
+  top: 3.5em;
+  right: 0.5em;
+}
+
+.layer-switcher button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.layer-switcher button:hover {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+/* Layer ordering controls */
+.layer-order-controls {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.layer-order-btn {
+  background: rgba(240, 240, 240, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.layer-order-btn:hover {
+  background: rgba(51, 153, 204, 0.9);
+  color: white;
+  border-color: rgba(51, 153, 204, 1);
+  transform: scale(1.1);
+}
+
+.layer-order-btn:active {
+  transform: scale(0.95);
+}
+
+.layer-switcher li.layer {
+  position: relative;
+  padding-right: 60px; /* Make room for ordering controls */
+}
+
+.layer-switcher li.layer .layer-order-controls {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Scale line */
+.ol-scale-line {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px;
+}
+
+.ol-scale-line-inner {
+  border: 1px solid #333;
+  border-top: none;
+  color: #333;
+  font-size: 10px;
+  text-align: center;
+  margin: 1px;
+  will-change: contents, width;
+  transition: all 0.25s;
+}
+
+/* Zoom controls */
+.ol-zoom {
+  top: 0.5em;
+  left: 0.5em;
+}
+
+.ol-zoom button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  margin: 1px;
+}
+
+.ol-zoom button:hover {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+/* Rotate control */
+.ol-rotate {
+  top: 0.5em;
+  right: 0.5em;
+}
+
+.ol-rotate button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.ol-rotate button:hover {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+/* Zoom to extent button */
+.ol-zoom-extent {
+  top: 6.5em;
+  left: 0.5em;
+}
+
+.ol-zoom-extent button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.ol-zoom-extent button:hover {
+  background-color: rgba(255, 255, 255, 1);
+}
+
+/* Overview map */
+.ol-overviewmap {
+  left: 0.5em;
+  bottom: 0.5em;
+}
+
+.ol-overviewmap button {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+/* Full screen */
+.ol-full-screen {
+  top: 0.5em;
+  right: 0.5em;
+}
+
+/* Graticule labels */
+.ol-graticule-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 
+    -1px -1px 0 #000,
+    1px -1px 0 #000,
+    -1px 1px 0 #000,
+    1px 1px 0 #000;
+}
+
+/* Loading indicator */
+.moonlayers-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 20px 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  z-index: 10000;
+  font-size: 14px;
+  color: #333;
+}
+
+/* Error display */
+.moonlayers-error {
+  color: #d32f2f;
+  background: #ffebee;
+  padding: 15px;
+  border-radius: 4px;
+  border-left: 4px solid #d32f2f;
+  margin: 10px;
+  font-size: 14px;
+}
+
+.moonlayers-error h3 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .ol-popup {
+    min-width: 200px;
+    max-width: 90vw;
+  }
+  
+  .ol-zoom,
+  .ol-rotate,
+  .ol-zoom-extent {
+    transform: scale(0.9);
+  }
+  
+  .custom-mouse-position {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+}
+
+/* Attribution */
+.ol-attribution {
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px 0 0 0;
+  font-size: 11px;
+}
+
+.ol-attribution ul {
+  margin: 0;
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #333;
+}
+
+/* Cursor styles */
+.ol-selectable {
+  cursor: pointer;
+}
+
+.ol-grabbing {
+  cursor: grabbing;
+  cursor: -webkit-grabbing;
+  cursor: -moz-grabbing;
+}

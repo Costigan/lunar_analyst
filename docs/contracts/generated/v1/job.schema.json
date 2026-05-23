@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "JobMode": {
+      "enum": [
+        "queued",
+        "immediate"
+      ],
+      "title": "JobMode",
+      "type": "string"
+    },
+    "JobStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "title": "JobStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "job_id": {
+      "title": "Job Id",
+      "type": "string"
+    },
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "job_type": {
+      "title": "Job Type",
+      "type": "string"
+    },
+    "mode": {
+      "$ref": "#/$defs/JobMode"
+    },
+    "status": {
+      "$ref": "#/$defs/JobStatus"
+    },
+    "params": {
+      "additionalProperties": true,
+      "title": "Params",
+      "type": "object"
+    },
+    "requested_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Requested At Utc",
+      "type": "string"
+    },
+    "started_at_utc": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Started At Utc"
+    },
+    "finished_at_utc": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Finished At Utc"
+    },
+    "updated_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Updated At Utc",
+      "type": "string"
+    }
+  },
+  "required": [
+    "job_id",
+    "scenario_id",
+    "job_type",
+    "mode",
+    "status",
+    "requested_at_utc",
+    "updated_at_utc"
+  ],
+  "title": "Job",
+  "type": "object"
+}

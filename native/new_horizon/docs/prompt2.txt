@@ -1,0 +1,40 @@
+Add a command line project to this solution called build.
+
+This project takes an argument that is a verb specifying what to do.
+The verb I want you to implement is 'lightmap'.
+
+The lightmap verb has these optional arguments:
+* -time that specifies a timestamp in ISO 8601 format
+* -csv that specifies an input .csv file.
+* -timefield that specifies the name of a field in the .csv file specifying times in ISO 8601 format. The combination of -csv and -timefield allows the specification of a list of timestamps.  
+* -outdir that specifies an output directory
+* -dem the path of a geotiff file that is a digital elevation map (DEM)
+* -horizondir the name of a directory containing horizon files for the DEM
+
+Each of these arguments should default to the value that was provided
+in the last run of the program.
+
+Add a second verb named 'config' that has the same optional arguments.
+The purpose of this verb is to update the default values of the
+arguments, and it has no other behavior.
+
+In this program, timestamps (DateTimes) will always be represented in
+UTC, even if the time zone is not included in the serialization of the
+DateTime.  External serialization will also be ISO 8601, although the
+timezone will be optional (again, if a timezone is present, it must be
+Zulu i.e. UTC).
+
+The lightmap verb writes one or more geotiffs to the -outdir, each
+with the same resolution and georeferencing as the DEM.  Each geotiff
+gives the amount of sunlight at a timestamp at each pixel in the DEM,
+calculated using the horizon files and the georeferencing.
+
+Go ahead and add the 'build' project to this solution and create the
+'lightmap' and 'config' command line verbs.
+
+Write a function that reads the csv file, extracts the timestamp
+values from the column named by the -timefield argument, and returns
+them in a list of DateTime instances.
+
+Stop there.  We'll add more code later.
+If you have questions, ask them first.

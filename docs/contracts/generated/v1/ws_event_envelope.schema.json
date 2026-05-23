@@ -1,0 +1,55 @@
+{
+  "$defs": {
+    "JobEventName": {
+      "enum": [
+        "job_queued",
+        "job_started",
+        "job_progress",
+        "job_completed",
+        "job_failed",
+        "job_cancelled",
+        "layer_added",
+        "layer_updated",
+        "layer_removed",
+        "map_zoom_requested"
+      ],
+      "title": "JobEventName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Stage 1 frozen WebSocket event envelope.",
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event": {
+      "$ref": "#/$defs/JobEventName"
+    },
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "timestamp_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Timestamp Utc",
+      "type": "string"
+    },
+    "data": {
+      "additionalProperties": true,
+      "title": "Data",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event",
+    "scenario_id",
+    "timestamp_utc",
+    "data"
+  ],
+  "title": "WsEnvelope",
+  "type": "object"
+}

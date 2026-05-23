@@ -1,0 +1,4 @@
+id,mode,primary_tool,repair_applied,first_try_success,unsafe_blocked,duration_ms,error,tool_call_count,tool_calls_json
+route_script_001,clarify,,False,False,False,0,,0,[]
+route_script_002,clarify,,False,False,False,0,,0,[]
+route_script_003,clarify,,False,False,False,0,,0,[]

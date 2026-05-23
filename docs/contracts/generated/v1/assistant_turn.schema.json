@@ -1,0 +1,94 @@
+{
+  "$defs": {
+    "AssistantTurnStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "confirmation_required"
+      ],
+      "title": "AssistantTurnStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "turn_id": {
+      "title": "Turn Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "user_message_id": {
+      "title": "User Message Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/AssistantTurnStatus"
+    },
+    "provider_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Id"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "created_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Created At Utc",
+      "type": "string"
+    },
+    "updated_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Updated At Utc",
+      "type": "string"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "usage": {
+      "additionalProperties": true,
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "required": [
+    "turn_id",
+    "session_id",
+    "user_message_id",
+    "status",
+    "created_at_utc",
+    "updated_at_utc"
+  ],
+  "title": "AssistantTurn",
+  "type": "object"
+}

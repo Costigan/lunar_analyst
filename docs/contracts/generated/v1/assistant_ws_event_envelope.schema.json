@@ -1,0 +1,75 @@
+{
+  "$defs": {
+    "AssistantEventName": {
+      "enum": [
+        "assistant_turn_started",
+        "assistant_delta",
+        "assistant_turn_completed",
+        "assistant_scenario_changed",
+        "assistant_tool_call_proposed",
+        "assistant_tool_call_started",
+        "assistant_tool_call_completed",
+        "assistant_confirmation_required",
+        "assistant_confirmation_resolved",
+        "assistant_error",
+        "prompt_segmentation_completed",
+        "prompt_classification_completed",
+        "turn_execution_plan_built",
+        "turn_execution_plan_validation_failed",
+        "segment_execution_started",
+        "segment_execution_finished",
+        "deterministic_handoff_built",
+        "turn_merge_completed",
+        "turn_status_finalized"
+      ],
+      "title": "AssistantEventName",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.1",
+      "default": "1.1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "event": {
+      "$ref": "#/$defs/AssistantEventName"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "turn_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Turn Id"
+    },
+    "timestamp_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Timestamp Utc",
+      "type": "string"
+    },
+    "data": {
+      "additionalProperties": true,
+      "title": "Data",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event",
+    "session_id",
+    "timestamp_utc",
+    "data"
+  ],
+  "title": "AssistantWsEnvelope",
+  "type": "object"
+}

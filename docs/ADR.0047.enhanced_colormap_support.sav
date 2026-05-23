@@ -1,0 +1,49 @@
+# ADR.0047: Enhanced Colormap Support
+
+- Status: Superseded by `docs/ADR.0047.enhanced_colormap_support.md`
+- Date: 2026-04-10
+- Owners: Lunar Analyst architecture team
+- Related: 
+
+# Initial notes (to be replaced by a clean draft)
+
+## Context
+
+## Problem
+
+- Brightness, contrast sliders on the panel in the Layer Manager panel for individual layers don't work.  I think the problem is in the shader, not the sliders themselves.  I think these parameters are being applied before the color calculation, not afterwards, but I'm not certain.
+- The assistant doesn't know about colormaps and should and should be able to create and apply them.
+- Colormaps known by the project need to live in files
+- There needs to be a search path for these colormap files that includes a directory in the scenario, a directory in the scenario root and a directory in the project source (or deployment) directory.
+- There needs to be a way to associate a colormap persistently with a file in a scenario.  I think this should be in the scenario database.
+- There should be more types of colormaps than just the mapping from normalized relative position to RGBA.
+  - Categorical and Discrete Visualization
+    For derived products like Hazard Maps (Safe, Caution, Danger), linear interpolation is undesirable.
+    - Extension: Add support for "Discrete" colormaps where colors "step" at specific thresholds rather than blending.
+    - Technical Path: Use ["case"] or ["step"] expressions in the OpenLayers style builder instead of the current ["interpolate"] logic.
+  - Statistical and Data-Driven Palettes
+    Instead of hardcoded values (0.0 to 1.0), colormaps should respond to the actual data distribution in the scenario.
+    - Extension: Support Quantile, Equal Interval, and Standard Deviation classification modes.
+    - Technical Path: Leverage the existing GET /api/v1/lunar-analyst/files/{id}/raster-stats endpoint. The frontend would calculate the stop values dynamically based on these stats before generating the WebGLTile expression.
+  - Periodic and Cyclic Colormaps
+    Data like Aspect (terrain orientation) is cyclic; 0° and 360° represent the same physical state but currently map to different ends of a linear gradient.
+    - Extension: Add a "Cyclic" flag to colormap definitions that ensures the first and last stops are identical and allows the GPU to use modulo arithmetic for interpolation.
+    - Technical Path: Update rasterStyle.ts to include a ["mod", ["band", 1], 360] operation in the style expression for cyclic layers.
+  - Scientific Perception & Accessibility Tools
+    Scientific accuracy can be compromised by "pretty" but misleading colormaps (like the classic 'Rainbow' which introduces artificial gradients).
+     - Extension:
+         - Integrate the CET (Colorcet) perceptually uniform palettes.
+         - Add a "Colorblind Simulation" toggle in the Layer Manager using a post-processing fragment shader on the entire map viewport.
+         - Provide a "Luminance Profile" preview in the colormap editor to show users if their palette has a monotonic increase in brightness (essential for interpreting 3D
+           shape from shading).
+  - Interactive "Transfer Function" Editor
+    Inspired by medical imaging (DICOM) and high-end GIS like QGIS, the UI could allow users to "re-weight" the colormap stops interactively.
+     - Extension: A histogram-overlay editor where users can drag stops to "stretch" colors across specific data ranges (e.g., highlighting only the coldest 5% of pixels in a PSR temperature map).
+     - Technical Path: Update style variables in real-time. Since OpenLayers style variables are reactive, dragging a stop in the UI would instantly update the map without a re-render or server hit.
+- Capture ideas for future extensions
+  - Bivariate and Multidimensional Colormaps
+    Currently, the application maps one data band to a 1D gradient. Many lunar datasets are best understood in relation to each other (e.g., Slope vs. Illumination or
+    Elevation vs. Cratering Density).
+    - Extension: Implement 2D colormaps where Band 1 (X-axis) and Band 2 (Y-axis) resolve to a color on a 2D grid.
+    - Technical Path: Use the LayerState.style.shader contract to pass two bands into a custom fragment shader that samples a 2D texture (the colormap grid).
+- Consider shaders that aren't colormaps too, like contour lines.

@@ -1,0 +1,137 @@
+title: Map Algebra Operation Guidance (raster.calculate + raster.transform)
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: map_algebra, raster.calculate, raster.transform, masks, transparency, numpy, safety
+
+# Purpose
+Use this guidance to choose the correct map algebra tool and encode mask intent correctly.
+
+- `raster.calculate`: expression DSL for single-step deterministic raster math.
+- `raster.transform`: restricted script mode for multi-step logic and explicit output shaping.
+
+# Tool Selection
+Use `raster.calculate` when:
+- The operation is a single expression.
+- Inputs can be described as direct bindings.
+- You do not need multi-step intermediate logic.
+
+Use `raster.transform` when:
+- You need intermediate variables or multi-step logic.
+- You need script readability for maintenance.
+- You need behavior not cleanly represented in one DSL expression.
+
+# Mask Intent: Required Distinction
+Always classify the request into one of these intents before generating a tool call.
+
+1. Binary classification mask (two classes, both meaningful)
+- Meaning: true pixels and false pixels are both data classes.
+- Preferred expression/script result: `1` for true, `0` for false.
+- Example: `where(slope <= 5, 1, 0)`.
+
+2. Visibility/selection mask (show selected pixels; hide others)
+- Meaning: selected pixels are data; non-selected pixels should be transparent/invalid.
+- Encode non-selected pixels as nodata/invalid (not as class `0`) when supported by the chosen tool path.
+- If nodata/invalid output cannot be encoded directly in the chosen path, switch tool path or include an explicit follow-up styling step that treats background as transparent.
+
+# Prompt Interpretation Rule
+If user wording says "highlight where" or "show areas", treat as visibility/selection mask by default.
+If user wording explicitly asks for two classes (for example "0/1 mask" or "binary classes"), treat as binary classification mask.
+
+# `raster.calculate` Authoring Rules
+- Expression must be a single valid DSL expression.
+- Use bound variable names exactly as provided in `inputs`.
+- Keep expressions deterministic and concise.
+- Use scenario-relative `output_relative_path`.
+- Use `overwrite_mode="ask"` by default.
+- Use `overwrite_mode="always"` only when the user explicitly requests replacement.
+- Use `overwrite_mode="never"` when the user explicitly says not to overwrite.
+- If the user asks to create/show the output as a map layer in one step, set `publish_layer.enabled=true` and set desired `publish_layer` fields (for example `visible=true`, `title`, `style`).
+- For highlight/selection masks that should hide non-selected pixels, set `publish_layer.transparent_background=true`.
+
+Current function families include:
+- Conditionals: `where(...)`
+- Terrain helpers: `slope(...)`, `aspect(...)`, `hillshade(...)`
+- Temporal reducers: `min(...)`, `max(...)`, `avg(...)`, `std(...)`
+
+# `raster.transform` Authoring Rules
+Two forms are supported:
+
+1. Single expression
+```python
+result = where((slope(dem) < 15) & (dem > 2000), 1.0, 0.0)
+```
+
+2. Multi-statement block
+```python
+slope_deg = slope(dem)
+is_flat = slope_deg < 15
+is_elevated = dem > 2000
+result = where(is_flat & is_elevated, 1.0, 0.0)
+```
+
+3. `np.where` alias (sealed NumPy facade)
+```python
+result = np.where((slope(dem) < 15) & (dem > 2000), 1.0, 0.0)
+```
+
+Required contract:
+- Script must assign one final `result` raster.
+- No imports, loops, custom function defs, or global side effects.
+- Keep logic array-parallel and partition-safe.
+- Use elementwise logic operators (`&`, `|`, `~`) with parentheses, not `and/or/not`.
+
+# Temporal Guidance
+When temporal inputs are used:
+- Use reserved `times` binding in request model.
+- Assume `[time, y, x]` axis order.
+- Reduce temporal stacks to a 2D final raster.
+- Canonical request pattern:
+  - `inputs.times = { "kind": "times", "start_utc": "...", "stop_utc": "...", "step_hours": ... }`
+  - Temporal rasters use `temporal_source` and `times: "times"`.
+- Legacy `signal` bindings and top-level `time_start_utc`/`time_stop_utc`/`time_step_hours` remain compatibility-only and should not be primary generated examples.
+
+# Alignment and CRS
+- Inputs are aligned to the scenario DEM grid by backend services.
+- Do not implement manual reprojection in expressions/scripts.
+
+# Robustness Checklist
+Before issuing a tool call:
+1. Choose tool by complexity (`raster.calculate` vs `raster.transform`).
+2. Determine mask intent (binary classification vs visibility/selection).
+3. Ensure expression/script matches intent encoding.
+4. Verify input keys match referenced variable names.
+5. Ensure output path is scenario-relative and deterministic.
+6. Set overwrite behavior explicitly (`ask`/`always`/`never`) based on user intent.
+
+# Error-Avoidance
+- `unknown_variable`: input key/name mismatch.
+- `unknown_function`: unsupported function in selected tool path.
+- `missing_result` (scripts): no final `result` assignment.
+- `output_exists`: ask for overwrite confirmation (`overwrite_mode="ask"`) or choose a new path.
+- `plan_too_large` (scripts): simplify transform or reduce temporal span.
+
+# Preferred Style
+- Prefer short, readable transforms over dense one-liners.
+- Use explicit thresholds and clear variable names.
+- Keep each request scoped to one output artifact.
+
+# Copy-This Templates
+1. Single expression:
+```python
+result = where((slope(dem) <= 8) & (dem > 0), 1, nodata())
+```
+
+2. Multi-statement:
+```python
+slope_deg = slope(dem)
+flat = slope_deg <= 8
+result = where(flat, dem, nodata())
+```
+
+3. Temporal reducer:
+```python
+illum_mean = avg(light)
+result = where(illum_mean >= 0.6, illum_mean, nodata())
+```

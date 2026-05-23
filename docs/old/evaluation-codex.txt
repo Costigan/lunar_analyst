@@ -1,0 +1,301 @@
+Lunar Analyst Detailed Evaluation (Codex)
+Date: 2026-03-03
+Scope reviewed: backend (API/services/jobs/worker), frontend (React/OpenLayers), native integration touchpoints, and design alignment against docs/DESIGN.md.
+
+Executive Summary
+- The application has strong domain direction (scenario-first workflow, typed contracts, explicit CRS handling attempts), but the current implementation is still in a transitional architecture and carries several structural risks.
+- The highest risks are not style-level code smells; they are architectural: synchronous "queued" jobs, process-bound in-memory state, and a monolithic service container module that mixes nearly every backend concern.
+- There are clear dead-ends if left unchanged: multi-worker deployment inconsistency, unreliable cancellation/progress semantics, and continued growth of God-modules.
+
+What Is Working Well
+- Clear typed model surface and contract decoration (`backend/contracts/models.py`, `backend/contracts/decorators.py`).
+- Strong path normalization/containment checks are present in many critical paths (for example `_ensure_within_root`).
+- Raster map-delivery derivative hashing and storage lineage are directionally correct (`backend/services/raster_delivery.py`).
+- Assistant provider abstraction exists and is extensible (`backend/services/assistant/provider_registry.py`).
+
+Critical Findings (Architectural)
+1) Job runtime semantics are synchronous despite "queued" contract.
+- Evidence:
+  - `StubJobService.run_typed_job` executes handlers inline in request path (`backend/api/dependencies.py:2594`, `backend/api/dependencies.py:2638`).
+  - Routes call this directly (`backend/api/job_runtime.py:61`, `backend/api/routers/v1.py` generated job routes).
+  - Cancellation API exists but cannot reliably cancel long-running native jobs because job IDs are only returned after handler completion (`backend/api/dependencies.py:2739`).
+- Impact:
+  - "Queued" is metadata only, not behavior.
+  - Long jobs block API request threads.
+  - Progress is mostly post-hoc, not real-time.
+- Why this is a dead-end:
+  - Any attempt to scale jobs/features on top of this model deepens technical debt.
+
+2) Process topology invariant is violated for native compute.
+- Design target says heavy compute should run in separate worker process.
+- Evidence:
+  - `JobHandlers.generate_horizons` loads `pythonnet`/`moonlib` in-process (`backend/jobs/handlers.py:188`).
+  - Lightmap native streaming client also boots moonlib in the backend process path (`backend/worker/lightmap_streaming.py`, `LightmapStreamingClient.__init__`).
+  - Only PSR path is isolated via subprocess (`backend/jobs/handlers.py:340`, `backend/worker/psr_job_runner.py`).
+- Impact:
+  - Native DLL lifetime/conflict risk in API process.
+  - Failure containment is weak.
+  - Harder future worker isolation migration.
+
+3) Monolithic backend core module is a God-object.
+- Evidence:
+  - `backend/api/dependencies.py` is ~3969 lines and contains scenario/product/layer/job/notebook/marimo/session/container/config/path helpers.
+- Impact:
+  - High coupling and fragile edits.
+  - Hard to reason about invariants per bounded context.
+  - Unit testing boundaries are blurred.
+- Why dead-end:
+  - New features will continue to accrete into this module unless a structural extraction happens now.
+
+4) Eventing/state model is per-process, unbounded, and polling-based.
+- Evidence:
+  - Events appended to unbounded in-memory lists: `stores.ws_events`, `stores.assistant_ws_events` (`backend/api/dependencies.py:187-188`, `backend/api/dependencies.py:2776`, `backend/services/assistant/assistant_service.py:1670`).
+  - WS endpoints poll list length with sleeps (`backend/api/routers/v1.py:469`, `backend/api/routers/assistant.py:117`).
+- Impact:
+  - Memory growth over long uptime.
+  - Event fan-out cost increases with list size.
+  - Multi-process workers produce inconsistent client views.
+
+5) Scenario DEM identity is hard-coded in a way that conflicts with path-first model.
+- Evidence:
+  - Contract constrains `primary_dem_path` to `dem.tif` only (`backend/contracts/models.py:45`).
+  - Normalizer effectively forces `dem.tif` (`backend/api/dependencies.py:4145`).
+- Impact:
+  - Limits path-first product identity and future multi-DEM workflows.
+  - Creates drift with docs that describe broader scenario DEM naming.
+
+6) Frontend map startup policy drift and config bypass.
+- Evidence:
+  - Base layer creation fetches live WMTS capabilities on startup (`backend/web/lunar_analyst/src/map/mapController.ts:217`).
+  - Hardcoded capabilities URL is used; passed config `moonTrekCapabilitiesUrl` is not actually consumed in that call path.
+- Impact:
+  - Startup depends on external service availability.
+  - Contradicts documented non-blocking deterministic startup policy.
+
+7) Assistant artifact inspection can read arbitrary paths.
+- Evidence:
+  - `_resolve_artifact_path` accepts raw absolute `path` and returns it without root allowlist enforcement (`backend/services/assistant/tool_registry.py:490-505`).
+- Impact:
+  - Weakens data-safety guarantees, especially via MCP/external-agent usage.
+
+High Severity Findings
+8) Significant configuration and constant duplication.
+- Evidence:
+  - Multiple `_resolve_config_path` implementations across app/router/worker modules.
+  - Repeated ESRI:103878 WKT constants in multiple routers.
+- Impact:
+  - Drift risk and inconsistent behavior under config changes.
+
+9) Draft job contracts are exposed as runnable routes but intentionally throw `NotImplementedError`.
+- Evidence:
+  - `generate_horizon_profile`, `generate_lightmap_timeseries` raise `NotImplementedError` (`backend/jobs/handlers.py:889`, `backend/jobs/handlers.py:910`).
+  - Auto-discovery exposes all `@contract` handlers (`backend/api/job_runtime.py:26`).
+- Impact:
+  - Public API surface contains known non-functional routes.
+
+10) Assistant persistence backend rewrites full JSON file on every mutation.
+- Evidence:
+  - `_save()` serializes full store each write (`backend/services/assistant/session_store.py:72`), called by most mutations.
+- Impact:
+  - Poor scaling with session/message volume.
+  - Increased corruption window and write amplification.
+
+11) Frontend `App.tsx` is a monolithic orchestrator component.
+- Evidence:
+  - ~1233 lines with broad state/effects/socket orchestration in one component (`backend/web/lunar_analyst/src/App.tsx`).
+- Impact:
+  - Hard to test and reason about effect ordering.
+  - Increased regression risk as UI capabilities grow.
+
+12) Legacy/unused abstraction layer indicates stalled architectural direction.
+- Evidence:
+  - `backend/services/interfaces/*.py` defines ABCs, but runtime wiring uses direct `Stub*` classes in `dependencies.py` and does not implement these interfaces.
+- Impact:
+  - Extra cognitive overhead with little runtime value.
+
+13) Persistence logic is tightly interleaved with domain logic.
+- Evidence:
+  - Core services in `backend/api/dependencies.py` mix orchestration and direct SQLite SQL (`SELECT`, `INSERT`, `DELETE`) in the same classes/methods.
+- Impact:
+  - Harder unit testing and mocking.
+  - Harder future storage backend changes.
+  - Increased risk of subtle transaction and consistency bugs as feature volume grows.
+
+Medium Findings
+14) Tight coupling of service implementation to FastAPI dependency module.
+- Evidence:
+  - Core service implementations are defined inside `backend/api/dependencies.py` rather than in independent service modules.
+- Impact:
+  - Reduced reuse in non-HTTP contexts (standalone worker/CLI/processes).
+  - Architectural boundaries are less explicit.
+
+15) Timestamp format is custom and non-ISO (`YYYY-MM-DDTHH-MM-SS`).
+- Evidence:
+  - `UtcTimestamp` regex (`backend/contracts/types.py`).
+- Impact:
+  - External tooling interoperability friction.
+
+16) Notebook run metadata map is append-only in memory.
+- Evidence:
+  - `notebook_run_info` populated (`backend/api/dependencies.py:3011`) with no cleanup path.
+- Impact:
+  - Gradual memory growth.
+
+17) Router modules contain business/data logic better placed in services.
+- Evidence:
+  - `backend/api/routers/lunar_analyst.py` includes colormap file parsing, aux.xml stat cache logic, CRS handling, bootstrap workflows.
+- Impact:
+  - Thicker API layer, harder reuse/test in service layer.
+
+18) Frontend test coverage is mostly utility/service-level; orchestration flows are under-tested.
+- Evidence:
+  - Tests primarily target utils/services; no strong end-to-end coverage of `App.tsx` state/effect/socket interactions.
+
+Code Smells Summary
+- God-modules: `backend/api/dependencies.py`, `backend/services/assistant/assistant_service.py`, `backend/web/lunar_analyst/src/App.tsx`.
+- Boolean/flag-driven behavior and duplicated config parsing.
+- In-memory mutable global state as system backbone.
+- "Stub" naming in production core paths suggests temporary design became permanent.
+
+Architectural Dead-Ends (Most Important)
+- Dead-end A: "Queued jobs" without actual async runtime/worker isolation.
+- Dead-end B: Per-process in-memory event/state as source of truth.
+- Dead-end C: Single monolithic dependency/service container as integration hub.
+- Dead-end D: Mixed API/business logic layers and duplicated config/constant ownership.
+
+Recommended Refactorings
+Priority 0 (Immediate, low-risk)
+1) Stop exposing draft handlers in public job route generation (gate by readiness flag).
+2) Centralize config loading + CRS constants in one module and remove duplicates.
+3) Add bounded ring buffers or TTL pruning for `ws_events`, `assistant_ws_events`, and `notebook_run_info`.
+4) Enforce scenario/workspace allowlist for assistant artifact path resolution.
+
+Priority 1 (Core architecture)
+1) Introduce real async job execution (queue + worker process) and decouple API request lifetime from compute lifetime.
+2) Move all moonlib/pythonnet-heavy compute behind worker boundary; keep API process control-plane only.
+3) Split `backend/api/dependencies.py` into bounded context services:
+   - scenario catalog lifecycle
+   - product/file registry
+   - layer state
+   - job orchestration
+   - notebook runtime control
+   - marimo/session/auth
+4) Introduce a repository/data-access layer so services stop embedding raw SQL and DB schema details.
+5) Rename `Stub*` runtime classes to production role names and ensure interface contracts match real implementations.
+
+Priority 2 (Stability and scale)
+1) Replace assistant JSON monolith store with a transactional store (SQLite or append-log + compaction).
+2) Replace polling WS model with pub/sub or incremental cursor/event-id streaming.
+3) Decompose `App.tsx` into domain hooks/stores (scenario, layers, assistant, layout, websocket) with integration tests.
+4) Align frontend Moon Trek base-layer init with deterministic startup policy (no blocking capabilities fetch).
+5) Split `backend/jobs/handlers.py` by domain (for example terrain, lighting, notebook orchestration) while preserving `JobHandlers` contract discoverability.
+
+Implementation Program (Execution-Ready)
+
+Tranche 0: Safety + Drift Control (1 week)
+- Goal: reduce immediate risk without changing system topology.
+- Changes:
+  1) Add a single config/crs source module and route all config + CRS lookups through it.
+  2) Add handler exposure gating so draft `JobHandlers` are not published as runnable routes.
+  3) Add allowlist enforcement for assistant artifact path resolution (scenario root or registered file-id only).
+  4) Replace raw event list appends with bounded buffers (ring or capped deque) for:
+     - `ws_events`
+     - `assistant_ws_events`
+     - `notebook_run_info`
+- Acceptance:
+  - Contract tests still pass.
+  - Draft handlers no longer show in `GET /api/v1/job-definitions` route outputs unless explicitly enabled.
+  - Assistant artifact describe calls reject out-of-root absolute paths with structured errors.
+
+Tranche 1: Real Async Job Runtime (2-3 weeks)
+- Goal: make `queued` behavior real and make cancel/progress semantically correct.
+- Changes:
+  1) Introduce job queue abstraction and worker execution loop (single-process queue first is acceptable).
+  2) Change `run_typed_job` to enqueue and return immediately.
+  3) Ensure job status transitions are worker-driven (`queued -> running -> completed|failed|cancelled`).
+  4) Ensure cancellation can interrupt running jobs (or mark cancel-pending if hard interrupt unavailable).
+- Acceptance:
+  - Job submission latency stays short for long-running handlers.
+  - `cancel_job` reliably affects running jobs.
+  - Progress events are emitted during execution, not only after completion.
+
+Tranche 2: Enforce Native Compute Process Boundary (2-3 weeks)
+- Goal: remove moonlib/pythonnet heavy execution from API process.
+- Changes:
+  1) Move native handlers (`generate_horizons`, native reduction paths, related heavy jobs) into worker process boundary.
+  2) Keep API process as control-plane only for compute orchestration.
+  3) Keep `JobHandlers` signatures as the contract source; move implementations to worker adapter calls where needed.
+- Acceptance:
+  - API process no longer imports/boots moonlib for heavy job paths.
+  - Native crash/failure is contained to worker process.
+  - Existing job routes and payload contracts remain compatible.
+
+Tranche 3: Service Decomposition + Repository Layer (3-4 weeks, incremental)
+- Goal: remove God-module coupling and separate domain from persistence.
+- Changes:
+  1) Extract domain services from `backend/api/dependencies.py`:
+     - scenario
+     - product/file
+     - layer
+     - job orchestration
+     - notebook runtime
+     - marimo/session
+  2) Introduce repository modules for direct SQL operations and transaction boundaries.
+  3) Convert `dependencies.py` into DI providers/wiring only.
+  4) Rename `Stub*` production classes to canonical names and align with interface contracts.
+- Acceptance:
+  - `dependencies.py` reduced to wiring + provider construction.
+  - Domain service unit tests can run with repository fakes/mocks.
+  - SQL is isolated in repository modules (not mixed through orchestration methods).
+
+Tranche 4: Assistant Store Migration to SQLite (2 weeks)
+- Goal: replace JSON full-rewrite persistence with transactional storage.
+- Changes:
+  1) Implement `AssistantSessionStoreSqlite` with schema for sessions/messages/turns/tool_calls/confirmations/compactions.
+  2) Use WAL mode + transactional writes.
+  3) Add one-time migration path from JSON store (read old file, upsert rows, mark migrated).
+  4) Keep fallback/rollback switch to JSON backend via config flag.
+- Acceptance:
+  - All assistant contract tests pass against SQLite backend.
+  - Message/turn creation throughput and latency remain stable with larger histories.
+  - Data survives restart and partial-failure scenarios without corruption.
+- Operational note:
+  - If local sandbox constraints block SQLite behavior in development, escalate immediately and use user-assisted environment execution rather than reverting architecture direction.
+
+Tranche 5: Frontend Orchestration Decomposition (2-3 weeks)
+- Goal: reduce `App.tsx` orchestration risk and improve testability.
+- Changes:
+  1) Split `App.tsx` state/effects into domain hooks:
+     - `useScenarioWorkspace`
+     - `useLayerSync`
+     - `useAssistantSession`
+     - `useWorkspaceLayout`
+     - `useBackendEventStreams`
+  2) Keep presentational components mostly stateless.
+  3) Add integration tests for websocket-driven state updates and assistant-turn lifecycle.
+  4) Align Moon Trek base-layer startup with deterministic non-blocking behavior.
+- Acceptance:
+  - `App.tsx` reduced to composition shell.
+  - Integration tests cover layer/event/assistant critical flows.
+  - Startup no longer depends on blocking live capabilities fetch.
+
+Cross-Cutting Delivery Rules (for all tranches)
+- Keep contract compatibility unless a specific contract-change tranche is approved.
+- Prefer additive/reversible migrations with feature flags.
+- For each tranche provide:
+  - touched files
+  - explicit out-of-scope
+  - tests added/updated
+  - rollback switch/plan
+
+Residual Risk If No Action
+- Increasing regression rate in backend edits due coupling.
+- Memory/performance degradation on long-running backend sessions.
+- Continued mismatch between documented architecture and runtime behavior.
+- Harder migration path to true worker/process isolation later.
+
+Suggested Target State (12-Week)
+- API process becomes strictly control-plane and event broker.
+- Worker process owns all heavy native compute and reports structured progress/cancellation live.
+- Scenario/product/layer/job services are isolated modules with explicit interfaces actually used in wiring.
+- Frontend orchestration split into typed domain hooks with integration tests for websocket and multi-pane state.

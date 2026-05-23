@@ -1,0 +1,1026 @@
+# ADR.0042: Non-Deterministic Classification with Product Graph Planning
+
+- Status: Superseded by `docs/ADR.0042.non_deterministic_classification_and_product_graph.md` and `docs/ADR.0043.segment_intent_classification_and_product_request_extraction.md`
+- Date: 2026-04-03
+- Owners: Lunar Analyst architecture team
+- Supersedes: `docs/ADR.0042.extended_non_deterministic_segment_classification.md`
+- Related: `docs/DESIGN.md`, `docs/ADR.0011.ai_assistant_and_mcp.md`, `docs/ADR.0019.unified_tool_model.md`, `docs/ADR.0022.hybrid_command_router_with_deterministic_guidance_triggers.md`, `docs/ADR.0023.deterministic_router_with_bounded_agent_substeps.md`, `docs/ADR.0026.spacy_intent_unit_segmentation.md`, `docs/ADR.0027.intent_classification_contract.md`, `docs/ADR.0028.turn_planner_json_contract.md`, `docs/ADR.0029.per_segment_execution_state_and_merge_policy.md`, `docs/ADR.0033.assistant_observability_and_failure_taxonomy.md`
+
+## Context
+
+The assistant already uses a staged turn pipeline:
+
+1. prompt segmentation into prompt segments;
+2. classification of each segment as deterministic or non-deterministic;
+3. direct application execution for deterministic segments;
+4. agent/model-loop execution for non-deterministic segments;
+5. merge of per-segment outcomes into one turn result.
+
+This architecture improved reliability for imperative operational requests, but it still leaves two major gaps.
+
+### 1. Non-deterministic work is still too coarse
+
+Not all non-deterministic segments are the same. In practice they fall into at least three distinct behavioral classes:
+
+- advisory or explanatory requests,
+- additive constraints that should shape later work,
+- product-generation requests that require artifact-producing execution.
+
+Treating all of these as one non-deterministic mode makes the system hard to control:
+
+- advisory turns may over-execute,
+- constraints may not persist as structured state,
+- product requests may rely too heavily on LLM-inferred execution structure.
+
+### 2. Product-generation requests lack an explicit dependency model
+
+When the user asks for a product, the system often needs intermediate products or prerequisite steps.
+
+Example:
+- a slope-derived landing mask may require a DEM-derived slope product first.
+
+Today those dependencies are either:
+
+- assumed by the user,
+- inferred inconsistently by the LLM,
+- or left to ad hoc tool-selection behavior.
+
+Lunar Analyst needs a deterministic internal representation of:
+
+- what analysis products exist,
+- what each product means,
+- what creates it,
+- and what prerequisite products are required first.
+
+## Problem
+
+The system currently lacks a clean separation between these questions:
+
+1. Is the user asking for explanation, constraint-setting, or product generation?
+2. If a product is requested, what products and tasks are required to produce it?
+3. Which parts of that flow should be deterministic application logic, and which parts should remain delegated to the LLM?
+
+Without explicit answers:
+
+- the LLM may carry too much planning responsibility,
+- domain/advice prompts may be treated as action prompts,
+- constraints may remain implicit in freeform conversation,
+- and product-generation turns may not be reproducible or explainable enough.
+
+## Decision
+
+Adopt a two-layer extension for non-deterministic work:
+
+1. a cleaner non-deterministic classifier with three primary semantic classes:
+   - `domain_query`
+   - `constraint_adding`
+   - `product_generating`
+   - plus `unclear` as fallback
+2. a deterministic internal product graph used only for `product_generating` work.
+
+The classifier decides what kind of non-deterministic work the segment represents.
+
+The product graph answers how a requested analysis product can be produced, including required prerequisite products and the task/tool that produces each product node.
+
+This keeps the current deterministic/non-deterministic split, but makes the non-deterministic branch structurally richer and more controllable.
+
+## Architecture
+
+### 1. Revised Turn Pipeline
+
+The assistant turn pipeline becomes:
+
+1. **Segmentation**
+   - split the prompt into prompt segments using the existing segmenter.
+2. **Deterministic Classification**
+   - classify each segment as deterministic candidate, LLM-required, or blocked using the existing classifier/router.
+3. **Deterministic Execution**
+   - execute deterministic segments through existing governed routes and tools.
+4. **Extended Non-Deterministic Classification**
+   - classify each remaining non-deterministic segment as `domain_query`, `constraint_adding`, `product_generating`, or `unclear`.
+5. **Mode-Specific Handling**
+   - `domain_query` -> advisory/explanatory agent path
+   - `constraint_adding` -> structured constraint-state update path
+   - `product_generating` -> product-graph-backed planning path
+   - `unclear` -> clarification or generic fallback path
+6. **Per-Segment Merge**
+   - merge deterministic outcomes, constraints, product outputs, and prose into one turn result.
+
+The product graph is not a replacement for segmentation or deterministic routing. It is used only after a segment has been identified as `product_generating`.
+
+### 2. Cleaner Non-Deterministic Classifier
+
+#### `domain_query`
+
+Definition:
+- The user is asking for interpretation, explanation, comparison, recommendation framing, uncertainty framing, or mission-analysis guidance.
+
+Examples:
+- "What should the analyst do first before making any landing-site recommendation?"
+- "How should we interpret slope and roughness thresholds?"
+- "What evidence package should be prepared for review?"
+
+Expected behavior:
+- Answer primarily in prose.
+- Use tools only when explicitly requested or clearly required to ground a claim.
+- Preserve access to the tool dictionary; classification does not deny tool access.
+- Prefer current scenario context, carried constraints, and domain retrieval over execution.
+
+#### `constraint_adding`
+
+Definition:
+- The user is adding, revising, or prioritizing constraints, thresholds, preferences, or planning assumptions that should affect later reasoning or generation.
+
+Examples:
+- "Use a 5 degree slope threshold."
+- "Favor sites with lower slope and more continuous illumination."
+- "Treat power continuity as more important than traverse convenience."
+
+Expected behavior:
+- Persist the constraint as structured state.
+- Do not generate a product by default.
+- Carry persisted constraints into later `domain_query` and `product_generating` prompts as marked XML constraint blocks.
+- Use clarification when the constraint is too ambiguous to persist safely.
+
+#### `product_generating`
+
+Definition:
+- The user is asking for a concrete analysis product, derived product, import, transformation, or publication step that should yield a new artifact or explicit product state.
+
+Examples:
+- "Generate a slope <= 5 degree mask."
+- "Create a hillshade and add it as a layer."
+- "Produce a landing-site candidate raster using slope and illumination."
+
+Expected behavior:
+- Invoke deterministic planning over the internal product graph.
+- Preserve confirmation, postcondition, and governed-tool policies.
+- Use the LLM only for bounded subtasks such as intent interpretation, parameter selection, or clarification.
+
+#### `unclear`
+
+Definition:
+- The segment is mixed, ambiguous, or not classifiable with enough confidence.
+
+Expected behavior:
+- Fall back to clarification or generic non-deterministic handling.
+- Preserve observability so these cases can be studied and reclassified later if a stable pattern emerges.
+
+### 3. Constraint Carry-Forward Contract
+
+`constraint_adding` is not merely conversational memory.
+
+Persisted constraints become explicit structured state and are injected into later non-deterministic prompts using marked XML.
+
+The authoritative stored form of carried constraints is structured application state, not XML. XML is a prompt-facing projection used to delimit and communicate those constraints clearly to downstream model calls.
+
+Illustrative shape:
+
+```xml
+<constraints>
+  <constraint kind="threshold" target="slope" operator="<=" value="5" units="degrees" />
+  <constraint kind="priority" target="illumination_continuity" preference="high" />
+</constraints>
+```
+
+This mechanism exists so later `domain_query` and `product_generating` segments operate against explicit machine-marked assumptions rather than relying on latent conversational recall.
+
+The constraint state model must also define conflict and override semantics, for example:
+
+- whether a later threshold replaces an earlier threshold for the same target,
+- whether a new constraint refines rather than replaces prior state,
+- whether contradictory constraints trigger clarification,
+- and whether some constraints are pinned against implicit override.
+
+### 4. Product Graph
+
+The product graph is an internal graph of analysis products.
+
+Each node describes both:
+
+- the product the node creates, and
+- how that product is created, usually through a governed tool call or typed execution task.
+
+It is therefore not only a catalog of product names. It is a deterministic map from requested product to:
+
+- product semantics,
+- prerequisite products,
+- producing task/tool,
+- and expected outputs.
+
+Illustrative node shape:
+
+```json
+{
+  "product": "slope",
+  "requires": ["dem"],
+  "created_by": {
+    "kind": "tool_call",
+    "tool_name": "terrain.slope"
+  },
+  "semantic": {
+    "units": "degrees",
+    "type": "terrain_metric"
+  }
+}
+```
+
+The node says:
+- what the product is,
+- what must already exist,
+- and what execution surface creates it.
+
+### 4.1 Declarative Product Library
+
+The product graph should be defined from a declarative library rather than ad hoc orchestration code.
+
+YAML is an acceptable source format for this library because it is:
+
+- reviewable by developers and domain experts,
+- easy to validate at startup,
+- and suitable for representing both product semantics and production rules.
+
+The runtime system may compile YAML definitions into an in-memory graph, but the source of truth should remain declarative.
+
+### 4.2 Product Type Schema
+
+Product types define what a product is.
+
+Illustrative YAML shape:
+
+```yaml
+product_type: slope_raster
+display_name: Slope Raster
+data_kind: raster
+semantic_type: terrain_metric
+description: Raster of local surface slope derived from a DEM.
+units: degrees
+crs_policy: inherit_from_source
+value_domain:
+  kind: continuous
+  min: 0
+  max: 90
+lineage_fields:
+  - source_products
+  - generating_operation
+  - parameters
+grounding:
+  accepted_extensions: [".tif", ".tiff", ".cog.tif"]
+  required_metadata:
+    product_type: slope_raster
+reuse_policy:
+  require_matching_crs: true
+  require_matching_resolution: true
+  require_parameter_match: true
+```
+
+Recommended fields include:
+
+- `product_type`
+- `display_name`
+- `data_kind`
+- `semantic_type`
+- `description`
+- `units`
+- `crs_policy`
+- `value_domain`
+- `lineage_fields`
+- `grounding`
+- `reuse_policy`
+
+### 4.3 Product Recipe Schema
+
+Product recipes define how a product can be created.
+
+Each recipe should describe:
+
+- which product type it produces,
+- which prerequisite product types it requires,
+- which governed execution surface creates it,
+- how expensive it is relative to alternatives,
+- and which arguments are fixed, user-controlled, or LLM-selected.
+
+Illustrative YAML shape:
+
+```yaml
+operation_id: terrain.slope.from_dem
+produces: slope_raster
+requires:
+  - dem
+optional_requires: []
+created_by:
+  kind: tool_call
+  tool_name: terrain.slope
+cost:
+  runtime_score: 10
+applicability:
+  requires_data_kind:
+    dem: raster
+argument_contract:
+  fixed:
+    output_product_type: slope_raster
+  user_controlled:
+    - output_resolution
+  llm_selectable:
+    - neighborhood_method
+  defaults:
+    neighborhood_method: horn
+postconditions:
+  - kind: product_exists
+  - kind: metadata_matches
+```
+
+Recommended fields include:
+
+- `operation_id`
+- `produces`
+- `requires`
+- `optional_requires`
+- `created_by`
+- `cost`
+- `applicability`
+- `argument_contract`
+- `postconditions`
+
+### 4.4 Separation of Product Types and Recipes
+
+Product types and product recipes should be stored separately.
+
+Rationale:
+
+- one product type may be creatable by multiple recipes,
+- product semantics should not be duplicated across recipes,
+- and recipe selection should remain a planning concern rather than a semantic-definition concern.
+
+This means the product library has at least two declarative layers:
+
+- a **product type catalog**
+- a **product recipe catalog**
+
+The runtime product graph is built by linking those two layers.
+
+### 5. What the Product Graph Is and Is Not
+
+The product graph is:
+
+- an internal orchestration structure for product-generation requests,
+- a deterministic source of dependency semantics for analysis products,
+- a way to encode which task/tool creates each product.
+
+The product graph is not:
+
+- a replacement for `JobHandlers` as the source of executable job contracts,
+- a replacement for scenario folder + `scenario.db` as the persisted source of actual artifacts,
+- a public user-facing workflow language,
+- or an unrestricted planner/search engine.
+
+Authority boundaries:
+
+- **Executable contract authority** remains with existing tool/job contracts and `JobHandlers`-centered compute.
+- **Dependency semantics for products** live in the internal product graph.
+- **Artifact persistence** remains in scenario-managed files and DB/catalog state.
+
+Because the product graph references governed execution surfaces, the system should validate graph-to-contract consistency so the graph does not become a drifting shadow of the tool/job registry. That validation should confirm at least:
+
+- referenced tools/jobs still exist,
+- referenced execution surfaces still accept the required argument shape,
+- and declared product-production edges still point at valid governed execution contracts.
+
+The system should also validate declarative library consistency, including:
+
+- every recipe `produces` a known product type,
+- every required input references a known product type,
+- grounding and reuse policies are syntactically valid,
+- and cost fields are present for recipe comparison.
+
+### 6. Product-Generating Flow
+
+For a `product_generating` segment, the system behavior becomes:
+
+1. determine the target product requested by the user;
+2. consult the product graph for that product node;
+3. recursively identify prerequisite product nodes;
+4. build a simple deterministic task/product dependency structure;
+5. invoke governed tasks/tools in dependency order;
+6. record resulting products and merge outputs into the turn.
+
+The important shift is that the LLM no longer invents the dependency chain.
+
+The graph provides the structure. The LLM helps with bounded interpretation and arguments.
+
+### 7. Simple Planner
+
+The planner for the product graph is intentionally simple.
+
+It does:
+
+- forward chaining over known product prerequisites,
+- insertion of missing prerequisite tasks,
+- bounded branching when a product has multiple valid production rules,
+- dependency ordering,
+- precondition and postcondition attachment,
+- reuse of already-existing products when valid.
+
+It does not do:
+
+- open-ended search,
+- optimization over many alternative workflows,
+- arbitrary graph mutation by the LLM,
+- or replacement of the existing deterministic routing system.
+
+The planner's job is to convert a requested product into a deterministic execution skeleton using known graph edges.
+
+Where multiple valid production rules exist for the same product, the planner performs a small bounded search over grounded alternatives rather than unrestricted planning.
+
+### 8. Grounding Before Scoring
+
+Production rules are not scored in the abstract.
+
+Each candidate rule must first be expanded into a complete grounded plan:
+
+- recursively expand prerequisite products,
+- reuse existing valid scenario products where possible,
+- reject the candidate if grounding cannot be completed.
+
+Only complete grounded plans are scored.
+
+This means:
+
+- incomplete rule expansions are discarded, not compared;
+- cost is a property of a grounded plan, not of an abstract rule in isolation.
+
+### 9. Cost Model
+
+The planner selects among complete grounded plans using a simple cost model.
+
+For the initial architecture, the score of a grounded plan is:
+
+- the sum of the scores of the task/product-generation nodes in that plan.
+
+This assumes sequential execution.
+
+The intent of the score is to model total runtime cost, not scientific quality.
+
+Quality-related choices such as:
+
+- raster resolution,
+- thresholds,
+- temporal window,
+- analysis assumptions,
+
+remain under explicit user control or explicit LLM-assisted argument selection. They are not silently optimized by the planner.
+
+The planner therefore chooses:
+
+- the lowest-cost complete grounded plan
+
+among plans that are already semantically valid for the requested product.
+
+### 10. Two-Phase Planner Evolution
+
+The planner is intended to evolve in two phases.
+
+#### Phase A: Simple Backward Chaining with Basic Unification
+
+Phase A implements:
+
+- custom backward chaining from one or more desired products,
+- grounding against existing scenario products,
+- recipe expansion into complete grounded plans,
+- shared-subgraph reuse across multi-product requests,
+- cost scoring of complete grounded plans,
+- and very simple unification.
+
+The unification model in Phase A is intentionally limited.
+
+It only supports:
+
+- variable with ground term,
+- variable with variable,
+- ground term with identical ground term.
+
+Phase A does not attempt to solve:
+
+- arithmetic constraints,
+- domain-membership constraints,
+- inequalities over numeric values,
+- or richer compatibility conditions beyond simple equality/unifiability.
+
+This phase exists to validate the planning skeleton before introducing a full constraint layer.
+
+#### Phase B: Constraint-Aware Planning with Z3Py
+
+Phase B extends the Phase A planner with a dedicated constraint layer implemented in Python using Z3Py.
+
+Phase B adds:
+
+- membership constraints over discrete integer domains,
+- arithmetic equality and inequality constraints over integers and reals,
+- merged user constraints on product properties and tool arguments,
+- satisfiability checks during plan expansion,
+- and binding of constrained argument values beyond simple term equality.
+
+This is a true extension of Phase A, not a replacement.
+
+The architectural model remains:
+
+- backward chaining and graph construction in custom planner code,
+- constraint consistency and variable satisfaction delegated to Z3Py.
+
+This separation keeps the planner logic understandable while giving Phase B a principled way to handle numeric and domain constraints.
+
+### 11. Future Parallel Execution
+
+The initial scoring model assumes sequential execution, but the plan representation is still a DAG and may later support parallel execution of independent branches.
+
+This ADR does not require a specific execution substrate for that future work.
+
+Possible later execution targets include:
+
+- the current governed job/tool executor,
+- a compiled internal execution graph,
+- external schedulers such as Dask for suitable subgraphs.
+
+The key architectural point is:
+
+- planning and scoring are not coupled to any one execution target.
+
+The planner owns:
+
+- graph completion,
+- dependency ordering,
+- and plan selection.
+
+An execution substrate may later consume the chosen graph.
+
+### 12. Role of the LLM
+
+The LLM remains important, but its role becomes narrower and cleaner.
+
+The LLM is used for:
+
+- classifying non-deterministic segments,
+- interpreting which target product the user likely means when phrasing is ambiguous,
+- selecting or refining task arguments,
+- explaining results,
+- clarifying ambiguity with the user.
+
+The LLM is not used for:
+
+- inventing dependency structure for known products,
+- deciding executable task ordering for known product chains,
+- generating provenance structure,
+- or mutating the planner graph itself.
+
+This is a deliberate reduction in LLM authority for product-generation turns.
+
+### 13. Planner Failure and LLM Fallback
+
+If the planner cannot produce a complete grounded graph, it does not fabricate a plan and it does not delegate dependency invention to the LLM.
+
+Instead it returns a structured planning-failure result.
+
+Illustrative failure categories include:
+
+- missing required root product in the scenario,
+- no known production rule for a requested product,
+- ambiguous requested target product,
+- missing user-controlled parameters,
+- contradictory or invalid carried constraints.
+
+The planner should also report:
+
+- which product could not be grounded,
+- which prerequisites were missing or unsatisfied,
+- which attempted rule expansions failed,
+- and why they failed.
+
+The LLM then uses that structured failure to generate the user-facing response.
+
+Its role in that fallback is:
+
+- explain what information or product is missing,
+- explain why it is needed,
+- suggest how it could be obtained,
+- and ask for clarification or approval when a next step is available.
+
+This preserves system honesty:
+
+- the planner determines incompleteness,
+- the planner names the missing pieces,
+- the LLM communicates the implications and next options.
+
+### 14. Same-Turn Mixed Example
+
+Example user turn:
+
+- "Use a 5 degree slope threshold, explain why that threshold matters, and then generate a candidate landing mask."
+
+Under this architecture:
+
+- "Use a 5 degree slope threshold" -> `constraint_adding`
+- "explain why that threshold matters" -> `domain_query`
+- "generate a candidate landing mask" -> `product_generating`
+
+The first segment persists constraint state.
+The second segment receives those constraints as XML-marked context and answers in prose.
+The third segment receives those constraints as XML-marked context and uses the product graph plus simple planner to determine which products/tasks are needed to create the mask.
+
+## Rationale
+
+### Why the classifier is still needed even with a product graph
+
+The product graph answers:
+- how to produce a requested product.
+
+It does not answer:
+- whether production is what the user wants right now.
+
+That distinction still matters. The system must still separate:
+
+- advice and explanation,
+- constraint introduction,
+- and artifact generation.
+
+Without the classifier, the product graph would be invoked too often for turns that are actually analytical or advisory.
+
+### Why the product graph is needed even with improved classification
+
+Classification answers:
+- what kind of work the user is asking for.
+
+It does not answer:
+- what prerequisites are needed to generate a product,
+- which governed task/tool creates each intermediate product,
+- or how to make product-generation reproducible and explainable.
+
+Without the graph, `product_generating` remains too dependent on implicit LLM planning.
+
+### Why grounding must precede scoring
+
+The planner should not compare partial ideas.
+
+A candidate path is meaningful only once it has been fully grounded into:
+
+- existing scenario products,
+- or further valid generated prerequisites.
+
+That is why incomplete expansions are rejected before scoring rather than being treated as low-quality or high-cost candidates.
+
+### Why runtime cost is a sufficient default selector
+
+If alternative grounded plans are semantically valid for the same target product, then a simple runtime-cost objective is appropriate.
+
+This keeps the planner deterministic and pragmatic:
+
+- planner chooses the lowest-cost valid plan;
+- user controls quality-related choices directly.
+
+This avoids hidden scientific tradeoffs in the planner.
+
+### Why the two-phase planner path is appropriate
+
+Phase A and Phase B solve different risks in sequence.
+
+Phase A answers:
+
+- whether the recipe/product graph model is adequate,
+- whether multi-goal backward chaining and subtree sharing behave as expected,
+- and whether complete grounded plans can be built and scored reliably.
+
+Phase B then adds:
+
+- richer argument/property constraint merging,
+- satisfiability-based pruning,
+- and support for arithmetic and domain constraints that Phase A intentionally does not model.
+
+This sequencing avoids conflating planner-shape problems with constraint-solver integration problems.
+
+### Why this complexity is justified
+
+Lunar Analyst workflows are genuinely mixed:
+
+- users ask for advice,
+- add constraints incrementally,
+- and request derived artifacts in the same turn.
+
+A simpler architecture appears smaller, but only by hiding the complexity inside prompts and model behavior.
+
+This ADR makes the complexity explicit:
+
+- classification for intent kind,
+- constraint state for carried assumptions,
+- product graph for dependency semantics,
+- simple planner for deterministic expansion,
+- bounded LLM use for interpretation and arguments.
+
+That is a better match for a high-reliability scientific assistant than a single undifferentiated model loop.
+
+## Consequences
+
+### Positive
+
+- Better separation between explanation, constraints, and generation.
+- Less implicit LLM planning for product-generation turns.
+- More reproducible product-generation behavior.
+- Explicit carry-forward of constraints into later prompts.
+- Better observability because failures can be attributed to classification, graph semantics, argument selection, or execution.
+
+### Tradeoffs
+
+- Additional orchestration state and metadata.
+- Need to maintain the internal product graph as domain knowledge evolves.
+- Need to define authority boundaries carefully so the graph does not duplicate executable contracts.
+- Potential ambiguity at the classifier boundary, especially between `domain_query` and `constraint_adding`.
+
+## Out of Scope
+
+- Concrete implementation phases or task breakdown.
+- Final XML schema for carried constraints.
+- Final internal schema for product-graph nodes.
+- Detailed planner algorithm or execution engine API.
+- Detailed method for LLM argument selection.
+- Public exposure of the product graph as a user-facing artifact.
+
+## Implementation Plan
+
+Implementation should proceed in additive phases so the architecture can be validated incrementally without conflating planner-shape problems, classifier problems, and solver-integration problems.
+
+### Phase 0: ADR Alignment and Vocabulary Freeze
+
+Goal:
+- align naming and architectural boundaries before code is introduced.
+
+Work items:
+- [ ] Confirm the canonical terms:
+  - `product_type`
+  - `recipe`
+  - `grounded_plan`
+- [ ] Confirm that a recipe is a reusable single-output DAG template, not necessarily a single tool call.
+- [ ] Confirm authority boundaries:
+  - `JobHandlers` and governed tools remain the executable contract source.
+  - the product graph owns dependency semantics.
+  - scenario files and scenario DB remain the persisted artifact source of truth.
+- [ ] Confirm that carried constraints are stored as structured state and projected to XML only for prompt injection.
+- [ ] Confirm that cost means estimated runtime cost and does not silently optimize user-visible quality choices.
+
+Acceptance:
+- [ ] ADR terminology and boundaries are considered stable enough for implementation.
+
+### Phase 1: Product Type and Recipe Library
+
+Goal:
+- create the declarative product library and runtime loader/validator.
+
+Primary surfaces:
+- new declarative config files for product types and recipes
+- backend loader/validator module(s)
+
+Work items:
+- [ ] Define on-disk YAML layout for:
+  - product type catalog
+  - recipe catalog
+- [ ] Implement startup loading of YAML product definitions.
+- [ ] Implement schema validation for product types.
+- [ ] Implement schema validation for recipes.
+- [ ] Validate cross-references:
+  - every recipe output references a known product type
+  - every recipe input references a known product type
+- [ ] Validate execution references:
+  - referenced tools/jobs/handlers exist
+  - referenced execution surfaces are compatible with declared argument expectations
+- [ ] Fail fast on invalid declarative library state.
+- [ ] Start with a narrow initial library for core lunar analysis products, for example:
+  - `dem`
+  - `slope_raster`
+  - `hillshade_raster`
+  - `illumination_raster`
+  - `binary_constraint_mask`
+  - `combined_landing_mask`
+  - `candidate_site_table`
+  - `traverse_cost_raster`
+
+Acceptance:
+- [ ] Product library loads successfully at startup.
+- [ ] Invalid references or malformed YAML fail deterministically with actionable errors.
+- [ ] Initial core product set is represented in the library.
+
+### Phase 2: Structured Constraint State and XML Projection
+
+Goal:
+- create the carried-constraint state model independently of the planner.
+
+Primary surfaces:
+- assistant turn state / working-set state
+- prompt-construction path for downstream segment prompts
+
+Work items:
+- [ ] Define structured internal representation for carried constraints.
+- [ ] Implement conflict/override policy for repeated constraints on the same target.
+- [ ] Implement contradiction detection for clearly incompatible constraints.
+- [ ] Implement XML projection for downstream prompt injection.
+- [ ] Ensure XML is projection-only and not the canonical stored form.
+- [ ] Add prompt-building support so later `domain_query` and `product_generating` segments receive carried constraints as XML blocks.
+- [ ] Add observability for:
+  - constraints added
+  - constraints overridden
+  - constraints rejected as contradictory
+
+Acceptance:
+- [ ] Constraints persist as structured state across segments in a turn.
+- [ ] Downstream prompts receive stable XML projection of active constraints.
+- [ ] Conflict/override behavior is deterministic and test-covered.
+
+### Phase 3: Extended Non-Deterministic Classifier
+
+Goal:
+- add the cleaner non-deterministic subtype classifier.
+
+Primary surfaces:
+- post-segmentation / post-deterministic-classification assistant pipeline
+- planner metadata / per-segment state
+
+Work items:
+- [ ] Implement classifier labels:
+  - `domain_query`
+  - `constraint_adding`
+  - `product_generating`
+  - `unclear`
+- [ ] Add typed classifier output structure including at least label and confidence.
+- [ ] Record subtype on non-deterministic segments in planner/turn-state metadata.
+- [ ] Route `domain_query` segments to advisory/explanatory model handling.
+- [ ] Route `constraint_adding` segments to structured constraint-state update handling.
+- [ ] Route `product_generating` segments to planner entry.
+- [ ] Route `unclear` segments to clarification or generic fallback handling.
+- [ ] Add eval fixtures that distinguish:
+  - advisory prompts
+  - constraint prompts
+  - product-generation prompts
+
+Acceptance:
+- [ ] Non-deterministic segments receive a stable subtype in telemetry and planner state.
+- [ ] Mixed turns can contain at least one segment of each subtype without breaking merge behavior.
+
+### Phase 4: Phase A Planner Skeleton
+
+Goal:
+- implement custom backward chaining with simple unification and grounded-plan construction.
+
+Primary surfaces:
+- planner module
+- scenario-product grounding module
+- execution-plan IR
+
+Work items:
+- [ ] Define internal `grounded_plan` representation.
+- [ ] Implement backward chaining from one or more requested output products.
+- [ ] Implement recipe expansion over the declarative library.
+- [ ] Implement simple unification limited to:
+  - variable with ground term
+  - variable with variable
+  - ground term with identical ground term
+- [ ] Implement grounding against existing scenario products/files/catalog state.
+- [ ] Reject incomplete expansions before scoring.
+- [ ] Support multi-goal requests in one combined plan.
+- [ ] Detect and merge shared subgraphs/intermediate products across requested outputs.
+- [ ] Compute grounded-plan total cost as sum of node runtime scores under sequential execution.
+- [ ] Rank alternative complete grounded plans by total cost and select the lowest-cost plan.
+- [ ] Return structured planner-failure metadata when no complete grounded plan exists.
+
+Acceptance:
+- [ ] Planner can generate a complete grounded plan for simple single-product requests.
+- [ ] Planner can generate a joint grounded plan for multi-product requests with shared intermediates.
+- [ ] Incomplete plans are discarded rather than scored.
+- [ ] Lowest-cost complete grounded plan is selected deterministically.
+
+### Phase 5: Planner Execution Integration
+
+Goal:
+- compile grounded plans into governed tool/job execution without introducing a parallel contract system.
+
+Primary surfaces:
+- planner executor / assistant execution path
+- existing tool/job invocation layer
+
+Work items:
+- [ ] Define compiler from `grounded_plan` nodes to governed tool/job calls.
+- [ ] Ensure compiled execution uses existing governed execution surfaces only.
+- [ ] Preserve existing confirmation and mutation policies for compiled plan steps.
+- [ ] Preserve execution provenance and map results back to product nodes.
+- [ ] Register produced artifacts/products into existing scenario/catalog state.
+- [ ] Reuse existing turn merge and observability machinery where possible.
+- [ ] Add structured explanation summary of chosen plan for telemetry/debugging.
+
+Acceptance:
+- [ ] Executing a grounded plan produces artifacts through existing tool/job contracts only.
+- [ ] Product outputs remain discoverable through normal scenario/catalog mechanisms.
+- [ ] Plan execution provenance is available for debugging and explanation.
+
+### Phase 6: Planner Failure to LLM Fallback
+
+Goal:
+- make incomplete planning explainable and safe.
+
+Primary surfaces:
+- planner failure payload
+- assistant response generation path
+
+Work items:
+- [ ] Define structured planner-failure categories, including at least:
+  - missing required root product
+  - no known recipe for product
+  - ambiguous requested product
+  - missing user-controlled parameters
+  - contradictory or invalid constraints
+- [ ] Include failure detail fields:
+  - failed target product
+  - missing prerequisites
+  - attempted recipe expansions
+  - reason for failure
+- [ ] Feed planner failure payload to the LLM as structured context.
+- [ ] Prompt the LLM to explain:
+  - what is missing
+  - why it is needed
+  - how it could be obtained
+  - whether clarification or approval is needed next
+- [ ] Prevent the LLM from inventing unsupported dependency chains in this fallback path.
+
+Acceptance:
+- [ ] Failed product-generation requests produce honest, specific, actionable user-facing explanations.
+- [ ] Planner-failure responses are grounded in structured failure metadata, not freeform model speculation.
+
+### Phase 7: Phase B Constraint Layer with Z3Py
+
+Goal:
+- extend the Phase A planner with solver-backed constraints for arguments and product properties.
+
+Primary surfaces:
+- planner constraint context
+- Z3Py integration layer
+
+Work items:
+- [ ] Introduce Z3Py-backed constraint context for plan expansion.
+- [ ] Model integer-domain membership constraints.
+- [ ] Model arithmetic equalities/inequalities over integers and reals.
+- [ ] Map user constraints into Z3Py assertions.
+- [ ] Map recipe applicability and argument constraints into Z3Py assertions.
+- [ ] Add satisfiability checks during plan expansion for early pruning.
+- [ ] Bind selected argument values from satisfiable models where needed.
+- [ ] Preserve Phase A simple unification behavior as the base case.
+- [ ] Keep solver output compiled back into the neutral `grounded_plan` representation.
+
+Acceptance:
+- [ ] Planner can reject unsatisfiable plans before full expansion.
+- [ ] Planner can support numeric and domain constraints not representable in Phase A.
+- [ ] Solver integration does not replace the planner IR or execution pipeline.
+
+### Phase 8: Observability, Testing, and Evaluation
+
+Goal:
+- make the architecture measurable and maintainable.
+
+Primary surfaces:
+- telemetry
+- unit/integration/eval suites
+
+Work items:
+- [ ] Add unit tests for:
+  - YAML library loading/validation
+  - constraint conflict/override behavior
+  - simple unification
+  - multi-goal shared-subgraph planning
+  - cost ranking
+  - planner failure categories
+  - Z3Py satisfiability pruning
+- [ ] Add integration tests for end-to-end product-generation planning.
+- [ ] Add eval coverage for:
+  - advisory prompts
+  - constraint prompts
+  - product-generation prompts
+  - mixed turns with constraints plus generation
+  - planner-failure explanation quality
+- [ ] Add telemetry for:
+  - chosen product goals
+  - candidate plans explored
+  - grounded plans rejected
+  - planner failure reason
+  - solver satisfiability failures
+  - selected total plan cost
+
+Acceptance:
+- [ ] The new architecture is test-covered at unit, integration, and eval levels.
+- [ ] Failures can be attributed to classifier behavior, planner grounding, constraint solving, or execution.
+
+### Phase 9: Future Work Hooks
+
+Goal:
+- preserve room for later extensions without blocking the core path.
+
+Work items:
+- [ ] Leave execution substrate abstraction points so later parallel execution targets remain possible.
+- [ ] Keep plan IR suitable for later DAG schedulers, including possible Dask compilation for appropriate subgraphs.
+- [ ] Leave room for constraint pinning/pruning and longer-lived constraint state.
+- [ ] Leave room for richer recipe DAG templates and more expressive argument-selection policy.
+
+Acceptance:
+- [ ] The implemented architecture does not hard-code assumptions that prevent later parallel execution or richer constraint handling.

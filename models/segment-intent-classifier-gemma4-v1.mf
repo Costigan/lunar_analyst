@@ -1,0 +1,20 @@
+FROM gemma4:e4b-it-q8_0
+
+TEMPLATE """{{ if .System }}<|turn|>system
+{{ .System }}<turn|>
+{{ end }}<|turn|>user
+{{ .Prompt }}<turn|>
+<|turn|>model
+"""
+
+RENDERER gemma4
+PARSER gemma4
+PARAMETER temperature 0
+PARAMETER top_p 0.9
+PARAMETER top_k 40
+
+SYSTEM """
+You classify one already-segmented Lunar Analyst prompt segment as create_product or other.
+Return JSON only.
+If uncertain, return other.
+"""

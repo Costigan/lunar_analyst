@@ -1,0 +1,23 @@
+Read @docs/DESCRIPTION.md for context.  Then look at QuadTreeRayCastKernel starting on line 1727 of @moonlib/QuadTreeHorizonGenerator.cs .
+
+Consider how this kernel steps through distances along the rays cast out from the observer's position.
+
+My understanding is that it steps through distances that are 0.5 times the pixel size in the base level DEM unless the quad tree max elevation filtering allows an jump across a rectangle.
+
+I think this results in distance steps that are too small.  When I run the algorithm with nested DEMs at resolutions of 1 and 5 meters per pixel, the time needed to generate horizons is acceptable, but when I add a large outer DEM at 20 meters per pixel, the time grows to much longer than is acceptable.
+
+While ideally, for any ray, the algorithm should find the single pixel in any DEM that is highest along the horizon.  However, this is very expensive, given that we're doing this for many azimuth angles and many observers.  For each 128 x 128 pixel terrain patch, this is 128 x 188 x 1440 x 3 = 70778880 rays.
+
+I care most about the angular error between the sampled horizon and the true horizon from the observer's position.  I want this to be 0.05 deg at most.
+
+This should allow larger steps when at greater distances from the observer.
+
+Note the angle-of-repose for lunar regolith is 50 degrees, although the slope is much less than this in general.
+
+Think through potential approaches for controlling the sampling step as a function of distance.
+
+Also consider the idea of searching for the point that produces the highest elevation in a manner inspired by binary search (although the elevation angles aren't sorted, of course).
+
+I want to keep the use of polynomials to represent the rays, and idea of casting rays independently for each DEM from starting points at the edge of the DEM just inside (except for the innermost DEM where rays start at the observer).
+
+Give me options.  Then we'll pick one and implement it.

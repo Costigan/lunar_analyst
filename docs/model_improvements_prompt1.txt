@@ -1,0 +1,154 @@
+PROMPT
+
+I'm building an app that supports searching for and analyzing
+candidate landing sites on the moon for lunar science missions.
+It contains a map of the lunar south pole, a library for performing
+map-algebra operations on raster maps, a library for calculating the
+amount of sunlight at raster points at given times.
+It also contains support for using language models as agents for
+advising and carrying out analysis tasks for a human analyst, who is
+expected to be an expert on the science they want to perform but not
+necessarily on maps or mission design.
+
+The agent current operates like this:
+- Some queries, identified by regular expressions, are handled by python code
+- When queries are given to the LLM, the context is augmented by RAG
+- The RAG documents are generally short and contain procedural guidance or domain knowledge
+
+I've implemented a simple testing rig based on pytest that runs test
+prompts and captures the agent's responses, although scoring is very rudimentary.
+
+My goal now is to improve the performance of the AI agent.
+
+Give me suggestions for doing this.  These suggestions can include
+improvements to the agent architecture and/or to the testing approach
+and implementation specifics.
+
+RESPONSE
+
+1. Expand deterministic routing before LLM calls.
+
+- Add more high-frequency intents to config/assistant_action_router.yaml (site filtering, layer toggles, scenario/product lookup, simple stats).
+- Keep using partial deterministic execution so only the “hard” remainder goes to the model.
+- Track execution_origin and success rate by intent to prioritize new rules.
+
+2. Add a planner stage between intent and tool execution.
+
+- Introduce a lightweight “plan JSON” contract: goal, candidate tools, required inputs, expected artifact.
+- Validate the plan server-side before tool calls (schema + policy + scenario-root checks).
+- Reject under-specified plans early and request clarifying questions.
+
+3. Tighten tool-choice reliability.
+
+- Bias the model toward tools.search then tools.describe then exact tool call, but cap loops (max_tool_iterations) aggressively.
+- Add per-tool argument repair for common failures (path normalization, missing overwrite_mode, missing time bounds for temporal ops).
+- Keep mutating tools confirmation-gated, but allow read-only auto-exec for faster turns.
+
+4. Improve RAG precision and routing.
+
+- Split corpus more aggressively by task type: procedural (how to use tool), domain (lunar science), contract (API/tool args).
+- Add query classifier to choose retrieval channel and k dynamically.
+- Add “negative docs”/anti-pattern snippets for common mistakes (e.g., wrong CRS assumptions, missing temporal reducers).
+- Version RAG docs and log per-turn retrieved chunk IDs to correlate with success/failure.
+
+5. Build evals around behaviors, not just text quality.
+
+- For each test prompt, assert: required tool family used, artifact exists, output metadata valid, and side effects match expected state.
+- Keep your current contract/postcondition split from DESIGN.md and make it primary scoring.
+- Score with weighted rubric: tool correctness, argument correctness, execution success, postcondition success, safety policy adherence.
+
+6. Add golden task suites and stratified coverage.
+
+- Create suites: deterministic intents, single-tool analytics, multi-step workflows, ambiguity handling, failure recovery.
+- Include adversarial prompts (multi-intent, conflicting constraints, vague time ranges, out-of-root path attempts).
+- Track pass rates by suite and by model/provider.
+
+7. Add regression and drift controls.
+
+- Store turn transcripts + tool calls + artifacts for failing evals as replay fixtures.
+- Run nightly evals across candidate prompts/models and compare against baseline with hard gates.
+- Fail CI when critical suites regress (mutation safety, artifact correctness, deterministic intents).
+
+8. Instrument the full assistant pipeline.
+
+- Log per-turn latency breakdown: routing, retrieval, model, tool runtime, confirmation wait.
+- Log failure taxonomy with stable codes (schema_mismatch, tool_runtime, empty_completion, no_postcondition).
+- Build a small dashboard to see top failure modes and top recovered failures.
+
+9. Improve prompts with explicit operational contracts.
+
+- System prompt should force: “state assumptions,” “prefer deterministic tools,” “never fabricate artifacts,” “ask one clarifying question when required inputs are missing.”
+- Add few-shot examples specifically for lunar tasks (site candidacy scoring, sunlight-window reasoning, raster mask publication).
+
+10. Short-term highest ROI sequence.
+
+- First: expand deterministic router + add behavior-based scoring.
+- Second: add planner JSON + server-side plan validation.
+- Third: improve RAG routing and chunk/version observability.
+
+If you want, I can next propose a concrete 1-week implementation plan mapped to repo files and pytest targets.
+
+ Consider "1. Expand deterministic routing before LLM calls."  How should the app handle prompts that have multiple sentences where some should be handled deterministically and
+  some require the LLM?
+
+
+• Use a hybrid turn pipeline with sentence/segment-level execution, not all-or-nothing routing.
+
+  1. Segment the prompt into prompt segments
+
+  - Split by sentence and conjunction boundaries (and, then, also, but), but keep dependent clauses together.
+  - Build segments[] with original text offsets so order is preserved.
+
+  2. Classify each segment
+
+  - deterministic_candidate: matches router rule with high confidence and no complexity guard hit.
+  - llm_required: analysis/explanation/open-ended planning/ambiguous instruction.
+  - blocked: safety or missing required inputs.
+
+  3. Build one execution plan for the whole turn
+
+  - Preserve segment order.
+  - Mark each segment with execution_mode (deterministic or llm).
+  - Attach dependencies (segment 3 depends on output artifact from segment 1).
+
+  4. Execute deterministic segments first (in order)
+
+  - Run router action specs and tool calls.
+  - Apply normal confirmation gates for mutating actions.
+  - Store structured outputs in a turn_state object (new layers, stats, files, errors).
+
+  5. Hand only unresolved remainder to the LLM
+
+  - Pass:
+      - Original user prompt
+      - Unhandled segments text
+      - Compact summary of deterministic outcomes from turn_state
+      - Relevant tool schemas (focused via tools.search/tools.describe)
+  - Instruct model to continue from current state, not re-do completed actions.
+
+  6. Merge into one final response
+
+  - Chronological output:
+      - Actions completed deterministically
+      - LLM-driven analysis/recommendations
+      - Any failures/questions requiring user input
+  - Include per-segment status (done, failed, needs_clarification).
+
+  7. Failure policy
+
+  - If a deterministic segment fails:
+      - Continue with independent later segments.
+      - For dependent segments, mark blocked and expose a concrete recovery step.
+  - Never silently fallback a failed deterministic action to model improvisation for mutating operations.
+
+  8. Guardrails to avoid bad splits
+
+  - Don’t deterministically capture segments containing conditional/complex logic (if, unless, only if, optimization/comparison requests).
+  - Send those segments to LLM or deterministic sub-agent with strict tool allowlist.
+
+  Example:
+  “Switch to Shackleton scenario. Turn on slope and hillshade. Then suggest the top 3 candidate landing zones with rationale.”
+
+  - Seg1/2 deterministic (scenario switch, layer visibility)
+  - Seg3 LLM (scientific reasoning)
+  - LLM receives updated state (active scenario + visible layers) and returns analysis only.

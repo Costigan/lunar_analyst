@@ -1,0 +1,72 @@
+title: Layer Visibility Intent Policy (Few-Shot)
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: assistant, tool-routing, layer, visibility, turn-on, turn-off, show, hide
+
+# Scope
+This document applies only to user intents about showing/hiding/toggling existing map layers.
+
+# Deterministic Intent Triggers
+Treat these as visibility intents when they appear at the start of the user request:
+- `show <name>`
+- `hide <name>`
+- `turn on <name>`
+- `turn off <name>`
+- `enable <name>`
+- `disable <name>`
+
+Examples:
+- "show slope"
+- "turn off hillshade"
+- "enable aspect layer"
+
+# Mandatory Tool Policy
+For visibility intents, do NOT call `product.list` first.
+For visibility intents, do NOT stop after any read-only call.
+For visibility intents, the target mutating tool is `layer.update_state`.
+
+Primary action:
+1. Call `layer.update_state` with:
+   - `scenario_id`: active scenario id
+   - `layer_name`: user-provided layer name phrase
+   - `visible`: true for show/on/enable, false for hide/off/disable
+
+Optional verification:
+2. Call `layer.list_visible` only if user asks to confirm visible layers.
+
+# Few-Shot Mappings
+User: "show slope"
+Action:
+- `layer.update_state({"scenario_id":"<active>","layer_name":"slope","visible":true})`
+
+User: "turn off slope.tif"
+Action:
+- `layer.update_state({"scenario_id":"<active>","layer_name":"slope.tif","visible":false})`
+
+User: "hide hillshade"
+Action:
+- `layer.update_state({"scenario_id":"<active>","layer_name":"hillshade","visible":false})`
+
+User: "enable aspect layer"
+Action:
+- `layer.update_state({"scenario_id":"<active>","layer_name":"aspect","visible":true})`
+
+# Ambiguity Handling
+If `layer.update_state` fails because the name is ambiguous or not found:
+1. Ask a concise clarification question with candidate names.
+2. Do not dump full `product.list` output unless the user explicitly asks for inventory.
+
+# Out Of Scope
+These are not visibility intents:
+- "import this geotiff"
+- "list products"
+- "describe slope values"
+
+Use other guidance for import, inventory, or analysis intents.
+
+# Deterministic Trigger Recommendation
+For best reliability, pair this guidance with a deterministic pre-router:
+- If prompt matches visibility trigger regex, execute `layer.update_state` path directly.
+- Use LLM/tool-loop only when deterministic matching fails.

@@ -1,0 +1,3 @@
+Key points
+* Double-precision calculations on the GPU I have are 64x slower than single-precision, so we avoid them.
+

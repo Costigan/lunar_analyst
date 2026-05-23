@@ -1,0 +1,26 @@
+[
+  {
+    "prompt": "Show me the south pole of the moon."
+  },
+  {
+    "prompt": "Overlay elevation and add place names. I want to look for high points."
+  },
+  {
+    "prompt": "What is this color map?"
+  },
+  {
+    "prompt": "Zoom in on the top of Mons Malapert and map slope to the same color map.."
+  },
+  {
+    "prompt": "What is the range of the slope data?"
+  },
+  {
+    "prompt": "Limit the colormap to 20 degrees."
+  },
+  {
+    "prompt": "Switch to an operations color map with a landing threshold of 10 degrees and a movement threshold of 15 degrees."
+  },
+  {
+    "prompt": "Are there any safe landing sites?"
+  }
+]

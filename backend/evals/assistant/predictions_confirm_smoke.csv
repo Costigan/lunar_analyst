@@ -1,0 +1,2 @@
+id,prompt,scenario_id_used,mode,primary_tool,repair_applied,first_try_success,overall_success,answer_generated,unsafe_blocked,turn_status,response_text,duration_ms,error,tool_call_count,tool_calls_json
+route_script_001,Write and run a Python script that computes slope <= 5 degrees and saves landing_sites.tif.,scn_mons-malapert,respond,,False,False,False,False,False,,,8209,[Errno 13] Permission denied: 'D:\\lunar_analyst_scenarios\\mons-malapert\\compute_slope_filter.py',0,[]

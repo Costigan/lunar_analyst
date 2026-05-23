@@ -1,0 +1,9 @@
+{
+  "rules": [
+    { "pattern": "(?i)hazard|risk|safe", "colormap": "inferno" },
+    { "pattern": "(?i)aspect|phase|azimuth", "colormap": "plasma" },
+    { "pattern": "(?i)slope", "colormap": "magma" },
+    { "pattern": "(?i)elev|dem|height", "colormap": "viridis" }
+  ],
+  "default": "gray"
+}

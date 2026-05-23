@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario_root": {
+      "pattern": "^[a-z0-9][a-z0-9_-]{2,31}$",
+      "title": "Scenario Root",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "owner": {
+      "title": "Owner",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scenario_root",
+    "name",
+    "owner"
+  ],
+  "title": "CreateScenarioRequest",
+  "type": "object"
+}

@@ -1,0 +1,421 @@
+version: 1
+
+verb_aliases:
+  goto:
+    - go to
+    - zoom to
+    - zoom in on
+    - center on
+    - navigate to
+    - fly to
+    - take me to
+  search:
+    - find
+    - search for
+    - look up
+    - lookup
+  show:
+    - turn on
+    - display
+    - reveal
+    - make visible
+  hide:
+    - turn off
+    - conceal
+    - make hidden
+  set_current:
+    - switch to
+    - use
+    - select
+    - change to
+  apply:
+    - set
+    - use
+    - apply
+
+entity_kind_routing_rules:
+  - rule_id: navigation.feature
+    required_verbs: [goto, search, show]
+    required_entity_kinds: [feature]
+    intent_families: [location_navigation, layer_visibility_update]
+    min_confidence: 0.9
+    allow_ambiguity: false
+  - rule_id: layer.visibility
+    required_verbs: [show, hide]
+    required_entity_kinds: [layer]
+    intent_families: [layer_visibility_update]
+    min_confidence: 0.9
+    allow_ambiguity: false
+  - rule_id: file.show
+    required_verbs: [show]
+    required_entity_kinds: [file]
+    intent_families: [layer_visibility_update]
+    min_confidence: 0.9
+    allow_ambiguity: false
+
+actions:
+  - action_id: capabilities.describe
+    enabled: true
+    priority: 130
+    deny_if_complex: false
+    patterns:
+      - '^\s*capabilities\s*$'
+      - '^\s*describe capabilities\s*$'
+      - '^\s*what can lunar analyst.*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: capabilities.describe
+        arguments: {}
+
+  - action_id: jobs.list_predefined
+    enabled: true
+    priority: 120
+    deny_if_complex: false
+    patterns:
+      - '^\s*list\s+predefined\s+jobs\s*$'
+      - '^\s*list\s+jobs\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: jobs.list_predefined
+        arguments: {}
+
+  - action_id: jobs.run_predefined
+    enabled: true
+    priority: 115
+    deny_if_complex: false
+    patterns:
+      - '^\s*run\s+predefined\s+job\s+(?P<implementation_name>[^\s]+).*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: jobs.run_predefined
+        arguments:
+          implementation_name: "${implementation_name}"
+          params: "${params}"
+
+  - action_id: job.launch
+    enabled: true
+    priority: 114
+    deny_if_complex: false
+    patterns:
+      - '^\s*launch\s+job\s+(?P<implementation_name>[^\s]+).*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: job.launch
+        arguments:
+          implementation_name: "${implementation_name}"
+          params: "${params}"
+
+  - action_id: scenario.switch
+    enabled: true
+    priority: 100
+    deny_if_complex: true
+    patterns:
+      - '^\s*(?:switch(?:\s+to)?(?:\s+the)?(?:\s+scenario)?|change(?:\s+to)?(?:\s+the)?(?:\s+scenario)?|use(?:\s+the)?\s+scenario|set(?:\s+the)?\s+scenario(?:\s+to)?)\s+(?P<scenario_ref>.+?)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.set_current
+        arguments:
+          scenario_ref: "${scenario_ref}"
+
+  - action_id: scenario.list
+    enabled: true
+    priority: 96
+    deny_if_complex: false
+    patterns:
+      - '^\s*list\s+scenarios\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.list
+        arguments: {}
+
+  - action_id: scenario.list_scripts
+    enabled: true
+    priority: 95
+    deny_if_complex: false
+    patterns:
+      - '^\s*list\s+scripts\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.list_scripts
+        arguments:
+          scenario_id: "${scenario_id}"
+
+  - action_id: scenario.list_notebooks
+    enabled: true
+    priority: 94
+    deny_if_complex: false
+    patterns:
+      - '^\s*list\s+notebooks\s*$'
+      - '^\s*list\s+marimo\s+notebooks\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.list_notebooks
+        arguments:
+          scenario_id: "${scenario_id}"
+
+  - action_id: scenario.run_script
+    enabled: true
+    priority: 93
+    deny_if_complex: false
+    patterns:
+      - '^\s*run\s+script\s+(?P<relative_path>.+?)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.run_script
+        arguments:
+          relative_path: "${relative_path}"
+          scenario_id: "${scenario_id}"
+
+  - action_id: scenario.run_marimo_notebook
+    enabled: true
+    priority: 92
+    deny_if_complex: false
+    patterns:
+      - '^\s*run\s+notebook\s+(?P<relative_path>.+?)\s*$'
+      - '^\s*run\s+marimo\s+notebook\s+(?P<relative_path>.+?)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.run_marimo_notebook
+        arguments:
+          relative_path: "${relative_path}"
+          scenario_id: "${scenario_id}"
+
+  - action_id: runs.get_logs
+    enabled: true
+    priority: 91
+    deny_if_complex: false
+    patterns:
+      - '^\s*get\s+logs\s+(?P<job_id>[^\s]+).*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: runs.get_logs
+        arguments:
+          job_id: "${job_id}"
+          head_lines: "${head_lines}"
+          tail_lines: "${tail_lines}"
+          stream: "${stream}"
+
+  - action_id: runs.get_status
+    enabled: true
+    priority: 90
+    deny_if_complex: false
+    patterns:
+      - '^\s*(?:run|job)\s+status\s+(?P<job_id>[^\s]+)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: runs.get_status
+        arguments:
+          job_id: "${job_id}"
+
+  - action_id: runs.cancel
+    enabled: true
+    priority: 89
+    deny_if_complex: false
+    patterns:
+      - '^\s*cancel\s+(?:run|job)\s+(?P<job_id>[^\s]+)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: runs.cancel
+        arguments:
+          job_id: "${job_id}"
+
+  - action_id: scenario.revoke_script_overwrite
+    enabled: true
+    priority: 88
+    deny_if_complex: false
+    patterns:
+      - '^\s*revoke\s+overwrite\s+approval\s+(?P<relative_path>.+?)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.revoke_script_overwrite
+        arguments:
+          relative_path: "${relative_path}"
+          scenario_id: "${scenario_id}"
+
+  - action_id: product.list
+    enabled: true
+    priority: 87
+    deny_if_complex: false
+    patterns:
+      - '^\s*list\s+products(?:\s+for\s+scenario(?:_id)?\s+(?P<scenario_ref>[a-z0-9_\-]+))?\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: product.list
+        arguments:
+          scenario_id: "${scenario_id}"
+
+  - action_id: product.files
+    enabled: true
+    priority: 86
+    deny_if_complex: false
+    patterns:
+      - '^\s*files\s+for\s+product\s+(?P<product_id>[a-z0-9_\-]+)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: product.files
+        arguments:
+          product_id: "${product_id}"
+
+  - action_id: scenario.import_geotiff
+    enabled: true
+    priority: 85
+    deny_if_complex: false
+    patterns:
+      - '^.*\bimport\s+geotiff\b.*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.import_geotiff
+        arguments:
+          scenario_id: "${scenario_id}"
+          source_path: "${source_path}"
+
+  - action_id: scenario.move_path
+    enabled: true
+    priority: 84
+    deny_if_complex: false
+    patterns:
+      - '^\s*move\s+path\s+.+$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: scenario.move_path
+        arguments:
+          scenario_id: "${scenario_id}"
+          source_relative_path: "${source_relative_path}"
+          target_relative_path: "${target_relative_path}"
+
+  - action_id: raster.calculate.slope_threshold_mask_transparent
+    enabled: true
+    priority: 83
+    deny_if_complex: true
+    patterns:
+      - '^.*\b(?:highlight|highlights)\b.*\b(?:pixel|pixels|area|areas|where)\b.*\bslope\b.*\b(?:transparent|hide other pixels|hide others|other pixels transparent|make other pixels transparent)\b.*$'
+      - '^.*\bslope\b.*\b(?:transparent|hide other pixels|hide others|other pixels transparent|make other pixels transparent)\b.*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: raster.calculate
+        arguments:
+          scenario_id: "${scenario_id}"
+          expression: "${expression}"
+          inputs:
+            slope:
+              relative_path: "slope.tif"
+          output_relative_path: "${output_relative_path}"
+          overwrite_mode: always
+
+  - action_id: raster.calculate.slope_threshold_mask_binary
+    enabled: true
+    priority: 82
+    deny_if_complex: true
+    patterns:
+      - '^.*\b(?:highlight|highlights)\b.*\b(?:pixel|pixels|area|areas|where)\b.*\bslope\b.*$'
+    deny_patterns:
+      - '\btransparent\b'
+      - '\bhide other pixels\b'
+      - '\bhide others\b'
+    steps:
+      - kind: tool_call
+        tool_name: raster.calculate
+        arguments:
+          scenario_id: "${scenario_id}"
+          expression: "${expression}"
+          inputs:
+            slope:
+              relative_path: "slope.tif"
+          output_relative_path: "${output_relative_path}"
+          overwrite_mode: always
+
+  - action_id: layer.set_state_by_id
+    enabled: true
+    priority: 81
+    deny_if_complex: false
+    patterns:
+      - '^\s*set\s+layer\s+(?P<layer_id>[^\s]+).*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: layer.update_state
+        arguments:
+          layer_id: "${layer_id}"
+          opacity: "${opacity}"
+          visible: "${visible_explicit}"
+
+  - action_id: layer.set_visible_by_name
+    enabled: true
+    priority: 80
+    deny_if_complex: true
+    patterns:
+      - '^\s*turn\s+(?P<toggle>on|off)\s+(?:the\s+)?(?P<layer_name>.+?)(?:\s+layer)?\s*$'
+      - '^\s*(?P<toggle>show|hide)\s+(?:the\s+)?(?P<layer_name>.+?)(?:\s+layer)?(?:[\s\.\!\?]+)?$'
+      - '^\s*(?:make sure|ensure)\s+(?:the\s+)?(?P<layer_name>.+?)\s+is\s+(?P<toggle>on|off|visible|hidden)\s*[.!?]?\s*$'
+    deny_patterns:
+      - '\b(csv|table|plot|chart|image|file|artifact)\b'
+      - '\b(show|hide)\s+.*\b(as|with)\b'
+      - '\.(tif|tiff|csv|json|geojson|png|jpg|jpeg|webp|txt|md|py)\b'
+    steps:
+      - kind: tool_call
+        tool_name: layer.update_state
+        arguments:
+          layer_name: "${layer_name}"
+          visible: "${visible}"
+
+  - action_id: layer.list_visible
+    enabled: true
+    priority: 79
+    deny_if_complex: false
+    patterns:
+      - '^\s*(?:what|which)\s+layers\s+are\s+currently\s+visible\s*\??\s*$'
+      - '^\s*list\s+visible\s+layers\s*$'
+    deny_patterns: []
+    steps:
+      - kind: tool_call
+        tool_name: layer.list_visible
+        arguments: {}
+
+  - action_id: layer.resolve_visibility_with_agent
+    enabled: true
+    priority: 70
+    deny_if_complex: true
+    patterns:
+      - '^\s*set\s+visibility\s+for\s+layer\s+(?P<layer_query>.+?)\s+to\s+(?P<toggle>on|off|visible|hidden)\s*$'
+    deny_patterns: []
+    steps:
+      - kind: agent_call
+        objective: 'Resolve the target layer name for query "${layer_query}" in the active scenario and return JSON.'
+        allowed_tools:
+          - layer.list_visible
+          - product.list
+        output_schema:
+          type: object
+          required:
+            - layer_name
+          properties:
+            layer_name:
+              type: string
+          additionalProperties: false
+        max_iterations: 2
+        max_output_tokens: 512
+        timeout_ms: 8000
+      - kind: tool_call
+        tool_name: layer.update_state
+        arguments:
+          layer_name: "${layer_name}"
+          visible: "${visible}"

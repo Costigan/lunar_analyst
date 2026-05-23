@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "RenderMode": {
+      "enum": [
+        "raster",
+        "vector"
+      ],
+      "title": "RenderMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "layer_id": {
+      "title": "Layer Id",
+      "type": "string"
+    },
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "product_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Product Id"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "visible": {
+      "title": "Visible",
+      "type": "boolean"
+    },
+    "opacity": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Opacity",
+      "type": "number"
+    },
+    "z_index": {
+      "title": "Z Index",
+      "type": "integer"
+    },
+    "render_mode": {
+      "$ref": "#/$defs/RenderMode"
+    },
+    "source_file_id": {
+      "title": "Source File Id",
+      "type": "string"
+    },
+    "style": {
+      "additionalProperties": true,
+      "title": "Style",
+      "type": "object"
+    },
+    "updated_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Updated At Utc",
+      "type": "string"
+    }
+  },
+  "required": [
+    "layer_id",
+    "scenario_id",
+    "title",
+    "visible",
+    "opacity",
+    "z_index",
+    "render_mode",
+    "source_file_id",
+    "updated_at_utc"
+  ],
+  "title": "LayerState",
+  "type": "object"
+}

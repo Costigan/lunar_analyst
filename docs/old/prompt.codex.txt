@@ -1,0 +1,36 @@
+# Background
+
+The projects in these directories are relevant:
+
+- @lunarsiteeval/ contains a python library named 'lunarsiteeval' (Lunar Site Eval) which contains code for analyzing raster geotiff maps to find potential lunar landing sites
+- @moonlayers/ contains python code for integrating openlayers into marimo notebooks as a control.
+- @new_horizon/ contains C# .net core code for generating horizons from digital elevation maps, and from the horizons light maps and other lighting-related products
+- @env_311 is a python environment that has lunarsiteeval included as some kind of 'virtual' site package.
+- @lunar_analyst_net/ is a C# .net core desktop application for rendering lunar maps.
+
+Also read @lunar_analyst/docs/MOVE_TO_BROWSER.md
+@lunar_analyst/docs/NEW_DESIGN.md @lunar_analyst/docs/NEW_ROADMAP.md for context.
+
+# Your Task
+
+Your task is to review @lunar_analyst/docs/PLAN.md, which is a plan
+for implementing the lunar analyst program primarily in python that
+was created by the gemini language model.
+
+The plan is intended to rougly replicate the C# .net core desktop
+application @lunar_analyst_net/ using openlayers with a python back
+end.
+
+This backend will generate and serve the maps for the browser-based
+client (based on openlayers).  It will call the C# code in
+@new_horizon using the pythonnet (Python.Net) library, but there will
+be no .net winform-based user interface.
+
+This backend will also run a marimo server.  I don't know whether this
+should be a separate process or they should be running in the same
+server.  Code in the marimo notebooks will need to cause maps to be
+generated (perhaps calling C# via pythonnet) and cause geotiffs to be
+added to or removed from the available openlayers layers.
+
+Ask questions if you need to.
+Put your review of the plan in lunar_analyst/docs/PLAN_REVIEW_BY_CODEX.md

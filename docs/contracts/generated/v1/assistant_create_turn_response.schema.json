@@ -1,0 +1,477 @@
+{
+  "$defs": {
+    "AssistantConfirmation": {
+      "additionalProperties": false,
+      "properties": {
+        "confirmation_id": {
+          "title": "Confirmation Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "action_type": {
+          "$ref": "#/$defs/AssistantConfirmationActionType"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "requested_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "title": "Requested At Utc",
+          "type": "string"
+        },
+        "resolved_at_utc": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved At Utc"
+        },
+        "resolution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssistantConfirmationDecision"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "confirmation_id",
+        "session_id",
+        "turn_id",
+        "action_type",
+        "tool_name",
+        "status",
+        "requested_at_utc"
+      ],
+      "title": "AssistantConfirmation",
+      "type": "object"
+    },
+    "AssistantConfirmationActionType": {
+      "enum": [
+        "launch_job",
+        "import_file",
+        "move_path",
+        "update_layer_state",
+        "delete_artifact",
+        "write_notebook"
+      ],
+      "title": "AssistantConfirmationActionType",
+      "type": "string"
+    },
+    "AssistantConfirmationDecision": {
+      "enum": [
+        "allow_once",
+        "always_allow_action_type",
+        "deny_once"
+      ],
+      "title": "AssistantConfirmationDecision",
+      "type": "string"
+    },
+    "AssistantMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/AssistantRole"
+        },
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "created_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "title": "Created At Utc",
+          "type": "string"
+        },
+        "turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Turn Id"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/AssistantOutput"
+          },
+          "title": "Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "message_id",
+        "session_id",
+        "role",
+        "content",
+        "created_at_utc"
+      ],
+      "title": "AssistantMessage",
+      "type": "object"
+    },
+    "AssistantOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "output_id": {
+          "title": "Output Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "table",
+            "plot",
+            "artifact_card",
+            "map_view"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "mime_type": {
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "storage": {
+          "enum": [
+            "inline",
+            "file"
+          ],
+          "title": "Storage",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "output_id",
+        "kind",
+        "mime_type",
+        "storage"
+      ],
+      "title": "AssistantOutput",
+      "type": "object"
+    },
+    "AssistantRole": {
+      "enum": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "title": "AssistantRole",
+      "type": "string"
+    },
+    "AssistantToolCall": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_call_id": {
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "tool_name": {
+          "title": "Tool Name",
+          "type": "string"
+        },
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "created_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "title": "Created At Utc",
+          "type": "string"
+        },
+        "completed_at_utc": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At Utc"
+        },
+        "result": {
+          "additionalProperties": true,
+          "title": "Result",
+          "type": "object"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "action_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssistantConfirmationActionType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "outputs": {
+          "items": {
+            "$ref": "#/$defs/AssistantOutput"
+          },
+          "title": "Outputs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "tool_call_id",
+        "session_id",
+        "turn_id",
+        "tool_name",
+        "status",
+        "created_at_utc"
+      ],
+      "title": "AssistantToolCall",
+      "type": "object"
+    },
+    "AssistantTurn": {
+      "additionalProperties": false,
+      "properties": {
+        "turn_id": {
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "user_message_id": {
+          "title": "User Message Id",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/AssistantTurnStatus"
+        },
+        "provider_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Id"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "created_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "title": "Created At Utc",
+          "type": "string"
+        },
+        "updated_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "title": "Updated At Utc",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "usage": {
+          "additionalProperties": true,
+          "title": "Usage",
+          "type": "object"
+        }
+      },
+      "required": [
+        "turn_id",
+        "session_id",
+        "user_message_id",
+        "status",
+        "created_at_utc",
+        "updated_at_utc"
+      ],
+      "title": "AssistantTurn",
+      "type": "object"
+    },
+    "AssistantTurnStatus": {
+      "enum": [
+        "queued",
+        "running",
+        "completed",
+        "failed",
+        "confirmation_required"
+      ],
+      "title": "AssistantTurnStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "turn": {
+      "$ref": "#/$defs/AssistantTurn"
+    },
+    "assistant_message": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssistantMessage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "confirmation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssistantConfirmation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "tool_calls": {
+      "items": {
+        "$ref": "#/$defs/AssistantToolCall"
+      },
+      "title": "Tool Calls",
+      "type": "array"
+    }
+  },
+  "required": [
+    "turn"
+  ],
+  "title": "CreateAssistantTurnResponse",
+  "type": "object"
+}

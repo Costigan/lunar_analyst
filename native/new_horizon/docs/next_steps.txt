@@ -1,0 +1,16 @@
+## Work To Date
+1. Added a planar-to-chord cubic model (`SStartChord`, `PlanarToChordC{1..3}`) to every `RaySegment` and to the emulator. Both the kernel and the CPU debug path now recover the true chord distance from planar deltas without double precision.
+2. Instrumented `SinglePointComparisonTests` so any failure emits ref/quad angles (deg/rad) and a CSV (`ref_vs_qt.csv`) for all azimuth bins.
+3. Added detailed logging inside `QuadTreeRayCastKernel`: for a chosen azimuth we now log the segment metadata, the best slope encountered, the distance/pixel/elevation where it happened, and a sample count.
+4. Fixed the inner-DEM march: we no longer accept the observer sample (slope=0). When the segment starts at 0 we now begin the march at 1.2 m (matching the reference emulator's first sample) so the horizon isn't clamped to 0°.
+
+## Hypotheses Considered
+- **Zero-slope corruption**: confirmed. Starting at s=0 forced every bin to 0°; after skipping the origin the max delta dropped from 5.28° to ~1.67°.
+- **Chord-length error**: ruled out by the new polynomial fits—the per-sample slope deltas in the emulator are now ~1e-3, so the remaining gap isn't coming from the planar→chord approximation.
+- **Bin indexing mismatch**: still plausible, especially since the latest failure is at az≈90° (a different region) and the quad angles are consistently offset (~+1.67°).
+- **Hierarchy skip heuristics**: ruled out here because `_disableHierarchy` is true—every ray goes straight to Level 0 sampling with no culling.
+
+## Next Steps
+1. Pull the new `ref_vs_qt.csv` for Deploy_markh 20251212T125026_14256 and plot the quad-minus-ref delta vs azimuth to see if the +1.67° bias is localized (single bin) or spans a range. If it affects multiple bins, revisit the azimuth mapping (`ReferenceHorizonGenerator.ConvertHorizonIndexToQuadTreeIndex`).
+2. For az≈89.75° specifically, compare the per-sample slopes from `reference_trace.csv` and `quadtree_trace.csv` to check whether the quadwalker samples peak at ~13.2° or whether the horizon is being set to an older value (which would point to aggregation issues).
+3. If the slopes themselves match, inspect how the final `currentHorizonSlope` is converted back to degrees. We only emit `atan(currentSlope)` at the end; confirm we never mix ref/quad bin indexing in `PlotHorizons` or the final comparison.

@@ -1,0 +1,41 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "dem_path": {
+      "title": "Dem Path",
+      "type": "string"
+    },
+    "hillshade_path": {
+      "title": "Hillshade Path",
+      "type": "string"
+    },
+    "size_bytes": {
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "artifact_db_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Db Path"
+    }
+  },
+  "required": [
+    "scenario_id",
+    "dem_path",
+    "hillshade_path",
+    "size_bytes"
+  ],
+  "title": "GenerateHillshadeResult",
+  "type": "object"
+}

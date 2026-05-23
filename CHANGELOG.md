@@ -1,0 +1,1698 @@
+# CHANGELOG (Functional, Full History)
+
+This file summarizes functional behavior changes across all commits in this repository (128 commits), from `b38cd7c` to `Unreleased`.
+
+- `08dfad3` (2026-05-20): Horizon-generation correctness fixes, chord-correction toggle, and algorithm documentation refresh.
+  - New Horizon / QuadTree horizon generation:
+    - Fixed a ray-fit unit mismatch in `native/new_horizon/moonlib/horizon/QuadTreeHorizonGenerator.cs` where segment polynomials were being fit/scaled in meters while the GPU kernel evaluated them in kilometers. This bug produced broadly incorrect horizons and incorrect downstream `psr.tif` output.
+    - Kept the current fast sample-generation path while preserving the kilometer-based polynomial fit/evaluation convention expected by the GPU kernel.
+    - Added an explicit chord-correction mode switch in `QuadTreeHorizonGenerator`:
+      - `UseDemElevationChordCorrection = true` uses per-sample DEM elevations in the planar-to-chord fit target.
+      - `UseDemElevationChordCorrection = false` uses a fixed-radius spherical correction model based on `reference_radius + observer_pixel_elevation`.
+    - Current code setting: `UseDemElevationChordCorrection = false`.
+    - Preserved both chord-correction implementations in code so correctness and performance can be compared without reworking the surrounding pipeline.
+    - Corrected the fixed-radius spherical chord-correction path so it no longer accidentally double-counts terrain height when computing chord-distance targets.
+    - Changed GPU horizon accumulation buffers to store apparent slope across DEM passes and convert to degrees only once after traversal, avoiding per-pass `atan`/`tan` round trips in the kernel.
+    - Added a GPU adaptive-step floor of `0.5 x` the active DEM map resolution so near-field stepping cannot become substantially denser than the raster supports.
+    - Increased the DEM 0 adaptive-step floor to `0.8 x` active DEM map resolution after `100 m` from the observer, preserving the denser `0.5 x` floor only in the most sensitive near-observer zone.
+    - Moved traversal-counter instrumentation behind the `QUADTREE_TRAVERSAL_PROFILE` compile-time symbol so normal builds omit the counter buffer, atomic updates, and hot-loop profiling branches entirely.
+  - Observed behavior on the Haworth scenario (`208` patches, run mode `5`):
+    - DEM-elevation chord correction: about `7.00` minutes total, about `2.02 sec/patch`.
+    - Fixed-radius spherical chord correction: about `1.93 sec/patch` in the recent direct comparison run.
+    - The corrected kilometer-based fit restored PSR correctness relative to `main`; the earlier fast-but-wrong branch state had lower throughput artifacts tied to incorrect segment geometry rather than a valid performance baseline.
+  - Documentation:
+    - Added `docs/horizon_generation_algorithm.md`, a fresh end-to-end description of the current horizon-generation algorithm, including patch tiling, subpatch interpolation, sample generation, polynomial ray fitting, planar-to-chord correction, GPU traversal, hierarchical culling, and the main simplifying assumptions/design tradeoffs.
+    - Added a measured appendix in `docs/horizon_generation_algorithm.md` documenting the recent DEM-elevation vs fixed-radius chord-correction timing comparison.
+    - Documented the slope-buffer GPU accumulation model in `docs/horizon_generation_algorithm.md`.
+    - Documented the raster-resolution floor used by adaptive GPU ray stepping.
+
+- `38be733` (2026-05-16): QuadTree horizon artifact reduction and production-path documentation.
+  - New Horizon / QuadTree horizon generation:
+    - Made bilinear subpatch segment interpolation the production fast path in `QuadTreeHorizonGenerator`.
+    - Replaced hard subpatch-owner switching with four-segment interpolation so 8-pixel subpatch seams are smoothed without falling back to per-pixel reference rays.
+    - Added per-job segment-center reuse for adjacent patch halo centers, preserving most of the fast-path performance while avoiding redundant ray fitting across patch boundaries.
+    - Corrected subpatch grid-convergence handling so azimuth-bin correction is subpatch-relative instead of 128x128 tile-relative, removing the large patch-boundary shadow-map artifact.
+    - Clamped interpolation halo segment centers at DEM edges and shifted reused segments from their actual clamped centers, avoiding off-DEM edge artifacts.
+    - Removed diagnostic-only forced-owner and per-pixel ENU frame-correction paths from the production code path; retained `QUADTREE_PIPELINE_SUBPATCH_SIZE` for subpatch-size sensitivity diagnostics.
+  - Documentation:
+    - Added `docs/QUADTREE_UPDATE.md` summarizing the experiments, quality results, conclusions, and production path.
+    - Updated `docs/DESIGN.md` to replace stale New Horizon descriptions with the current `ReferenceHorizonGenerator` validation role, `QuadTreeHorizonGenerator` production role, bilinear interpolation model, segment-cache behavior, DEM-edge handling, and grid-convergence correction.
+
+- `befb8e8` (2026-04-20): Implemented ADR.0055 deterministic noun-phrase product matching with create-intent gating and LLM handoff candidate context.
+  - Product-type alias source of truth:
+    - Extended `ProductTypeSpec` with `noun_phrase_aliases` in `backend/services/assistant/product_type_dictionary.py`.
+    - Added noun-phrase aliases across canonical product types and validation for alias integrity.
+  - Prompt classification behavior (`backend/services/assistant/prompt_classifier.py`):
+    - Added deterministic noun-phrase product-type matching for recipe-backed product types.
+    - Added create-intent gating so noun matches alone do not force `create_product` classification.
+    - Added negative guardrails for common non-create paths (questions, explicit tool-call segments, script authoring flows, and non-create leading verbs such as `show`/`call`).
+    - Preserved compatibility for explicit `create/generate/make/build ...` requests, including unsupported product types that should still classify as `create_product` and block in planner with structured reasons.
+    - Added always-on `candidate_product_types` extraction for all segments, independent of final class.
+  - Assistant handoff/context propagation (`backend/services/assistant/assistant_service.py`):
+    - Extended per-segment classification summary logging and classification telemetry payloads with `candidate_product_types`.
+    - Extended `<DOMAIN_ENTITY_CONTEXT>` payload to include per-segment classification metadata (`segment_class`, `classification_origin`) and `candidate_product_types` so model-routed segments receive deterministic candidate grounding without forcing deterministic execution.
+    - Wired `turn_id` through model handoff context construction so per-segment candidate metadata is available in model-loop paths.
+  - Design/ADR documentation:
+    - Added `docs/ADR.0055.deterministic_noun_phrase_product_matching.md`.
+    - Updated `docs/DESIGN.md` to describe:
+      - class set (`command`/`create_product`/`other`),
+      - separation of candidate extraction from final classification,
+      - create-intent gating for `create_product`,
+      - propagation of `candidate_product_types` into `<DOMAIN_ENTITY_CONTEXT>` for LLM fallback.
+  - Tests:
+    - Added and updated worker tests for noun-phrase matching, ambiguity fallback, non-recipe gating, product-type alias source-of-truth coverage, and classifier-to-planner integration:
+      - `backend/tests/worker/test_prompt_classifier.py`
+      - `backend/tests/worker/test_create_product_planner.py`
+    - Verified targeted regression slices for assistant hybrid metadata, tool loop routing, segmentation/golden fixtures, and assistant API artifact paths.
+    - Full local run reported: `588 passed, 3 skipped, 11 warnings`.
+
+- `f9461bd` (2026-04-19): Implemented ADR.0054 deterministic routing simplification and assistant flag reduction.
+  - Assistant routing/runtime simplification:
+    - Removed rollout-era assistant routing toggles from active runtime wiring in:
+      - `backend/services/assistant/assistant_service.py`
+      - `backend/api/dependencies.py`
+      - `backend/api/dependency_helpers.py`
+    - Deterministic routing is now mandatory; deterministic `agent_call` substeps are disabled; product-recipe planning is always enabled for create-product handling.
+    - Primary model handoff now always injects `<DOMAIN_ENTITY_CONTEXT>` wrappers.
+  - Secondary classifier removal:
+    - Removed semantic fallback classifier execution path from assistant routing.
+    - Deleted deprecated classifier module/assets/tests:
+      - `backend/services/assistant/segment_intent_extractor.py`
+      - `backend/services/assistant/prompts/segment_intent_classifier_system.txt`
+      - `backend/services/assistant/prompts/segment_intent_classifier_fewshot.json`
+      - `backend/services/assistant/schemas/segment_intent_classifier.schema.json`
+      - `backend/tests/worker/test_segment_intent_extractor.py`
+    - Simplified classifier behavior to deterministic command candidate + heuristic create-product + `other` fallback in `backend/services/assistant/prompt_classifier.py`.
+  - Provider/performance policy hardening:
+    - Removed config-driven `allow_cross_provider_fallback` and `prewarm_on_startup` handling in `backend/services/assistant/provider_registry.py`.
+    - Cross-provider fallback is no longer allowed in assistant fallback pair selection.
+  - Session-store policy hardening:
+    - Collapsed assistant session storage to SQLite-only wiring (no JSON backend selection path) in:
+      - `backend/api/dependencies.py`
+      - `backend/api/dependency_helpers.py`
+    - Removed obsolete helper `resolve_assistant_store_backend`.
+    - Simplified `resolve_assistant_store_path` to SQLite-only resolution (removed JSON path branch and `backend=` selector argument).
+  - Dead code cleanup (post-ADR.0054 implementation pass):
+    - Removed unused product dictionary helpers in `backend/services/assistant/product_type_dictionary.py`:
+      - `product_type_labels`
+      - `get_product_type_spec`
+    - Removed unused `NativeJobAdapter` interface from `backend/services/interfaces/native_compute.py`.
+  - Config contract hardening (removed keys are invalid):
+    - Added explicit removed-key validation in `backend/core/config.py` for:
+      - `backend.llm.hybrid_command_router_enabled`
+      - `backend.llm.legacy_parser_enabled`
+      - `backend.llm.prompt_segmentation_model`
+      - `backend.llm.deterministic_agent_substeps_enabled`
+      - `backend.llm.create_product_recipe_catalog_enabled`
+      - `backend.llm.session_store_backend`
+      - `backend.llm.routing.entity_kind_routing_enabled`
+      - `backend.llm.routing.domain_entity_context_enabled`
+      - `backend.llm.routing.semantic_classifier_fallback_enabled`
+      - `backend.llm.segment_intent_classifier.*`
+      - `backend.llm.performance.allow_cross_provider_fallback`
+      - `backend.llm.performance.prewarm_on_startup`
+    - Validation now raises even in non-strict config loads so removed keys are treated as invalid config, not ignored.
+  - Config updates:
+    - Removed deprecated keys from maintained app configs:
+      - `config/lunar_analyst.toml`
+      - `config/lunar_analyst.container.toml`
+      - `config/lunar_analyst.devcontainer.toml`
+  - Tests:
+    - Added `backend/tests/worker/test_core_config_removed_keys.py`.
+    - Updated/removed assistant tests that depended on removed toggle branches and semantic-classifier-specific behavior.
+    - Updated `backend/tests/worker/test_workspace_path_contract.py` for SQLite-only store-path behavior.
+    - Verified targeted suites:
+      - `backend/tests/worker/test_assistant_tool_loop.py` (`66 passed`)
+      - `backend/tests/worker/test_prompt_classifier.py` (`3 passed`)
+      - `backend/tests/worker/test_deterministic_recognizer.py` (`2 passed`)
+      - `backend/tests/worker/test_assistant_hybrid_metadata.py` (`10 passed`)
+      - `backend/tests/worker/test_core_config_removed_keys.py` (`3 passed`)
+      - `backend/tests/worker/test_workspace_path_contract.py` (`3 passed`)
+
+- `7028fc5` (2026-04-17): NAME-TYPE feature-phrase recognition and personal-pronoun entity-resolution guard.
+  - Colloquial feature-phrase extraction (`backend/services/assistant/entity_reference_resolver.py`):
+    - Added `_FEATURE_NAME_TYPE_PATTERN` regex to recognise colloquial **NAME TYPE** phrases (e.g., "Dawa Crater", "Shackleton Crater") in addition to the existing IAU-style TYPE-NAME pattern ("Mons Malapert").
+    - Updated `_extract_feature_mentions_from_text` to scan both patterns, deduplicating by normalised name, so NAME-TYPE mentions reach the entity resolver and the deterministic recognizer can match the `navigation.feature` rule without falling back to the LLM.
+    - Effect: "Take me to Dawa Crater" now resolves deterministically in ~4 ms (`origin=deterministic_recognizer:navigation.feature`, `segments_using_semantic_fallback=0/1`) instead of invoking the local LLM (~1100 ms).
+  - Personal-pronoun entity-resolution guard (`backend/services/assistant/entity_reference_resolver.py`):
+    - Added `_PERSONAL_PRONOUNS` frozenset covering standard English personal pronouns.
+    - Filter applied in `_build_dependency_metadata_map`, `_extract_pos_mentions`, and `_direct_object_candidate_from_mentions` so pronouns (e.g., "me" in "Take me to Dawa Crater") are never used as candidate feature mentions or direct-object targets for fuzzy lookup, eliminating false `entity_ambiguous_requires_clarification` blocks.
+  - Test coverage (`backend/tests/worker/test_verb_and_entity_resolution.py`, `backend/tests/worker/test_feature_resolution_variants.py`):
+    - Added `test_entity_resolver_extracts_feature_from_name_type_order` — asserts "Shackleton Crater" resolves to the correct feature ID with no ambiguities.
+    - Added `test_personal_pronoun_not_treated_as_entity` — asserts "Take me to Dawa Crater" plans `location.goto` without `requires_clarification` and without "me" appearing in entity mentions or ambiguity list.
+
+- `Unreleased` (2026-04-17): Assistant observability upgrades and deterministic map zoom behavior for assistant-driven location navigation.
+  - ADR.0053 completed: entity-kind-aware deterministic routing and domain-entity LLM context (phases 0-4).
+    - Entity-resolution metadata and typed target selection (`backend/services/assistant/entity_reference_resolver.py`, `backend/services/assistant/assistant_service.py`):
+      - Added canonical-verb and object-target metadata (`direct_object_candidate`, `target_kind`, `target_mention`, `target_resolved_id`) and deterministic ambiguity signaling (`ambiguous_layer_or_file`).
+      - Added cross-segment entity-mention binding memory (`_apply_prior_mention_bindings`) to preserve resolution across subsequent segments in the same turn.
+      - Improved target selection using linguistic dependency roles (`direct_object_candidate`) to disambiguate multiple resolved entities.
+      - Added deterministic promotion path from `other` to typed `intent_family` based on canonical operation + resolved target kind.
+    - Typed deterministic routing matrix and planner wiring (`backend/services/assistant/intent_to_tool_planner.py`, `config/assistant_action_router.yaml`, `backend/services/assistant/action_router_config.py`, `backend/services/assistant/command_router.py`):
+      - Added entity-kind-aware deterministic handling for `goto/show/hide` with explicit clarification on ambiguity or missing required entity kinds.
+      - Added file-reference guard in layer-visibility normalization so file-like targets (for example `show slope.tif`) are not misrouted as layer-name-only visibility commands.
+    - File-to-layer visibility workflow hardening (`backend/services/assistant/tool_registry.py`):
+      - `scenario.import_geotiff` now resolves relative file paths against scenario root, enforces in-root existence checks, and preserves idempotent existing-layer behavior.
+    - Primary LLM context contract for model-loop/handoff (`backend/services/assistant/assistant_service.py`, `backend/services/assistant/system_prompt.txt`):
+      - Added `<DOMAIN_ENTITY_CONTEXT>` + `<USER_QUERY>` wrapper injection with bounded mentions/ambiguity candidates.
+      - Added system-prompt guidance requiring the model to use provided domain-entity context and avoid contradiction/invention.
+    - Classifier dependency reduction controls (`backend/services/assistant/prompt_classifier.py`, `config/lunar_analyst*.toml`):
+      - Added `semantic_fallback_enabled` classifier control and routing feature flags:
+        - `entity_kind_routing_enabled`
+        - `domain_entity_context_enabled`
+        - `semantic_classifier_fallback_enabled`
+    - Diagnostics parity update (`scripts/show_prompt_plans.py`):
+      - Updated script to use `AssistantService` routing/classification/resolution internals so diagnostics mirror runtime behavior exactly (including promotion, dispatch blocks, planner gating, and domain-context handoff payloads).
+    - Unified deterministic recognizer + fallback ordering (`backend/services/assistant/deterministic_recognizer.py`, `backend/services/assistant/assistant_service.py`, `backend/services/assistant/verb_normalizer.py`, `backend/services/assistant/prompt_classifier.py`):
+      - Replaced split deterministic promotions with one recognizer that evaluates deterministic regex + entity-kind rules in a single stage.
+      - Reordered segment processing to: provisional non-semantic classification -> entity resolution + verb-operation candidates -> deterministic recognizer -> semantic fallback only for no-match segments.
+      - Verb normalization now preserves operation candidate sets and matched alias evidence (`operation_candidates`, `matched_aliases_by_operation`) instead of forcing an early single canonical operation.
+    - Prompt-plan diagnostics clarity (`scripts/show_prompt_plans.py`):
+      - Added explicit per-segment deterministic recognizer traces (status/rule/reason/operation_candidates/target kinds).
+      - Added prompt-level and segment-level processing timing (segmentation, resolution, total elapsed ms).
+      - Corrected semantic-classifier usage reporting to be origin-based so deterministic promotions are no longer reported as local-LLM classification.
+    - Test coverage:
+      - Updated/added worker tests across metadata, planner mapping, tool-loop routing, classifier fallback gating, and geotiff import path handling (including new `backend/tests/worker/test_deterministic_recognizer.py` and `backend/tests/worker/test_tool_registry_import_geotiff.py`).
+    - Planning samples (`scripts/`):
+      - Renamed `sample_prompts_for_planning.json` to `sample_planning_prompts_1.json`.
+      - Added `sample_planning_prompts_2.json` with updated prompt sets for deterministic routing validation.
+  - Assistant logging (`backend/services/assistant/assistant_service.py`):
+    - Added per-segment post-processing logs (`assistant segment processed`) with structured payloads including segment text, classification, entity resolution, dispatch/execution mode, tool-call outcomes, response excerpts, error fields, and elapsed time.
+    - Added turn-level processing summary logs (`assistant turn processing summary`) focused on prompt, segment list/outcomes, tool-call counts, and aggregate error status without duplicating full segment payload detail.
+    - Added fallback segment-log emission so every segment receives a processed log even when execution flows through model-loop/terminal branches.
+    - Switched segment and turn summary JSON payloads to pretty-printed log formatting for easier inspection.
+  - RAG reference logging (`backend/services/assistant/providers/rag_wrapper_provider.py`):
+    - Switched `assistant rag injected references` detail payload to pretty-printed JSON.
+  - Assistant location navigation (`backend/services/assistant/tool_registry.py`):
+    - Added default `max_zoom=11.0` for `location.goto` WS zoom requests (unless explicitly provided), and included `max_zoom` in the returned tool payload for traceability.
+  - Frontend map zoom handling (`backend/web/lunar_analyst/src/map/mapController.ts`):
+    - Reworked deferred zoom application for hidden/non-renderable map tabs.
+    - Replaced timing-sensitive `View.fit(...)` dependence with deterministic geometry-based center/resolution computation from extent + viewport dimensions.
+    - Applied explicit constrained center/resolution updates (or animation for non-deferred calls) so assistant zoom outcomes are driven by feature geometry and remain stable across tab visibility/layout timing changes.
+
+- `800fed6` (2026-04-16): Container ergonomics, assistant provider-agnostic classification, and entity resolution hardening:
+  - Containerization & Deployment:
+    - Fixed missing spaCy components in Docker by adding `en_core_web_sm` download to `Dockerfile.dev` and `Dockerfile.runtime`.
+    - Optimized dev-container startup by making recursive `chown` operations conditional on top-level directory ownership, reducing typical launch delay from 20s+ to near-instant.
+    - Enabled external access to the containerized app by defaulting `LUNAR_ANALYST_HOST` to `0.0.0.0` in `scripts/run-host-dev.sh` and `docker/compose.dev.yml`.
+    - Fixed a bug in `scripts/run-host-dev.sh` where the `--host` parameter was missing from the `uvicorn` launch command.
+    - Added passthrough for `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, and `LUNAR_ANALYST_MCP_TOKEN` in `docker/compose.dev.yml`.
+    - Synchronized `config/lunar_analyst.devcontainer.toml` and `config/lunar_analyst.container.toml` with host-native functional and performance blocks.
+  - Assistant & Entity Resolution:
+    - Refactored `SegmentIntentExtractor` to support multiple providers via `AssistantProviderRegistry`, enabling OpenAI-backed intent classification in environments without Ollama.
+    - Hardened entity resolution by filtering out "entity_ambiguity" blocks when a generic mention (e.g., "Malapert") is subsumed by a successfully resolved specific mention (e.g., "Mons Malapert").
+    - Generalized assistant classification origins and error detection to be provider-agnostic (removed hardcoded `ollama_` prefixes in logic).
+  - Verification:
+    - Verified "Zoom in on Mons Malapert" works end-to-end in the dev container using OpenAI classification.
+    - Verified container startup performance and port-mapped browser access to the backend.
+
+- `3b24111` (2026-04-15): Assistant tool & map-zoom reliability fixes and diagnostics
+  - Fixed malformed model-facing tool schema for `colormap.create_simple` (added explicit `items` for `stops` and `parameters`) so OpenAI function-calling accepts the tool.
+  - Added provider-side preflight validation for model-facing tool schemas (arrays must include `items`) and provider_request_id generation for early-fail correlation.
+  - Extended assistant bug-report bundle to optionally include provider_request_id, model_tool_schema and model_tool_names for better diagnostics.
+  - Hardened assistant location navigation: normalize/expand degenerate feature extents; prefer feature.diameter_km when deriving buffer so large features (e.g., Mons Malapert) zoom to an appropriate area.
+  - Frontend: accept extent-only `map_zoom_requested` events; added console diagnostics on parse/apply failures and detailed fitExtent logging to aid troubleshooting.
+  - Added regression tests for model-facing tool schemas (arrays must have `items`) and explicit test for `colormap.create_simple`.
+  - Added scripts/rebuild_front_end.sh to rebuild web frontends (map + moonlayers).
+  - Repair model-facing schema for colormap.create_simple (add items for stops/parameters).
+  - Add OpenAI-provider preflight validation that arrays include items and synthesize provider_request_id on preflight failure.
+  - Extend assistant bug-report bundle to optionally include provider_request_id, model_tool_schema, and model_tool_names for correlation.
+  - Normalize/expand degenerate nomenclature extents; prefer feature.diameter_km when deriving buffers so large features (e.g., Mons Malapert) zoom correctly.
+  - Frontend: allow extent-only map_zoom_requested events and add console.info/error diagnostics; add fitExtent logs.
+  - Add regression tests ensuring model-facing tool schemas include items and a specific test for colormap.create_simple.
+  - Add scripts/rebuild_front_end.sh to rebuild frontends.
+
+- `c1decb9` (2026-04-14): Current work tree combines assistant bug-report capture/analysis work with prompt-planning and runtime-context refactors:
+  - assistant bug-report capture and offline analysis:
+    - added a new `Report Assistant Bug` menu action and modal in the browser UI:
+      - `backend/web/lunar_analyst/src/components/Toolbar.tsx`,
+      - `backend/web/lunar_analyst/src/components/assistant/AssistantBugReportDialog.tsx`,
+      - `backend/web/lunar_analyst/src/AppLayout.tsx`;
+    - added bug-report contracts and API routes in:
+      - `backend/contracts/assistant_models.py`,
+      - `backend/api/routers/assistant.py`,
+      - `backend/services/assistant/assistant_service.py`;
+    - added bug-report bundle storage, log capture, and redaction helpers in:
+      - `backend/services/assistant/bug_report_service.py`,
+      - `backend/api/app.py`;
+    - added session-turn listing support in both assistant session store backends:
+      - `backend/services/assistant/session_store_sqlite.py`,
+      - `backend/services/assistant/session_store_json.py`;
+    - added contract-schema export support for the new models in `backend/tools/export_contract_schemas.py`;
+    - added an offline analysis package builder in `backend/tools/analyze_assistant_bug_report.py` plus a developer wrapper:
+      - `scripts/analyze_assistant_bug_report.sh`;
+    - added regression coverage in:
+      - `backend/tests/contract/test_phase6_assistant_api.py`,
+      - `backend/web/lunar_analyst/src/__tests__/assistantService.test.ts`;
+    - updated the ADR to match the capture/analyze workflow in `docs/ADR.0052.explain_assistant_behavior.md`;
+  - prompt-planning and context-building refactors already present in the work tree:
+    - exported `SYSTEM_PROMPT_PATH` from `backend/services/assistant/context_builder.py`;
+    - refactored `backend/services/assistant/prompt_segmenter.py` toward dependency-based segment splitting and expanded imperative lead-word handling;
+    - extended `scripts/show_prompt_plans.py` with richer handoff diagnostics and model-loop context reporting;
+  - verification notes:
+    - the targeted assistant bug-report contract path was exercised with `pytest -k captures_bug_report_bundle`;
+    - the full `pytest -q` run still had unrelated failures at the time of the first changelog entry, so it should not be treated as green yet;
+  - regression fixes applied after the initial work-tree rollout:
+    - restored the assistant turn handoff path in `backend/services/assistant/assistant_service.py` so `compacted_summary` is threaded correctly and the tool-loop no longer aborts with `NameError`;
+    - restored the previous prompt-segmentation contract in `backend/services/assistant/prompt_segmenter.py` so command routing keeps the expected imperative / coordination behavior;
+    - verified the repaired assistant slices with:
+      - `backend/tests/worker/test_assistant_hybrid_metadata.py`,
+      - `backend/tests/worker/test_assistant_tool_loop.py`,
+      - `backend/tests/worker/test_prompt_segmenter.py`;
+    - verified the full affected worker files pass (`80 passed` in the two assistant worker files after the fix).
+
+- `136644c` (2026-04-13): Implemented ADR 0050 local lunar nomenclature end-to-end on top of global `scenario_catalog.db`:
+  - added global nomenclature persistence and query service:
+    - new `backend/services/nomenclature_service.py` with canonical operations:
+      - `resolve_exact(name, feature_type?)`,
+      - `search_fuzzy(query, limit, feature_type?)`,
+      - `nearby(x, y, limit, feature_type?, radius_m?)`,
+      - `get_features_in_extent(extent, types?)`;
+    - extended global catalog schema bootstrap in `backend/api/dependencies.py` with:
+      - `lunar_features`,
+      - `lunar_features_fts` (FTS5),
+      - `lunar_features_rtree` (R-Tree),
+      - `nomenclature_dataset_metadata`;
+  - added nomenclature HTTP API in `backend/api/routers/nomenclature.py` and wired it in `backend/api/app.py`:
+    - `GET /api/v1/nomenclature/search`,
+    - `GET /api/v1/nomenclature/resolve`,
+    - `GET /api/v1/nomenclature/nearby`,
+    - `GET /api/v1/nomenclature/features`;
+  - added ingestion tooling:
+    - new `scripts/ingest-nomenclature.py` to ingest CSV/GeoJSON source data into `<workspace_root>/scenario_catalog.db` with lineage metadata updates;
+  - implemented assistant integration for location navigation:
+    - added assistant tools in `backend/services/assistant/tool_registry.py`:
+      - `location.search`,
+      - `location.goto`,
+      - `location.identify`,
+      - `location.pin_feature`,
+      - `location.list_pins`,
+      - `location.set_layer_filter`;
+    - added `location_navigation` intent-family planning in `backend/services/assistant/intent_to_tool_planner.py`;
+    - extended semantic intent schema/extraction/prompt assets for `location_navigation`:
+      - `backend/services/assistant/schemas/segment_intent_classifier.schema.json`,
+      - `backend/services/assistant/segment_intent_extractor.py`,
+      - `backend/services/assistant/prompts/segment_intent_classifier_system.txt`,
+      - `backend/services/assistant/prompts/segment_intent_classifier_fewshot.json`;
+    - updated success semantics classification in `backend/services/assistant/success_semantics.py` to treat `location_navigation` as read-only in V1 intent-family handling;
+  - implemented web workspace nomenclature UX:
+    - added `backend/web/lunar_analyst/src/services/nomenclatureService.ts`;
+    - added `backend/web/lunar_analyst/src/components/nomenclature/NomenclaturePane.tsx`;
+    - integrated panel and activity-bar wiring in:
+      - `backend/web/lunar_analyst/src/layout/workspaceLayout.ts`,
+      - `backend/web/lunar_analyst/src/layout/PanelFactory.tsx`,
+      - `backend/web/lunar_analyst/src/AppLayout.tsx`;
+  - documentation updates:
+    - refreshed ADR storage model and operation contracts in `docs/ADR.0050.local_lunar_nomenclature_and_feature_navigation.md`;
+    - added design cross-reference note in `docs/DESIGN.md` for ADR 0050 nomenclature flow;
+  - verification:
+    - targeted nomenclature/assistant worker tests pass (`24 passed`);
+    - nomenclature contract tests pass (`2 passed`);
+    - workspace layout frontend test passes;
+    - full backend contract+worker suite passes locally: `562 passed, 1 skipped`.
+
+- `8c9ffa3` (2026-04-13): Proposed local nomenclature integration and hardened deterministic command routing with scenario-context validation:
+  - added `docs/ADR.0050.local_lunar_nomenclature_and_feature_navigation.md` proposing a local SQLite-based lunar gazetteer and navigation service;
+  - hardened `HybridCommandRouter` in `backend/services/assistant/command_router.py` with scenario-context awareness:
+    - added `ScenarioCommandContext` and an optional `scenario_context_resolver` to the router;
+    - implemented `_slots_match_context` to validate matched entities (scenarios, layers) against the actual workspace state during deterministic planning;
+    - ensures the router only plans deterministic actions for entities that actually exist, falling back to the model-loop for ambiguous or missing references;
+  - enhanced `CreateProductPlanner` in `backend/services/assistant/create_product_planner.py`:
+    - added `allow_reuse` toggle to the planning contract, allowing callers to force plan generation even when reusable artifacts are detected;
+  - updated `scripts/show_prompt_plans.py` with richer handling diagnostics and context-aware routing:
+    - added a "Handling Summary" section to human-readable reports, showing the routing mode (`deterministic_command`, `deterministic_intent_family`, `deterministic_create_product`, or `model_loop`) for every prompt segment;
+    - integrated the context-aware `HybridCommandRouter` using a built-in resolver that hydrates context from the active scenario;
+    - added `--force-plan` (default) and `--allow-reuse` flags to control product reuse detection;
+    - improved overall status logic for planning-only runs;
+  - updated `config/lunar_analyst.toml` default Moon Trek overlay to `LRO_LOLA_Shade_SPole75_30mp_v04`;
+  - added worker regression coverage for context-aware routing and forced planning:
+    - `backend/tests/worker/test_hybrid_command_router.py` (context rejection cases);
+    - `backend/tests/worker/test_create_product_planner.py` (`allow_reuse` validation).
+
+- `3e6a582` (2026-04-13): Continued ADR 0049 Phase 1 modularization by extracting additional dependency-root responsibilities while preserving API/runtime compatibility:
+  - extracted Marimo runtime behavior from `backend/api/dependencies.py` into `backend/api/marimo_service.py`:
+    - moved `MarimoService`, `MarimoLaunchConflictError`, and scenario Python template helpers;
+    - preserved compatibility by re-exporting those names via `backend/api/dependencies.py` so existing imports/tests continue to resolve;
+  - extracted runtime-state primitives to `backend/api/runtime_state.py`:
+    - `BoundedEventBuffer`,
+    - `BoundedRunInfoMap`,
+    - sqlite connection helper and bounded-collection factories;
+  - extracted store/data models to `backend/api/store_models.py`:
+    - `InMemoryStores`,
+    - scenario/product/session/discovery record dataclasses;
+  - reduced `backend/api/dependencies.py` size and centralized role toward orchestration/composition without changing job handler contracts.
+  - extracted notebook auth/session management service into `backend/api/notebook_session_service.py` and re-wired composition through `backend/api/dependencies.py`.
+  - began `backend/jobs/handlers.py` domain-executor decomposition:
+    - extracted `generate_horizons` execution implementation to `backend/jobs/executors/horizons.py`;
+    - kept `ToolImplementations.generate_horizons(...)` signature as the contract surface and delegated execution to the new executor;
+    - extracted notebook-definition execution to `backend/jobs/executors/notebook.py` and delegated `ToolImplementations.run_notebook_definition(...)` through a strict injected executor path;
+    - extracted assistant RAG ingest execution to `backend/jobs/executors/rag.py` and delegated `ToolImplementations.assistant_rag_ingest(...)` while preserving cancellation/progress semantics;
+    - removed legacy fallback invocation path in `run_notebook_definition`; notebook execution now uses one canonical runtime-mode-aware call.
+  - began assistant dispatch registry migration in `backend/services/assistant/tool_registry.py`:
+    - added `REGISTRY_TOOL_EXECUTORS` and migrated a first subset (`capabilities.describe`, `tools.search`, `tools.describe`, `scenario.list`, `scenario.get`, `scenario.set_current`, `scenario.list_scripts`, `scenario.list_notebooks`, `scenario.revoke_script_overwrite`);
+    - `execute_tool(...)` now performs registry-first dispatch for migrated tools, with existing behavior retained for unmigrated tools.
+    - expanded migrated registry subset to include `scenario.rag_ingest`, `jobs.list_predefined`, and `jobs.run_predefined`.
+    - expanded migrated registry subset further to include run/job control tools: `runs.get_status`, `runs.get_logs`, `runs.cancel`, `job.launch`, and `job.cancel`.
+    - expanded migrated registry subset further to include read-only product/artifact tools: `product.list`, `product.files`, `artifact.describe_geotiff`, `artifact.stats_geotiff`, `artifact.describe_table`, and `artifact.describe_plot`.
+    - expanded migrated registry subset further to include scenario/colormap mutation tools: `scenario.import_geotiff`, `scenario.move_path`, `colormap.list`, `colormap.create_simple`, `colormap.save_scenario`, and `layer.apply_colormap`.
+    - migrated layer tools to registry path: `layer.list_visible` and `layer.update_state`.
+    - migrated additional scenario/script and artifact preview tools to registry path: `scenario.run_script`, `scenario.run_marimo_notebook`, `scenario.write_script`, `scenario.write_run_script`, and `artifact.preview_geotiff`.
+    - extracted tool-resolution helpers into dedicated modules:
+      - `backend/services/assistant/tool_layer_resolution.py`
+      - `backend/services/assistant/tool_artifact_resolution.py`
+      and preserved compatibility wrappers in `tool_registry.py`.
+    - continued helper extraction with dedicated modules:
+      - `backend/services/assistant/tool_script_ops.py`
+      - `backend/services/assistant/tool_scenario_matching.py`
+      - `backend/services/assistant/tool_logs.py`
+      and preserved compatibility wrappers in `tool_registry.py`.
+  - added/updated worker coverage for migrated registry dispatch in `backend/tests/worker/test_mcp_tool_registry.py`.
+  - completed ADR0049 verification/reliability hardening artifacts:
+    - added contract-drift fast-fail script `scripts/check_contract_drift.sh`;
+    - updated `scripts/run_local_verification.sh` to run contract-drift checks before test suites;
+    - added optional non-blocking CI workflow `.github/workflows/adr0049-verification.yml` for targeted ADR0049 reliability slices;
+    - added troubleshooting guide `docs/dev_notes/adr0049_verification_troubleshooting.md`;
+    - added leak-check helpers `backend/tests/support/leak_checks.py`;
+    - added leak/shutdown regression tests `backend/tests/worker/test_runtime_leak_checks.py`;
+    - added boot-order/native-preflight invariants `backend/tests/integration/test_boot_order_invariants.py`.
+
+- `f22ee33` (2026-04-13): Advanced ADR 0049 from proposal into active implementation, with strict native-bridge contract alignment and Linux-first native runtime packaging:
+  - ADR tracking/documentation updates:
+    - updated `docs/ADR.0049.python_core_modularization_ci_and_leak_free_reliability_program.md` status from `Proposed` to `In Progress`;
+    - added concrete implementation-status section (completed vs pending phases, verification outcomes, reliability posture notes);
+  - Python job contract alignment:
+    - aligned `ToolImplementations.generate_horizons` in `backend/jobs/handlers.py` to the canonical MoonlibBridge signature (single strict call path, no overload fallback logic);
+    - added explicit optional handler inputs for `surrounding_dem_paths` and `observer_elevation_meters` while preserving existing call-site compatibility;
+    - updated worker fake bridge coverage in `backend/tests/worker/test_hillshade_job_flow.py` to the canonical signature;
+  - Native runtime reliability hardening (Linux target):
+    - migrated native .NET projects from `GDAL`/`GDAL.Native` to Linux-oriented `MaxRev.Gdal.Core` + `MaxRev.Gdal.LinuxRuntime.Minimal`;
+    - pinned package versions to `3.11.3.339` to eliminate restore-time floating-version warnings;
+    - set `RuntimeIdentifier=linux-x64` for native projects and tests:
+      - `native/new_horizon/moonlib/moonlib.csproj`,
+      - `native/new_horizon/new_horizon.csproj`,
+      - `native/new_horizon/horizon_runner/horizon_runner.csproj`,
+      - `native/new_horizon/tests/HorizonGen.Tests/HorizonGen.Tests.csproj`;
+    - removed Windows-only GDAL data-copy assumptions from HorizonGen test project and replaced with runtime path probing in `TestInitializer.cs`;
+    - updated `native/new_horizon/moonlib/MoonlibBridge.cs` GDAL/PROJ data discovery to support Linux runtime layouts (`runtimes/*/native`, `gdal/data`, `share/proj`);
+    - updated Python native bootstrap output-path preference in `backend/worker/native_bootstrap.py` to prefer `linux-x64` build outputs and runtime-native directories;
+  - Real-bridge integration test behavior:
+    - hardened `backend/tests/integration/test_moonlib_bridge_real.py` preflight to skip when CLR GDAL bindings are unavailable, preventing false-negative failures in environments without loadable native GDAL payloads;
+  - Verification snapshot (latest local runs):
+    - `dotnet restore native/new_horizon/new_horizon.sln`: passed;
+    - `dotnet build native/new_horizon/new_horizon.sln -v minimal`: passed (non-blocking compiler warnings remain);
+    - `.venv/bin/python -m pytest backend/tests/integration/test_moonlib_bridge_real.py::test_real_generate_horizons_endpoint -q`: skipped;
+    - `.venv/bin/python -m pytest backend/tests/contract backend/tests/integration backend/tests/worker -q`: **552 passed, 3 skipped**.
+
+- `8a65eed` (2026-04-12): Completed ADR 0048 semantic intent-family rollout through Phase 3 domain families and evaluation gates:
+  - expanded semantic-family planning and deterministic execution coverage for:
+    - `lunar_environment_reasoning`,
+    - `surface_route_planning`,
+    - `evidence_packaging`;
+  - added mixed-outcome planner behavior so family plans can include both:
+    - deterministic tool steps (for evidence/context gathering), and
+    - structured model handoff prompts for narrative synthesis;
+  - added response guardrails for domain-family model handoffs in `assistant_service`:
+    - explicit evidence/provenance section requirements,
+    - explicit uncertainty signaling for underconstrained prompts,
+    - alternatives/underconstrained annotations when required by family policy;
+  - added family-specific eval assets and gates:
+    - benchmark fixture set at `backend/evals/assistant/intent_family_benchmark_v1.jsonl`,
+    - readiness report generation at `backend/evals/assistant/intent_family_readiness.py`,
+    - threshold gate evaluation at `backend/evals/assistant/intent_family_thresholds.py`,
+    - replay/threshold/readiness tests under `backend/tests/worker/`;
+  - completed ADR tracking updates:
+    - checked Phase 3 implementation and completion-gate checkboxes in `docs/ADR.0048.semantic_intent_family_extraction_and_property_mapping.md`,
+    - updated ADR status table in `docs/adr_status.txt` to `Accepted | fully`.
+  - known limits:
+    - semantic family extraction depends on configured local intent-classifier model availability;
+    - deterministic planners remain intentionally constrained to V1 property schemas and require clarification when required fields are missing or ambiguous.
+  - follow-up reliability hardening for classifier availability:
+    - fixed `assistant_service.create_turn` so turns that already have deterministic execution paths (`action_plan`, parser fast path, explicit tool sequence, external agent path) no longer fail when segment-intent classification is unavailable;
+    - classification unavailability now remains a hard failure only for turns that require classification/model-loop routing decisions;
+    - restored Phase 6 contract behavior for explicit tool prompts and script write/run confirmation flows in environments without the local segment-intent model.
+  - verification status:
+    - `pytest -q`: **552 passed, 3 skipped** (2026-04-12), with only existing rasterio/raster-delivery warnings.
+
+- `2e8c366` (2026-04-11): Implemented ADR 0048 semantic intent-family extraction and deterministic intent-to-tool planning, then hardened routing/confirmation behavior based on integration-test feedback:
+  - extended segment intent extraction contract from `create_product|other` to include semantic families with structured properties:
+    - added `class="intent_family"` plus `intent_family` and `intent_properties` in `backend/services/assistant/schemas/segment_intent_classifier.schema.json`;
+    - updated extractor prompt/few-shot guidance in `backend/services/assistant/prompts/segment_intent_classifier_system.txt` and `backend/services/assistant/prompts/segment_intent_classifier_fewshot.json`;
+    - updated parsing/validation in `backend/services/assistant/segment_intent_extractor.py` with startup schema checks and downgrade-safe handling;
+  - propagated semantic-family fields through classification/planning:
+    - added `intent_family` and `intent_properties` to segment classifications in `backend/services/assistant/prompt_classifier.py`;
+    - updated deterministic execution-mode selection in `backend/services/assistant/turn_execution_plan.py`;
+  - introduced deterministic semantic planning via `backend/services/assistant/intent_to_tool_planner.py` (renamed from initial mapper naming):
+    - implemented plannable families for `layer_style_update`, `layer_visibility_update`, `artifact_inspection`, `scenario_context_management`, `compute_job_control`, and `programmatic_workflow_authoring`;
+    - added colormap-family operation support for listing colormaps (`list_colormaps`) mapped to `colormap.list`;
+  - integrated semantic planning into assistant turn execution in `backend/services/assistant/assistant_service.py` with guardrails:
+    - semantic/deterministic execution runs only for enabled families and falls back to model-loop when families are not plannable;
+    - deterministic preemption is now skipped for `external_mcp_agent` turns to preserve provider fallback behavior;
+    - deterministic `create_product` preemption is skipped when no active scenario is available (preserving legacy model-loop behavior);
+    - complexity-guarded/conditional semantic segments are routed back to model-loop instead of forcing immediate mutation execution;
+  - added confirmation UX hardening:
+    - plain-turn `approve`/`deny`/`continue` prompts now auto-resolve latest pending confirmation defensively in `backend/services/assistant/assistant_service.py`;
+    - added pending-confirmation listing support in `backend/services/assistant/session_store_sqlite.py` and `backend/services/assistant/session_store_json.py`;
+  - improved prompt imperative detection for style commands:
+    - added `apply` handling in `backend/services/assistant/prompt_segmenter.py` and command gating in `backend/services/assistant/assistant_service.py`;
+  - aligned scripts and ADR/docs with the new architecture:
+    - updated `scripts/show_prompt_segmentation.py` and `scripts/show_prompt_plans.py` to surface semantic-family extraction and deterministic intent-to-tool planning output;
+    - updated `docs/ADR.0048.semantic_intent_family_extraction_and_property_mapping.md` terminology from mapper wording to intent-to-tool planner wording;
+  - expanded regression coverage:
+    - added `backend/tests/worker/test_intent_to_tool_planner.py`;
+    - updated `backend/tests/worker/test_segment_intent_extractor.py`, `backend/tests/worker/test_prompt_classifier.py`, `backend/tests/worker/test_prompt_segmenter.py`, `backend/tests/worker/test_segmentation_classification_invariants.py`, and `backend/tests/worker/test_assistant_tool_loop.py`;
+    - adjusted tool-loop-focused tests to explicitly disable deterministic semantic/create-product preemption where those tests validate model-loop behavior.
+
+- `cd8898c` (2026-04-11): Implemented the first end-to-end ADR 0047 colormap/tone/export slice and hardened Marimo contract-test reliability:
+  - added shared colormap support in `backend/services/colormap_support.py`:
+    - normalized extended colormap schema (`mode`, optional `parameters`, optional `cyclic`);
+    - implemented deterministic source precedence (`scenario_local > scenario_root > app > builtin`);
+    - added filename-stem regex default-colormap rule resolution with first-match semantics;
+    - added reusable tone math and backend sampling helpers for `continuous`, `discrete`, `threshold`, and `cyclic` modes plus contour RGBA generation;
+  - added built-in default colormap rules file at `config/colormaps/default_colormap_rules.json`;
+  - updated Lunar Analyst colormap APIs in `backend/api/routers/lunar_analyst.py`:
+    - `GET /api/v1/lunar-analyst/colormaps` now returns scenario-aware merged colormaps, sources, and rules;
+    - added `POST /api/v1/lunar-analyst/layers/{layer_id}/apply-default-colormap`;
+    - added `POST /api/v1/lunar-analyst/layers/{layer_id}/export-rgba` to launch backend RGBA bake jobs;
+    - bootstrap layer creation now applies resolved default colormap instead of hardcoded `gray`;
+  - updated generic layer creation in `backend/api/routers/v1.py` so raster layers without explicit `style.colormap` automatically receive default-colormap assignment from registry/rules;
+  - added backend RGBA export job in `backend/jobs/handlers.py`:
+    - introduced `ToolImplementations.export_colormap_rgba_geotiff`;
+    - applies colormap or contour style, applies post-colormap tone math, writes 4-band `uint8` RGBA GeoTIFF, converts to COG-compatible output, and registers lineage/artifact metadata;
+  - expanded assistant colormap tooling in `backend/services/assistant/tool_registry.py`:
+    - added `colormap.list`, `colormap.create_simple`, `colormap.save_scenario`, and `layer.apply_colormap`;
+  - updated frontend map/layer behavior:
+    - `backend/web/lunar_analyst/src/map/rasterStyle.ts` now applies brightness/contrast as post-colormap RGB tone math and supports threshold parameter override + contour style mode rendering;
+    - `backend/web/lunar_analyst/src/components/layers/LayerCard.tsx` adds context-menu actions for `Apply Default Colormap` and `Export as RGBA GeoTIFF`, and adds threshold slider support for threshold colormaps;
+    - `backend/web/lunar_analyst/src/components/layers/LayerManagerPane.tsx` wires the new layer actions;
+    - `backend/web/lunar_analyst/src/hooks/useScenarioWorkspace.ts` and layer-add flows no longer hardcode `colormap: "gray"` on new raster layers;
+    - `backend/web/lunar_analyst/src/services/lunarAnalystService.ts` adds client methods/types for new colormap endpoints;
+  - added worker tests in `backend/tests/worker/test_colormap_support.py` covering precedence, regex first-match, tone formula, and cyclic sampling;
+  - fixed flaky marimo contract tests in `backend/tests/contract/test_phase4_marimo_integration.py`:
+    - added deterministic `ensure_local_port_2718` fixture;
+    - fixture reuses existing listener when present, attempts local temporary listener when possible, and falls back to readiness monkeypatch in restricted environments;
+    - removes hidden dependency on an externally running service on `127.0.0.1:2718` for launch/restart tests.
+
+- `79f41a3` (2026-04-11): Added a new deterministic prompt-planning utility with optional execution backends, scenario-file pre/post gating, and serial per-prompt reporting:
+  - added `scripts/show_prompt_plans.py`:
+    - reads prompt inputs from either line-based text files or JSON files (auto-selected when extension is `.json`);
+    - supports JSON prompt objects with `prompt`, `required_files_before`, `delete_files_before`, and `required_files_after`;
+    - enforces per-prompt serial processing: precondition check, optional delete, planning, optional execution, postcondition check, then immediate report output;
+    - preserves original prompt numbering from the input file;
+    - skips prompts with no `create_product` segments;
+    - supports execution backends via `--execution-mode`:
+      - `none` (default): planning-only, no deletions, no `required_files_after` enforcement;
+      - `direct`: in-process backend service execution;
+      - `api`: FastAPI tool invocation (`/api/v1/tools/{tool_name}/runs`);
+    - reports per-prompt overall plan status (`SUCCESS`, `FAILED`, `SKIPPED`) plus end-of-run aggregate counts;
+  - added sample JSON input file:
+    - `scripts/sample_prompts_for_planning.json`;
+  - changed deterministic product inventory/discovery for planner parity:
+    - `backend/services/assistant/product_type_dictionary.py` now defines `DEFAULT_PRODUCT_FILENAMES_BY_TYPE` and validates coverage across canonical product types;
+    - `backend/services/assistant/create_product_planner.py` now supports scenario-directory product discovery directly (using default filename candidates), so plan/reuse detection can run against scenario files without requiring external `available_products` input;
+  - updated docs:
+    - `docs/DEVELOPER_GUIDE.md` now includes a dedicated section on running `show_prompt_segmentation.py` and `show_prompt_plans.py` with practical variants.
+
+- `e3972e7` (2026-04-10): Fixed imperative-coordination prompt segmentation so mixed-verb instructions no longer inherit the wrong leading verb in later clauses:
+  - changed `backend/services/assistant/prompt_segmenter.py`:
+    - updated imperative coordination rebuilding to preserve a coordinated part when it already starts with its own imperative verb (for example, `save ...`) instead of always prepending the first clause prefix (for example, `create ...`);
+    - added `save`, `export`, and `open` to imperative/clause-start detection so these clauses are recognized as valid imperative segment starts;
+    - aligned imperative-candidate detection to use the centralized imperative lead-word set;
+  - added regression coverage in `backend/tests/worker/test_prompt_segmenter.py`:
+    - verifies `Create a slope mask at <= 5 degrees and save it as landing_sites.tif` does not produce `create save ...`;
+    - verifies `save ...` clauses are marked as imperative candidates;
+  - verification performed:
+    - passed: `.venv/bin/python -m pytest backend/tests/worker/test_prompt_segmenter.py -q`.
+
+- `1e05da6` (2026-04-09): Fixed Lunar Analyst hillshade map rendering so scenario hillshade tiles no longer appear as a single flat color and map delivery is faster/more reliable for same-CRS rasters:
+  - fixed raster style normalization fallback in `backend/web/lunar_analyst/src/map/rasterStyle.ts`:
+    - removed the no-range `["clamp", ["band", 1], 0, 1]` fallback that collapsed typical hillshade byte values (`0..255`) into a near-constant normalized value;
+    - when no explicit range is present, styling now uses raw band values so colormap interpolation remains data-driven;
+  - improved raster-style hydration in `backend/web/lunar_analyst/src/utils/rasterStatsStyle.ts`:
+    - style hydration now applies/removes `valueMin`/`valueMax` from raster stats alongside existing nodata/alpha metadata;
+    - this ensures layers get explicit value-range normalization when stats are available and prevents stale range values when stats are unavailable;
+  - hardened map-display raster delivery in `backend/services/raster_delivery.py`:
+    - added optimization detection for same-CRS rasters (`tiled` + overviews for larger rasters);
+    - for CRS-equivalent rasters that are not map-optimized, the service now builds and serves a tiled/deflate display derivative with overview pyramids under the `display/.../*.cog.tif` path instead of returning the original source TIFF directly;
+    - preserved derivative registration behavior in `scenario.db` for these generated display copies;
+  - updated regression coverage:
+    - `backend/tests/services/test_raster_delivery.py`
+    - `backend/web/lunar_analyst/src/__tests__/rasterStyle.test.ts`
+    - `backend/web/lunar_analyst/src/__tests__/rasterStatsStyle.test.ts`;
+  - verification performed:
+    - passed: `.venv/bin/python -m pytest backend/tests/services/test_raster_delivery.py -q`;
+    - passed: `npm --prefix backend/web/lunar_analyst test -- src/__tests__/rasterStyle.test.ts src/__tests__/rasterStatsStyle.test.ts`.
+   
+- `62e1bdd` (2026-04-09): Reworked image-viewer mouse readout to eliminate per-move backend calls, restore reliable status-line updates, and include explicit projection labeling in the readout text:
+  - changed image metadata/readout contracts to carry projection definitions needed for client-side coordinate conversion:
+    - added `projection.proj4` and `geographic_crs_proj4` fields in `backend/contracts/models.py`;
+    - populated those fields in `backend/api/routers/v1.py` from raster CRS metadata and the lunar geographic CRS;
+    - updated frontend metadata typing in `backend/web/lunar_analyst/src/services/scenarioService.ts`;
+  - changed image-viewer readout behavior in `backend/web/lunar_analyst/src/components/viewer/ImageViewerPane.tsx`:
+    - removed per-hover `GET /api/v1/scenarios/{scenario_id}/image-readout` usage from mouse-move flow;
+    - now computes `x/y`, projected `E/N`, and lunar geographic `lon/lat` in-browser from image metadata (affine transform + proj4 CRS transform);
+    - added stale-state resets when switching files so readout text does not carry over between images;
+  - changed status-line formatting for georeferenced images:
+    - now displays `"<projection> projection"` before projected coordinates (for example, `unnamed projection: E=... N=...`);
+  - verification performed:
+    - passed: `npm run build` in `backend/web/lunar_analyst`.
+
+- `5ae1b15` (2026-04-09): Stabilized Messages-pane script/notebook output delivery with a deterministic backend/frontend log-finalization handshake, and documented the implementation plan and current architecture:
+  - changed backend log contracts in `backend/api/dependencies.py` so `GET /api/v1/jobs/{job_id}/logs` now returns `is_final` for `stdout`, `stderr`, and `combined` responses;
+  - implemented monotonic run-log finalization in `NotebookJobService` by tracking process-exit plus stdout/stderr pump completion before marking logs final;
+  - updated websocket job metadata seeding in `backend/api/dependencies.py` so `job_queued` and `job_started` events include `job_type`, `handler_name`, `title`, and `notebook_job_id` (when present), reducing delayed run classification in the UI;
+  - refactored message transcript run-block lifecycle in `backend/web/lunar_analyst/src/components/jobs/JobsManagerPane.tsx`:
+    - added explicit run phases (`open`, `draining`, `closed`);
+    - on terminal status, transitions run blocks to `draining` and keeps transcript prefix blocking until backend `is_final=true`;
+    - added per-run drain in-flight guards and preserved per-run stdout/stderr line cursors;
+    - ensured at least one deterministic drain cycle for fast terminal runs before block close/end marker;
+  - added and updated regression coverage:
+    - new backend worker tests in `backend/tests/worker/test_notebook_run_logs_finalization.py` for `is_final` behavior;
+    - updated `backend/tests/worker/test_job_service_queue_runtime.py` to assert queued/started WS metadata shape;
+    - updated notebook contract expectations in `backend/tests/contract/test_phase4_8_notebook_jobs.py` to assert `is_final` in combined stream payloads;
+  - updated `docs/message-pane.md` with the agreed implementation plan checklist and concrete code references;
+  - verification performed:
+    - passed: `.venv/bin/python -m pytest backend/tests/worker/test_notebook_run_logs_finalization.py backend/tests/worker/test_job_service_queue_runtime.py -q`;
+    - passed: `npm test -- --run src/__tests__/jobsManager.test.ts` in `backend/web/lunar_analyst`;
+    - passed: `npm run build` in `backend/web/lunar_analyst`.
+
+- `7eeae6d` (2026-04-08): Tightened the Scenario Explorer file list to reduce visual row spacing while staying within Blueprint’s supported tree styling:
+  - updated `backend/web/lunar_analyst/src/components/explorer/FilteredTreeTable.tsx` to enable Blueprint’s built-in `compact` tree mode for the scenario file list instead of relying on the default `30px` tree-row height;
+  - refined explorer table spacing in `backend/web/lunar_analyst/src/styles/app.css` so the file-list header, row box, label padding, and scroll region use tighter vertical spacing around file names and hover highlighting;
+  - verification performed:
+    - passed: `npm run build` in `backend/web/lunar_analyst`;
+
+- `93cc0c0` (2026-04-08): Refined the scenario explorer and image-viewer workflow so raster/image files open reliably, the explorer scrolls correctly, and embedded image inspection supports browser-safe previews plus interactive pan/zoom:
+  - improved scenario-explorer behavior in `backend/web/lunar_analyst/src/components/explorer/ScenarioExplorerPane.tsx`, `backend/web/lunar_analyst/src/components/explorer/FilteredTreeTable.tsx`, `backend/web/lunar_analyst/src/AppLayout.tsx`, and `backend/web/lunar_analyst/src/styles/app.css`:
+    - fixed the left explorer tree region so it can actually shrink and show its own scrollbar when the file list exceeds the available height;
+    - extended file-type-aware opening so `.tif` and `.tiff` files are treated as image-viewer targets;
+    - kept double-click opening aligned with the same `Open` behavior used by the context menu;
+  - added browser-safe image preview delivery in `backend/api/routers/v1.py` and `backend/web/lunar_analyst/src/services/scenarioService.ts`:
+    - introduced `GET /api/v1/scenarios/{scenario_id}/image-preview` for image-viewer loading;
+    - non-browser-native TIFF sources are now converted server-side to PNG for embedded display, while browser-native image formats continue to stream directly;
+    - existing image metadata/readout APIs continue to operate on the original source image so pixel/georeferencing readouts stay source-accurate;
+  - upgraded the embedded image viewer in `backend/web/lunar_analyst/src/components/viewer/ImageViewerPane.tsx` and `backend/web/lunar_analyst/src/styles/app.css`:
+    - made `Pan + Zoom` the default mode when opening an image;
+    - fixed `Fit to Pane` so it fits the image to both available width and height while preserving aspect ratio;
+    - added interactive `Pan + Zoom` with mouse-wheel zoom, mouse-drag panning, and reset behavior when `Pan + Zoom` is chosen again from the display menu;
+    - moved the image information/readout line below the image area and tightened vertical spacing around the filename/mode controls, image container, and status line;
+  - documentation alignment:
+    - updated `docs/DESIGN.md` to reflect the current scenario-file workspace behavior, image preview/readout APIs, and center-tab scenario synchronization;
+  - verification performed:
+    - passed: `python3 -m py_compile backend/api/routers/v1.py`;
+    - passed: `npm test` in `backend/web/lunar_analyst`;
+    - passed: `npm run build` in `backend/web/lunar_analyst`;
+
+- `e3c3ad9` (2026-04-08): Expanded the scenario explorer into a real file-opening workspace, added editable center tabs for common scenario files, and made image viewing/reporting more useful inside the main analyst shell:
+  - changed scenario-file opening in `backend/web/lunar_analyst/src/components/explorer/FilteredTreeTable.tsx`, `backend/web/lunar_analyst/src/components/explorer/ScenarioExplorerPane.tsx`, `backend/web/lunar_analyst/src/AppLayout.tsx`, and `backend/web/lunar_analyst/src/layout/PanelFactory.tsx` so explorer file interaction is now file-type-aware:
+    - replaced the old `Open / Select` context action with a real `Open` action for files;
+    - added double-click-to-open on explorer file rows using the same open path as the context menu;
+    - removed the redundant `Select` context action because single-click row selection already covers that behavior;
+    - selecting a scenario-scoped center tab now switches the active scenario to match the tab, keeping the visible tab, explorer, assistant context, and tool defaults coherent when multiple scenarios are open at once;
+  - added new center-tab viewers and editors for common scenario file types:
+    - added `TextEditorPane`, `CsvEditorPane`, and `ImageViewerPane` under `backend/web/lunar_analyst/src/components/`;
+    - `.txt` files now open in a saveable text editor tab;
+    - `.csv` files now open in an editable table tab with row search, sortable columns, and drag-reorderable columns;
+    - image files now open in a browser-native image viewer tab with `Fit to Pane` and `Original Size` display modes while preserving aspect ratio and scrollability;
+    - `.py` files continue to try Marimo notebook opening first and fall back to the Python editor when they are not recognized as notebooks;
+  - expanded the backend scenario-file contract in `backend/api/routers/v1.py`, `backend/api/dependencies.py`, and `backend/contracts/models.py`:
+    - added safe scenario-root read/write APIs for editable `.txt` and `.csv` files;
+    - added a raw scenario-file endpoint for viewer tabs that need direct browser file loading;
+    - added image metadata and per-pixel readout APIs so the client does not need to parse georeferencing locally;
+  - improved embedded image inspection:
+    - `backend/web/lunar_analyst/src/components/viewer/ImageViewerPane.tsx` now shows a status line under the viewer toolbar with image pixel `x/y`;
+    - when the image is georeferenced, the status line also shows the projection name plus projected easting/northing, and longitude/latitude when backend conversion is available;
+    - georeferencing and readout data are supplied by the backend through `GET /api/v1/scenarios/{scenario_id}/image-metadata` and `GET /api/v1/scenarios/{scenario_id}/image-readout`;
+  - verification performed:
+    - passed: `python3 -m py_compile backend/api/dependencies.py backend/api/routers/v1.py backend/contracts/models.py`;
+    - passed: `npm test` in `backend/web/lunar_analyst`;
+    - passed: `npm run build` in `backend/web/lunar_analyst`;
+
+- `b67ee42` (2026-04-08): Hardened scenario notebook launch so embedded Marimo tabs start against the current repo environment and wait for the notebook server to be ready before the tab loads:
+  - fixed stale Marimo reuse in `backend/api/dependencies.py` so notebook-opening requests that set `restart_if_running=true` now actually stop and replace an already running Marimo server instead of silently reusing an inherited process from an older environment;
+  - added explicit Marimo readiness polling in `backend/api/dependencies.py` so `/api/v1/marimo/open-notebook` no longer returns an iframe URL until the launched server is reachable on its configured host and port;
+  - updated `backend/web/lunar_analyst/src/components/notebook/NotebookPane.tsx` so notebook tabs use the backend-provided `initialFileUrl` directly instead of immediately issuing a second open request that could interfere with the embedded session;
+  - tightened notebook iframe layout behavior in `backend/web/lunar_analyst/src/styles/app.css` and `backend/web/lunar_analyst/src/components/notebook/NotebookPane.tsx` so embedded notebook tabs render as full flex children rather than collapsing into a partially rendered pane;
+  - updated `backend/tests/contract/test_phase4_marimo_integration.py` to match the readiness-wait launch flow used when Marimo is spawned during notebook open requests;
+  - verification performed:
+    - passed: `python3 -m py_compile backend/api/dependencies.py backend/tests/contract/test_phase4_marimo_integration.py`;
+    - passed: `npm test -- --run src/__tests__/marimoService.test.ts` in `backend/web/lunar_analyst`;
+    - passed: `npm run build` in `backend/web/lunar_analyst`;
+
+- `aabde9e` (2026-04-08): Refined the analyst workspace UI, expanded the focused assistant experience, improved light-theme readability, and changed notebook launching to open directly into scenario-scoped Marimo tabs:
+  - changed the frontend workspace composition in `backend/web/lunar_analyst/src/AppLayout.tsx`, `backend/web/lunar_analyst/src/layout/workspaceLayout.ts`, and `backend/web/lunar_analyst/src/layout/PanelFactory.tsx` so the assistant can now be used in two coordinated forms:
+    - added an `Assistant` activity in the main activity bar that opens or focuses a large center workspace tab sharing the same assistant session as the right-sidebar assistant;
+    - preserved the compact right-sidebar assistant for lightweight questions while keeping the focused center assistant view for longer chats, images, and larger outputs;
+    - added a resizable split between the assistant transcript and assistant input pane in the focused assistant workspace;
+  - improved narrow-pane assistant controls and light-theme ergonomics:
+    - updated `backend/web/lunar_analyst/src/components/assistant/AssistantInputPane.tsx` and `backend/web/lunar_analyst/src/styles/app.css` so the scenario/model/filter controls above the assistant input reorganize when width is constrained instead of clipping unreadably;
+    - replaced the prior light-theme accent treatment with a quieter blue-centered scheme and darker supporting text tokens, including stronger `Scenario` and `Filter` label contrast;
+  - cleaned up scenario-explorer presentation and naming:
+    - fixed the file-list header alignment/overlap issue affecting the `Name`, `Type`, `Created`, `Size`, and `Notes` headers in `backend/web/lunar_analyst/src/components/explorer/ScenarioExplorerPane.tsx` and related explorer table styling;
+    - renamed the `Moon Trek Layers` activity to `Map Layers`;
+  - reconciled jobs/messages workspace behavior and theming:
+    - moved `Jobs` into the primary left activity/sidebar presentation and rethemed both the jobs surfaces and the bottom messages/log surface to use the workspace’s bluish tokens instead of the older neutral gray treatment;
+    - changed the bottom pane role from a second gray jobs manager into a themed `Messages` surface while preserving background-job progress access from the `Jobs` activity;
+  - changed notebook opening flow to avoid Marimo’s generic landing page and to open scenario notebooks directly in workspace tabs:
+    - added a direct notebook open/create contract in `backend/api/routers/v1.py`, `backend/api/dependencies.py`, and `backend/contracts/models.py` for unique notebook creation and direct-file opening;
+    - updated `backend/web/lunar_analyst/src/services/marimoService.ts`, `backend/web/lunar_analyst/src/components/notebook/NotebookPane.tsx`, and explorer actions so `Open in Marimo` and `Open as Notebook` launch notebook files straight into embedded tabs, with advisory caching for whether a `.py` file successfully opens as a notebook;
+  - verification performed:
+    - passed: `npm test` in `backend/web/lunar_analyst`;
+    - passed: `npm run build` in `backend/web/lunar_analyst`;
+    - passed: `python -m py_compile backend/api/dependencies.py backend/api/routers/v1.py backend/contracts/models.py`;
+
+- `aabde9e` (2026-04-08): Removed Windows as a supported platform, deleted Windows-specific bootstrap/runtime assumptions, and standardized the active project workflow on Linux:
+  - updated the active project guidance and architecture docs to describe Linux as the only supported development/runtime platform:
+    - revised `AGENTS.md`, `README.md`, `docs/DESIGN.md`, `docs/DEVELOPER_GUIDE.md`, `docs/DEVELOPER_SETUP.md`, `docs/HOW_TO_TEST.md`, `docs/HOW_TO_TEST_MANUALLY.md`, `docs/RUNNING_TESTS.md`, `docs/ASSISTANT_EVAL_SPEC.md`, `docs/BUG.md`, `GEMINI.md`, `backend/README.md`, `backend/notebook/jobs/GEMINI.md`, and `docs/rag_corpus/guidance_python_scripts.txt`;
+    - accepted `docs/ADR.0046.remove_windows_support_and_standardize_on_linux.md` and updated `docs/adr_status.txt`;
+  - removed Windows-only wrappers and stale Windows-local artifacts from the repo:
+    - deleted `scripts/bootstrap.ps1`, `analyst.ps1`, `lunar_analyst.bat`, and `local_check_backend_contracts.ps1`;
+    - removed committed Windows-path scenario artifacts under `config/D:/...`;
+  - changed runtime defaults/configuration to stop assuming Windows paths and executables:
+    - updated `backend/api/dependencies.py` so notebook and Marimo Python resolution now prefer the current interpreter / Linux defaults instead of hard-coded `D:\projects\env_311\...` paths;
+    - updated `config/lunar_analyst.toml` so assistant subprocesses, Marimo configuration, and native DLL resolver examples now use Linux commands/paths;
+    - simplified `backend/services/assistant/providers/external_mcp_cli_provider.py` to stop performing Windows-specific executable suffix probing;
+  - simplified native bootstrap and native-library expectations for Linux-only operation:
+    - reduced `backend/worker/native_bootstrap.py` to Linux-oriented CSPICE/GDAL/PROJ discovery and removed Windows DLL-directory handling;
+    - updated `native/new_horizon/moonlib/spice/CSpice.cs` and `native/new_horizon/moonlib/moonlib.csproj` to stop carrying Windows CSPICE payload assumptions and to target Linux-native shared-library loading only;
+    - updated `backend/tests/worker/test_native_bootstrap.py` to match the Linux-only native-bootstrap contract;
+  - aligned the repo-managed environment workflow with Linux-only development:
+    - removed the Windows bootstrap path, kept `scripts/bootstrap.sh` as the active bootstrap, and updated the root dependency/documentation flow around `.venv`, `requirements.in`, and `requirements.txt`;
+  - verification performed:
+    - passed: `bash -n scripts/bootstrap.sh` and `bash -n scripts/compile_requirements.sh`;
+    - passed: `python3 -m py_compile backend/api/dependencies.py backend/services/assistant/providers/external_mcp_cli_provider.py backend/worker/native_bootstrap.py scripts/verify_env.py backend/tests/worker/test_native_bootstrap.py`;
+    - passed: repo-managed Linux bootstrap through `scripts/verify_env.py`, including spaCy model load and GDAL `gdal_array` verification after fixing bootstrap ordering and system-GDAL matching;
+
+- `8a4c73b` (2026-04-07): Reorganized the React workspace into an activity-bar-driven analyst shell, added direct notebook tabs, split tools from jobs, and refined the new UI defaults:
+  - changed the frontend workspace model in `backend/web/lunar_analyst/src/layout/workspaceLayout.ts`, `backend/web/lunar_analyst/src/AppLayout.tsx`, and `backend/web/lunar_analyst/src/layout/PanelFactory.tsx` so the application now uses `flexlayout-react` borders as a left activity bar / right assistant sidebar / bottom jobs region layout with:
+    - `Scenario Explorer`, `Layer Manager`, `Moon Trek Layers`, and `Tools` in the left activity bar;
+    - `Assistant Input` and compact `Assistant Response` in the right sidebar;
+    - `Jobs Manager` in the bottom panel;
+    - a persistent center region for the non-closable `Map`, notebook tabs, and expanded assistant-response tabs;
+  - added direct notebook opening from the scenario explorer:
+    - `backend/web/lunar_analyst/src/components/explorer/FilteredTreeTable.tsx` and `backend/web/lunar_analyst/src/components/explorer/ScenarioExplorerPane.tsx` now expose notebook-capable files through explorer row metadata and an `Open in Notebook` action;
+    - added `backend/web/lunar_analyst/src/components/notebook/NotebookPane.tsx` and updated `backend/web/lunar_analyst/src/services/marimoService.ts` so scenario-scoped Marimo sessions can be launched into embedded notebook tabs targeting a specific file;
+  - split the prior combined jobs/tools surface into distinct UI roles:
+    - `backend/web/lunar_analyst/src/components/jobs/JobsManagerPane.tsx` now supports separate `tools` and `jobs` modes so tool launching lives under the `Tools` activity while background run monitoring stays in `Jobs Manager`;
+    - `backend/web/lunar_analyst/src/components/Toolbar.tsx` was simplified to remove redundant direct-launch shortcuts for panels now owned by the activity bar;
+  - refined assistant workspace behavior:
+    - `backend/web/lunar_analyst/src/components/assistant/AssistantResponsePane.tsx` now supports both compact sidebar rendering and an expanded center-tab view for larger outputs;
+  - updated workspace theming and affordances in `backend/web/lunar_analyst/src/styles/app.css` and `backend/web/lunar_analyst/src/AppLayout.tsx`:
+    - added the new activity-bar/sidebar/editor visual treatment across dark/light and alternate skins;
+    - made the light skin the default when no saved theme exists;
+    - rendered explicit activity-bar icons with hover tooltips;
+    - removed close affordances from left activity-bar entries so they behave like fixed launcher activities rather than disposable tabs;
+  - updated ADR and frontend regression coverage:
+    - revised `docs/ADR.0044.ide_style_workspace_reorganization.md` to describe the activity-bar workspace direction, notebook opening behavior, dark/light skins, and acceptance criteria;
+    - updated `backend/web/lunar_analyst/src/__tests__/workspaceLayout.test.ts` and `backend/web/lunar_analyst/src/__tests__/marimoService.test.ts` for the new layout and notebook URL behavior;
+  - verification performed:
+    - passed: `npm test` in `backend/web/lunar_analyst`;
+    - passed: `npm run build` in `backend/web/lunar_analyst`;
+
+- `b090107` (2026-04-07): Refined assistant deterministic/model handoff behavior, preserved richer ordered-segment metadata, hardened notebook Python selection fallback, and recorded new ADR status/doc updates:
+  - changed `backend/services/assistant/assistant_service.py` so ordered deterministic segment execution is no longer forced ahead of every other routing path:
+    - create-product ordered segments can still run as an early deterministic fast path;
+    - mixed turns with unresolved `other` segments can now continue through provider selection / model tool-loop handling first, then fall back to ordered-segment execution when appropriate;
+    - resume handling now routes ordered-segment turns containing `other` segments back through `_resume_confirmed_model_tool_loop(...)` instead of treating every ordered-segment turn as purely deterministic;
+  - expanded ordered-segment execution bookkeeping in `backend/services/assistant/assistant_service.py`:
+    - added `OrderedOtherSegmentResult` so provider/model identity, token/cache usage, fallback state, source references, and optional captured RAG context from `other` segments are preserved and merged into the final ordered-segment turn result;
+    - final ordered-segment assistant-message metadata now carries attempted-model/fallback details plus deduplicated `source_references` when provider-backed completions were involved;
+    - ordered-segment usage now reflects the actual provider/model and aggregated completion/cache counters from provider-backed fragment execution instead of always looking like a purely local deterministic pass;
+  - hardened tool-loop recovery for raster overwrite flows in `backend/services/assistant/assistant_service.py`:
+    - `raster.calculate` and `raster.transform` now automatically apply overwrite-style confirmation argument overrides and retry once when the tool raises `map_algebra_output_exists` or `raster_transform_output_exists`;
+    - the provider follow-up loop now treats overwrite-related API errors as recoverable continuation signals instead of prematurely finalizing the assistant text from the intermediate error;
+  - updated worker coverage to match the new routing semantics and to lock in the notebook Python fallback:
+    - `backend/tests/worker/test_assistant_latency_metadata.py` now expects prompts that stay on the deterministic action-plan fast path to report `turn_handling_mode=action_plan_fast_path`;
+    - `backend/tests/worker/test_assistant_tool_loop.py` now distinguishes `action_plan_fast_path`, `model_tool_loop`, and `ordered_segment_execution` more precisely for the affected scenarios, and relaxes the overwrite-recovery assertion to verify the recovered conversation/output target rather than an exact retry count;
+    - added `backend/tests/worker/test_notebook_job_service_python.py` to verify that `NotebookJobService._python_executable()` falls back to the current interpreter when a configured path and the standard Windows env path do not exist;
+  - changed `backend/api/dependencies.py` so notebook-job Python resolution is now existence-aware:
+    - a configured `backend.notebook_jobs.python_executable` is only used if the file exists;
+    - otherwise the service falls back to `D:\projects\env_311\Scripts\python.exe` when present, then `sys.executable`, then plain `python`;
+    - practical effect: Linux/Pop!_OS development and tests no longer hard-fail on a Windows-only default interpreter path;
+  - updated ADR tracking docs:
+    - `docs/adr_status.txt` now marks ADR 0042 as superseded, adds proposed ADR 0043, and adds proposed ADR 0044;
+    - added `docs/ADR.0044.ide_style_workspace_reorganization.md`, proposing a VS Code-like border-driven workspace layout with a persistent map/editor center, sidebars for explorer/assistant tooling, a bottom jobs panel, and notebook tabs hosted in the central view group;
+
+- `22faf79` (2026-04-06): Made spaCy English model loading a hard prerequisite for assistant prompt segmentation and removed the non-spaCy fallback path:
+  - changed `backend/services/assistant/prompt_segmenter.py` so `PromptSegmenter` now requires spaCy plus the configured English model (`en_core_web_sm` by default) at initialization time;
+  - removed the deterministic rule-based sentence fallback that previously activated when spaCy or the configured model was unavailable;
+  - prompt segmentation now fails fast when:
+    - `spacy` is not installed;
+    - the configured spaCy model cannot be loaded;
+    - spaCy does not produce sentence spans for a prompt;
+  - updated active docs to describe spaCy/model availability as an explicit runtime prerequisite rather than an optional optimization:
+    - `docs/DESIGN.md`
+    - `docs/ASSISTANT_HYBRID_RELIABILITY_ARCHITECTURE.md`
+    - `docs/how-segments-are-classified.md`
+    - `docs/ADR.0026.spacy_intent_unit_segmentation.md`;
+  - practical runtime/testing effect:
+    - environments that construct `AssistantService` during app startup must now have `en_core_web_sm` installed or assistant initialization will fail immediately;
+    - once the model is installed, the broad startup failures disappear and prompt-segmentation golden coverage runs against the real spaCy model path instead of a local fallback path;
+
+- `9e32169` (2026-04-06): Renamed assistant prompt-segmentation and prompt-classification terminology across the active runtime, tests, configs, schemas, and design docs:
+  - replaced the old segmentation/classification naming in active assistant code:
+    - `backend/services/assistant/intent_segmenter.py` -> `backend/services/assistant/prompt_segmenter.py`;
+    - `backend/services/assistant/intent_classifier.py` -> `backend/services/assistant/prompt_classifier.py`;
+    - `IntentSegmenter` -> `PromptSegmenter`;
+    - `IntentClassifier` -> `PromptClassifier`;
+    - `IntentSegment` -> `PromptSegment`;
+  - renamed stage-level assistant event names and telemetry constants:
+    - `intent_segmentation_completed` -> `prompt_segmentation_completed`;
+    - `intent_classification_completed` -> `prompt_classification_completed`;
+    - `backend/contracts/assistant_events.py`, `backend/services/assistant/telemetry_codes.py`, and `docs/contracts/generated/v1/assistant_ws_event_envelope.schema.json` were updated consistently;
+  - renamed active segmentation/classification config and metadata surfaces:
+    - `backend.llm.intent_segmentation_model` -> `backend.llm.prompt_segmentation_model`;
+    - assistant runtime wiring now uses `prompt_segmentation_enabled`, `prompt_segmentation_model`, and `prompt_classification_contract_enabled`;
+    - per-segment success metadata now uses `prompt_class` instead of `intent_class`;
+    - `backend/api/dependencies.py` retains a compatibility fallback so older configs using `intent_segmentation_model` still resolve correctly;
+  - updated worker tests and helper scripts to use the new names:
+    - `backend/tests/worker/test_intent_segmenter.py` -> `backend/tests/worker/test_prompt_segmenter.py`;
+    - `backend/tests/worker/test_intent_classifier.py` -> `backend/tests/worker/test_prompt_classifier.py`;
+    - related worker tests and `scripts/analyze_prompt_segmentation.py` now import/use `PromptSegmenter` and `PromptClassifier`;
+  - updated design and architecture docs so the implemented pipeline now talks about prompt segments and prompt classification rather than intent units:
+    - `docs/DESIGN.md`
+    - `docs/ASSISTANT_HYBRID_RELIABILITY_ARCHITECTURE.md`
+    - `docs/how-segments-are-classified.md`
+    - `docs/ADR.0026.spacy_intent_unit_segmentation.md`
+    - `docs/ADR.0027.intent_classification_contract.md`
+    - `docs/ADR.0028.turn_planner_json_contract.md`
+    - `docs/ADR.0031.assistant_performance_improvement_program.md`
+    - `docs/ADR.0032.read_only_vs_mutating_completion_success_policy.md`
+    - `docs/ADR.0033.assistant_observability_and_failure_taxonomy.md`
+    - `docs/ADR.0035.typed_entity_memory_and_reference_resolution_v1.md`
+    - `docs/ADR.0042.non_deterministic_classification_and_product_graph.md`
+    - `docs/ADR.0042.non_deterministic_classification_and_product_graph.v1`;
+  - verification performed:
+    - passed: `python -m pytest backend/tests/worker/test_prompt_segmenter.py backend/tests/worker/test_prompt_classifier.py backend/tests/worker/test_turn_execution_plan.py backend/tests/worker/test_segmentation_classification_golden.py backend/tests/worker/test_segmentation_classification_invariants.py -q` (`12 passed`);
+
+- `Unreleased` (2026-04-06): Fixed assistant provider-selection/fallback routing regressions, restored deterministic-turn thinking persistence, hardened phase-6 contract-test workspace isolation, and aligned segmentation golden fixtures with current classifier labels:
+  - changed `backend/services/assistant/assistant_service.py` so provider selection is no longer skipped for deterministic-first turns that may still require a provider later:
+    - parser fast-path turns that can use provider-backed follow-up completions now request provider selection up front;
+    - partially matched action-plan turns now request provider selection so deterministic steps can hand off into `model_tool_loop` when unmatched segments remain;
+    - deterministic action plans containing `PlannedAgentStep` substeps now request provider selection before execution so constrained sub-agent completions are not invoked with placeholder provider/model values;
+    - explicit numbered tool-call prompts are now treated as provider-selection candidates so external-agent execution mode and fallback behavior can still apply when the selected provider requires it;
+  - added helper methods in `backend/services/assistant/assistant_service.py` to make the turn-level decision explicit:
+    - `_provider_selection_needed_for_turn(...)`
+    - `_provider_selection_is_optional_for_turn(...)`
+    - `_action_plan_has_agent_substeps(...)`
+    - `_tool_supports_parser_followup(...)`
+  - changed deterministic-turn thinking metadata handling so requested `thinking` values are preserved on the stored user message even when no provider normalization path runs;
+    - `create_turn(...)` now records a coerced request-level thinking value (`low` / `medium` / `high` / boolean) when `selected_thinking` would otherwise be unset;
+    - this restores confirmation/resume and observability consistency for deterministic fast-path turns without forwarding unsupported thinking settings to providers that were never called;
+  - practical assistant/runtime effect:
+    - external-agent fallback tests that previously short-circuited into pure parser or deterministic paths now flow through the intended provider-selection path;
+    - partial deterministic handoff now reaches `model_tool_loop` when expected instead of incorrectly finalizing as `action_plan_fast_path`;
+    - deterministic agent substeps can request their constrained provider completion instead of failing early from missing provider/model identity;
+  - updated phase-6 contract test helpers to isolate themselves from inherited shell workspace overrides:
+    - `backend/tests/contract/test_phase6_assistant_api.py`
+    - `backend/tests/contract/test_phase6_mcp_http.py`
+    - both `_reset_services(...)` helpers now clear `LUNAR_ANALYST_WORKSPACE_ROOT` before rebuilding services so those tests use their own temp-configured `workspace_root` instead of any repo-local shell override;
+  - aligned the segmentation/classification golden fixtures with the classifier labels already used by the live assistant runtime and adjacent tests:
+    - `backend/tests/fixtures/assistant_segmentation_classification/golden_cases.jsonl`
+    - replaced stale label expectations:
+      - `deterministic_candidate` -> `router_candidate`
+      - `llm_required` -> `model_required`
+    - this brings the golden corpus back in sync with the current `PromptClassifier` contract and the existing `test_prompt_classifier.py` expectations;
+  - verification performed:
+    - passed: targeted assistant routing/fallback regression slice in `backend/tests/worker/test_assistant_tool_loop.py` covering thinking persistence, external-agent model fallback, explicit fallback metadata, provider-switch isolation, partial handoff, and deterministic agent-substep confirmation behavior (`10 passed`);
+    - passed: `backend/tests/worker/test_segmentation_classification_golden.py` after the fixture alignment;
+    - phase-6 contract tests no longer fail immediately from inherited workspace-root misconfiguration, though full end-to-end completion was not confirmed in this shell session because those runs stalled during later setup/execution.
+
+- `0026dff` (2026-04-05): Reworked assistant hybrid-routing terminology and execution-plan contracts, tightened model tool exposure behavior, refreshed local eval defaults/docs, and cleaned stale leaderboard artifacts:
+  - replaced the old turn-planner naming with execution-plan naming across active backend code, tests, observability, and design/ADR docs:
+    - `backend/services/assistant/turn_planner.py` was replaced by `backend/services/assistant/turn_execution_plan.py`;
+    - turn/document metadata now uses names such as `execution_plan_status`, `execution_plan_segments`, `latency_execution_plan_ms`, `turn_execution_plan_contract_enabled`, and `turn_handling_mode`;
+    - assistant WS lifecycle events and telemetry/error codes were renamed from `turn_planner_*` to `turn_execution_plan_*`;
+    - `backend/contracts/assistant_events.py` and the generated assistant WS schema were updated accordingly, bumping `AssistantWsEnvelope.schema_version` from `1.0` to `1.1`;
+  - renamed intent-classification labels to describe routing outcomes more explicitly:
+    - `deterministic_candidate` -> `router_candidate`;
+    - `llm_required` -> `model_required`;
+    - `blocked` -> `clarification_or_policy_blocked`;
+    - active ADR/design docs now describe these labels as router/model/clarification outcomes rather than stronger determinism claims;
+  - narrowed the meaning of the turn execution-plan artifact in the docs and runtime:
+    - ADR 0028 now describes the artifact as a canonical execution-structure handoff rather than a search-based planner;
+    - `docs/DESIGN.md` now includes a small terminology note clarifying the difference between turn-level handling mode and segment execution mode;
+    - per-segment state merge and success-semantics paths were updated to consume execution-plan terminology and the renamed classification labels;
+  - wired `turn_execution_plan_contract_enabled` through the assistant runtime so it now actually gates execution-plan construction and derived metadata instead of being effectively always-on;
+    - when disabled, the final assistant message metadata omits execution-plan-specific payloads such as `execution_plan_segments`, `aggregate_status`, and `turn_state_merge`;
+  - added and updated regression coverage for the rename and behavior changes:
+    - replaced `test_turn_planner.py` with `test_turn_execution_plan.py`;
+    - updated assistant runtime/unit tests to assert the new usage keys, metadata keys, labels, and event names;
+    - added explicit coverage for the disabled execution-plan path;
+  - added a prompt-shape heuristic in the assistant runtime so non-command advisory/explanatory prompts can avoid exposing the full tool schema to the model, while command/lookup turns still expose tools as before;
+    - tests now cover both “advisory domain question” and “lookup/command prompt” cases;
+  - refreshed local eval/runtime defaults in `config/lunar_analyst.toml`:
+    - benchmark/default Ollama model selection now points at `gemma4:e4b-it-q8_0`;
+    - the command-model override was aligned to the same local model;
+    - the older local-model list was trimmed to the new single default target in that config surface;
+  - expanded `docs/HOW_TO_TEST.md` with instructions for launching the Tkinter-based assistant leaderboard/eval UI on both Windows and Linux, including storage-location notes for UI-generated runs;
+  - updated `docs/contracts/CHANGELOG.md` for the assistant contract rename and schema-version bump;
+  - removed a large set of stale checked-in assistant leaderboard run artifacts under `backend/evals/assistant/leaderboard_runs`, including failed smoke/local run outputs and older generated leaderboard summaries that no longer match the active local-model/eval setup.
+
+- `a8478a2` (2026-04-03): Improved Linux host-run ergonomics and startup scenario-discovery diagnostics for the ADR 0041 workflow:
+  - changed `scripts/run-host-dev.sh` so the host-native launcher no longer assumes an interactive-shell `python` alias:
+    - it now honors `LUNAR_ANALYST_PYTHON` first;
+    - otherwise falls back to `python3`, then `python`;
+    - and emits a clear error if no interpreter is found;
+  - expanded startup scenario auto-discovery logging in `backend/api/app.py` so the Python log now includes one line per discovered workspace directory result with:
+    - `scenario_root`
+    - `scenario_id`
+    - `status`
+    - `reason`
+    - and separate warning lines when discovery returns warnings;
+  - changed scenario discovery in `backend/api/dependencies.py` so non-hidden directories under `workspace_root` are all accounted for during discovery-status reporting instead of silently disappearing when they do not already contain `scenario.toml`;
+  - added explicit malformed/non-scenario reporting for ordinary directories that are not yet valid scenarios:
+    - directories without `scenario.toml` now produce `status=skipped reason=scenario.toml not found`;
+    - hidden directories whose names start with `.` are intentionally ignored during directory enumeration;
+  - practical effect:
+    - startup logs now make it obvious why a workspace directory was ingested, skipped, or rejected;
+    - operators no longer need to call `/api/v1/scenarios/discovery-status` just to see why visible workspace folders were not treated as scenarios.
+
+- `f574f3b` (2026-04-02): Implemented ADR 0041 Phase C immutable runtime-image and NRP first-slice repo surface, and aligned host/runtime launcher ergonomics:
+  - added the Phase C runtime image surface:
+    - `docker/Dockerfile.runtime`
+    - `docker/entrypoints/run-backend.sh`
+  - changed `scripts/docker-build.sh` so the standard container build path now produces all three images:
+    - `lunar-analyst-base`
+    - `lunar-analyst-dev`
+    - `lunar-analyst-runtime`
+  - added runtime-oriented host wrapper scripts:
+    - `scripts/docker-run-runtime.sh`
+    - `scripts/docker-runtime-smoke.sh`
+    - `scripts/run-host-dev.sh`
+  - implemented an immutable runtime launch path where:
+    - application source is copied into the image instead of bind-mounted;
+    - frontend assets are built into `backend/web/lunar_analyst/dist` during the image build;
+    - the runtime container serves the built frontend and backend APIs without requiring a git checkout on the host;
+    - writable runtime state is constrained to the mounted `workspace_root` at `/var/lib/lunar-analyst/workspace`;
+  - aligned the runtime wrapper defaults with the Phase A/B workspace-root contract so runtime scripts now default to the same host workspace root used by the Linux/container workflow (`LUNAR_ANALYST_RUNTIME_WORKSPACE_ROOT` -> `LUNAR_ANALYST_HOST_WORKSPACE_ROOT` -> `/e/lunar_analyst_scenarios`);
+  - added a host-native Linux launcher script (`scripts/run-host-dev.sh`) so the normal Pop!_OS backend loop now has the same script-based entrypoint style as the Docker workflows;
+  - added a local production-style runtime smoke flow that verifies:
+    - runtime image startup without a bind-mounted repo;
+    - FastAPI health and built-frontend asset serving;
+    - scenario creation and restart-time rediscovery from `scenario_catalog.db`;
+    - assistant provider-catalog initialization creates/persists `.assistant/rag/global_rag.db`;
+    - a representative `raster_transform` job writes outputs under the scenario root;
+    - container logs are emitted to stdout/stderr;
+  - suppressed expected transient startup `curl` noise in the runtime smoke retry loop so connection-reset races during initial container bring-up do not spam successful smoke runs;
+  - added first-slice NRP deployment assets under `deploy/nrp/`:
+    - `namespace-notes.md`
+    - `runtime-pvc.yaml`
+    - `runtime-configmap.yaml`
+    - `runtime-deployment.yaml`
+    - `runtime-service.yaml`
+    - `runtime-ingress.optional.yaml`
+    - `kustomization.yaml`
+  - encoded the initial NRP single-writer safety policy directly in the deployment surface:
+    - one replica only;
+    - `Recreate` rollout strategy;
+    - one PVC mounted as `workspace_root`;
+    - runtime config mounted via `ConfigMap`;
+    - provider credentials injected through env-backed Kubernetes Secrets instead of workspace files;
+  - updated docs for the new host/runtime flows and NRP assets:
+    - `README.md`
+    - `README_DOCKER.md`
+    - `docs/DEVELOPER_GUIDE.md`
+  - testing status:
+    - verified passing: `bash -n` for the new/updated shell scripts;
+    - verified passing: TOML parse for `config/lunar_analyst.container.toml`;
+    - verified passing: basic manifest/kustomization structure checks for `deploy/nrp/`;
+    - verified outside the sandbox by operator report: `./scripts/docker-runtime-smoke.sh` completed successfully with `Runtime smoke passed.`;
+    - verified outside the sandbox by operator report: transient startup `curl: (56)` noise was removed after the retry-loop stderr suppression change.
+
+- `007728e` (2026-04-02): Implemented ADR 0041 Phase B bind-mounted dev-container workflow and hardened the interactive Linux container loop:
+  - added the Phase B development-container surface:
+    - `docker/Dockerfile.dev`
+    - `docker/compose.dev.yml`
+    - `docker/entrypoints/run-dev.sh`
+    - `docker/entrypoints/docker-smoke.sh`
+    - `scripts/docker-build.sh`
+    - `scripts/docker-run-dev.sh`
+    - `scripts/docker-smoke.sh`
+    - `scripts/docker-down.sh`
+  - added a dev image built on the Phase A base image with Ubuntu-side development tooling for backend/frontend work, including Python test/runtime packages, Node.js, and helper utilities needed for bind-mounted repo execution;
+  - implemented a Compose-based development workflow that mounts:
+    - the git checkout at `/workspace/lunar_analyst`
+    - the full host `workspace_root` at `/var/lib/lunar-analyst/workspace`
+  - changed the dev-container launch model so `scripts/docker-run-dev.sh` now opens a one-off interactive shell via `docker compose run --rm --service-ports ... bash` instead of trying to keep a detached shell container alive;
+  - added explicit smoke verification in `docker/entrypoints/docker-smoke.sh`, including:
+    - in-container `pip install -e ./moonlayers_pkg`
+    - frontend/widget `npm ci`
+    - worker pytest slice execution
+    - backend service-container smoke construction;
+  - hardened bind-mounted file ownership behavior for Linux host development:
+    - wrapper scripts export host UID/GID into the container launch environment;
+    - dev entrypoint creates a matching in-container user/group dynamically and drops privileges to it;
+    - writable cache state moved under mounted workspace `.container-cache/` instead of root-owned Docker volumes;
+    - editable Python installs into the image venv are now possible by fixing ownership of `/opt/lunar-analyst/.venv` before dropping privileges;
+  - upgraded the dev image’s Node toolchain to a modern Node LTS path compatible with the current frontend stack (`vite`/`rollup`) instead of relying on Ubuntu’s outdated default Node package;
+  - moved the Docker workflow guide from `docker/README.md` to top-level `README_DOCKER.md`;
+  - updated user-facing docs to explain the Phase B workflow explicitly:
+    - `README.md`
+    - `README_DOCKER.md`
+    - `docs/DEVELOPER_GUIDE.md`
+  - testing status:
+    - verified Compose shape with `docker compose -f docker/compose.dev.yml config`;
+    - verified interactive dev-shell launch now drops directly into a container prompt like `lunar@<container-id>:/workspace/lunar_analyst$`;
+    - verified workspace persistence across container removal/restart;
+    - verified Phase B smoke path passes (`22 tests`) from inside the dev container.
+
+- `7cf1677` (2026-04-02): Implemented ADR 0041 Phase A host/container alignment for workspace-root semantics, Linux host docs, and the Ubuntu base-image surface:
+  - changed assistant session-store resolution in `backend/api/dependencies.py` so default SQLite/JSON assistant state now lives under the configured `workspace_root/.assistant/` instead of silently falling back into the repo checkout;
+  - tightened assistant store path handling so configured `session_store_path` and `session_store_legacy_json_path` are resolved relative to `workspace_root` and rejected if they escape that root;
+  - changed the JSON fallback path used when the SQLite assistant store is unavailable so fallback state also remains under the configured workspace root;
+  - changed notebook local scenario fallback in `backend/jobs/raster_transform.py` to derive scenario paths from `LUNAR_ANALYST_WORKSPACE_ROOT` or configured `backend.workspace_root` instead of a hardcoded Windows scenario parent directory;
+  - removed the hardcoded Windows fallback path from `backend/notebook/jobs/generate_gdaldem_derivatives.py` and replaced it with a repo/workspace-relative local default;
+  - aligned the main host config in `config/lunar_analyst.toml` so assistant session state is explicitly workspace-relative, and removed the stale Windows-only Gemini CLI `scenario_root` override so Linux/container configs can inherit `backend.workspace_root`;
+  - added dedicated container-oriented config profiles:
+    - `config/lunar_analyst.container.toml`
+    - `config/lunar_analyst.devcontainer.toml`
+  - added the initial Phase A container surface:
+    - `docker/Dockerfile.base`
+    - `docker/entrypoints/run-base-probes.sh`
+    - `README_DOCKER.md`
+    - `.dockerignore`
+  - documented the host-native Linux baseline and Phase A workspace-root contract updates in `README.md` and `docs/DEVELOPER_GUIDE.md`;
+  - added focused regression coverage for the new workspace-root contract and notebook fallback behavior:
+    - `backend/tests/worker/test_workspace_path_contract.py`
+    - `backend/tests/worker/test_raster_transform_runtime.py`
+    - updated `backend/tests/contract/test_phase6_assistant_api.py` for workspace-relative assistant store config;
+  - testing status:
+    - verified passing: `python3 -m pytest backend/tests/worker/test_workspace_path_contract.py -q` (`3 passed`);
+    - verified passing: `python3 -m pytest backend/tests/worker/test_raster_transform_runtime.py -q` (`19 passed`);
+    - verified passing: `python3 -m py_compile backend/api/dependencies.py backend/jobs/raster_transform.py backend/notebook/jobs/generate_gdaldem_derivatives.py backend/tests/worker/test_workspace_path_contract.py backend/tests/worker/test_raster_transform_runtime.py backend/tests/contract/test_phase6_assistant_api.py`;
+    - verified all three config profiles parse with `tomllib`;
+    - verified a container-profile `build_service_container()` smoke path starts with `LUNAR_ANALYST_WORKSPACE_ROOT` overridden to a temp workspace;
+    - attempted `python3 -m pytest backend/tests/contract/test_phase6_assistant_api.py -q`, but that heavier contract run did not return a clean result in this shell session, so a full contract pass is not claimed here.
+
+- `35bde9b` (2026-04-01): Fixed providerless deterministic assistant turns, cleared leaked notebook-runner runtime context between runs, and updated stale regression tests:
+  - changed `backend/services/assistant/assistant_service.py` so provider initialization and selection are deferred until a turn actually needs model/tool-loop execution; deterministic action-plan, parser-fast-path, and explicit non-confirmed tool-sequence turns now remain usable when no assistant providers are configured;
+  - preserved the new lazy provider-initialization failure surface for true model-required turns while avoiding regressions in providerless deterministic flows such as `scenario.write_run_script` and MCP script execution;
+  - changed `backend/notebook/job_runner.py` to restore `LUNAR_NOTEBOOK_CONTEXT_PATH` and clear cached notebook runtime/progress/cancel state in a `finally` block after `run_from_context(...)`, preventing later runs/tests from inheriting stale scenario-root context;
+  - added focused regression coverage in `backend/tests/worker/test_assistant_lazy_initialization.py` and `backend/tests/worker/test_notebook_job_runner.py`;
+  - updated stale tests to match current behavior:
+    - `backend/tests/worker/test_rag_ingest_logging.py` now captures the RAG index logger directly instead of relying on brittle pytest global logging capture behavior;
+    - `backend/tests/contract/test_map_milestone.py` now asserts against the stable React shell markers (`<!doctype html>`, `<title>Lunar Analyst</title>`, `<div id="root"></div>`) instead of the removed `Map Milestone (React)` server-rendered marker;
+    - `backend/tests/contract/test_phase4_marimo_integration.py` now checks semantic preservation of the existing `PYTHONPATH` tail entry across Linux path normalization rather than hard-coding a Windows-only path literal;
+  - testing status:
+    - verified passing: `/e/projects/env_311/bin/python3 -m pytest backend/tests/worker/test_assistant_lazy_initialization.py backend/tests/worker/test_notebook_job_runner.py backend/tests/worker/test_raster_transform_runtime.py backend/tests/worker/test_rag_ingest_logging.py -q` (`30 passed in 3.58s`);
+    - attempted affected contract tests, but the heavier FastAPI/TestClient pytest invocations did not return cleanly in this shell session after starting their fixtures, so a clean end-to-end contract pass is still not claimed here.
+
+- `cfc4413` (2026-04-01): Updated stale assistant latency test expectations and removed `osgeo.gdal` from temporal `raster.calculate` output writing:
+  - updated `backend/tests/worker/test_assistant_latency_metadata.py` so `describe capabilities` now expects `planner_mode = "action_plan_fast_path"` instead of the legacy `parser_fast_path`, matching the current deterministic action-plan routing behavior already covered elsewhere in assistant tool-loop tests;
+  - rewrote the temporal-output branch of `ToolImplementations.raster_calculate` in `backend/jobs/handlers.py` to create and write GeoTIFF outputs with `rasterio` windowed writes instead of importing `osgeo.gdal` for dataset creation and tile writes;
+  - preserved the existing temporal streaming, output dtype/nodata handling, tile assembly, and output registration behavior while removing an environment-sensitive dependency on the Python `osgeo` binding for this path;
+  - verified the focused temporal map algebra tests now pass in the Linux environment:
+    - `backend/tests/worker/test_assistant_latency_metadata.py`
+    - `backend/tests/worker/test_map_algebra_handler.py::test_raster_calculate_supports_temporal_signal_inputs_with_reducer`
+    - `backend/tests/worker/test_map_algebra_handler.py -k temporal`
+
+- `07f6d1b` (2026-04-01): Added a pinned cross-platform CSPICE runtime layout, documented Linux shared-library setup, and switched `moonlib` bootstrap to a host-backed pythonnet runtime layout:
+  - added a top-level native third-party runtime layout section to `docs/DESIGN.md` describing the canonical platform-specific CSPICE payload locations under `native/third_party/cspice/`;
+  - documented the Linux CSPICE setup flow end to end: unpack the NAIF toolkit, run the stock `makeall.csh` build, confirm that it produces only `cspice.a`/`csupport.a`, manually link `libcspice.so` with an explicit SONAME, verify the result with `file`/`ldd`/`readelf`/`nm -D`, and place the resulting artifact at `native/third_party/cspice/linux-x64/libcspice.so`;
+  - added Windows-side guidance documenting the expected pinned target location `native/third_party/cspice/windows-x64/cspice.dll` while leaving the acquisition/build flow intentionally high level;
+  - changed `moonlib` SPICE P/Invoke bindings to resolve the logical library name `cspice` through a custom resolver instead of hardcoding `cspice.dll`, allowing the same managed code to load `cspice.dll` on Windows and `libcspice.so` on Linux from controlled repo-managed locations;
+  - added the app-managed native third-party layout `native/third_party/cspice/windows-x64/cspice.dll` and `native/third_party/cspice/linux-x64/libcspice.so`, plus config/bootstrap search-path updates so strict native loading can find those artifacts without relying on a Python wheel layout;
+  - updated `moonlib.csproj` so pinned Windows and Linux CSPICE binaries are copied into the build output when present;
+  - added a minimal executable host project `native/new_horizon/moonlib_host/` and included it in the solution so .NET produces an app-style output directory containing the full managed dependency closure and a runtimeconfig file for pythonnet-hosted `moonlib` loads;
+  - taught `backend/worker/native_bootstrap.py` to prefer the host-style runtimeconfig when available, add the managed probe directory to `sys.path`, and load `moonlib` by simple assembly name under pythonnet instead of using an absolute-DLL `clr.AddReference(...)` call that failed on Linux;
+  - expanded native-bootstrap tests for cross-platform CSPICE name normalization and pinned Linux CSPICE discovery, and updated bootstrap expectations for the new simple-name assembly load path;
+  - verified focused worker bootstrap tests pass and confirmed a real Python `bootstrap_pythonnet(...); import_moonlib(...)` smoke path now succeeds on Linux with a passing SPICE bridge smoke check.
+
+- `53b0178` (2026-04-01): Hardened moonlib native bootstrap path resolution and native GDAL/PROJ environment ownership:
+  - taught native bootstrap to recover from stale configured moonlib output paths by translating between legacy `bin/x64/<Config>/...` layouts and the current `bin/<Config>/...` build outputs;
+  - added compatible-path resolution for configured strict DLL search roots and explicit import mappings so stale Windows-oriented config entries can be relocated onto the actual detected moonlib bundle when the filenames still match;
+  - changed native bootstrap to prefer moonlib-local GDAL/PROJ data directories when the moonlib bundle carries its own native GDAL package payload, instead of inheriting Python-side `PROJ_LIB`/`PROJ_DATA` blindly;
+  - added native bundle detection for both current moonlib output layouts (`gdal/data` + `gdal/share`) and NuGet-style fallback layouts (`gdal-data` + `proj-lib`);
+  - made native bootstrap explicitly set `GDAL_DATA`, `PROJ_LIB`, and `PROJ_DATA` from the moonlib bundle when those native data directories are present, preserving the invariant that the .NET/native side should see data matching its own GDAL package;
+  - limited strict DLL preloading to Windows only, avoiding unnecessary `ctypes.WinDLL(...)` assumptions on Linux while keeping the existing Windows guardrails for single-root native loading;
+  - added worker regression coverage for stale configured moonlib path recovery and native-bundle GDAL/PROJ env override behavior in `backend/tests/worker/test_native_bootstrap.py`;
+  - verified the focused native-bootstrap worker test suite passes (`11 passed`) after the resolver changes.
+
+- `b1c91b7` (2026-04-01): Removed the legacy non-Blueprint browser UI path and consolidated Linux GDAL/PROJ runtime discovery:
+  - removed the frontend fallback/feature-flag split for the React workspace UI and made the Blueprint implementation the only supported path;
+  - deleted `useBlueprint`-gated alternate render branches across the workspace shell, explorer, layers, jobs, trek catalog, filtered lists, and assistant panes so right-click/context-menu behavior now follows a single code path;
+  - simplified top-level frontend wiring by removing the build-time Blueprint flag plumbing from `AppLayout`/`PanelFactory`;
+  - rebuilt and validated the browser bundle after the UI-path cleanup;
+  - added ADR `docs/ADR.0039.linux_port_popos_and_ubuntu_container.md` documenting the Linux/Pop!_OS and Ubuntu-container port plan with completion checkboxes;
+  - refactored Python-side GDAL/PROJ discovery into shared runtime resolution in `backend/worker/gdal_runtime.py`;
+  - updated notebook job runtime setup and native bootstrap fallback logic to reuse the shared GDAL/PROJ resolver instead of carrying separate ad hoc path-detection rules;
+  - expanded GDAL runtime worker coverage to include runtime-prefix PROJ discovery and env propagation (`PROJ_LIB`, `PROJ_DATA`);
+  - fixed the original Linux failure mode where backend startup/tests could not locate `proj.db`;
+  - current limitation: moonlib/.NET GDAL-NuGet data-path selection is still not guaranteed to override Python-side `PROJ_LIB`/`PROJ_DATA`, so mixed Python+pythonnet native execution still needs dedicated follow-up work.
+
+- `4ba5e2c` (2026-03-30): Assistant eval `test_scenario` migration, leaderboard UI reliability updates, notebook runner completion handling, and confirmed-tool recovery hardening:
+  - migrated assistant eval baseline scenario selection from `mons-malapert` to `test_scenario` and made isolation clones derive from the configured baseline scenario;
+  - added eval setup/fixture support to prepare `test_scenario`-backed case prerequisites (including deterministic per-case artifact setup/cleanup expectations) for functional/domain suites;
+  - updated design docs to reflect current eval workflow and scenario assumptions:
+    - `docs/DESIGN.md` refreshed for current assistant eval flow/log interpretation and baseline scenario usage;
+    - added detailed migration plan doc for scenario transition and test setup strategy: `docs/ASSISTANT_EVAL_TEST_SCENARIO_MIGRATION_PLAN.md`;
+  - improved leaderboard desktop UI details/ergonomics:
+    - Case Detail metadata now includes the model actually used (`final_model` fallback chain aware);
+    - right-side results/detail pane refactored for vertical resizing;
+    - fixed blank-window startup regression by hardening geometry restore/min-size safeguards when persisted geometry is invalid/tiny;
+  - fixed notebook job runner success classification for script-style exits:
+    - `SystemExit(0)` is now treated as successful completion;
+    - result payload emission is guaranteed on this success path so jobs do not fail with missing result artifacts;
+    - added worker regression coverage in `backend/tests/worker/test_notebook_job_runner.py`;
+  - fixed assistant confirmed-tool execution recovery bug:
+    - when a confirmed tool call fails during `resolve_confirmation`, failure is now captured as a failed tool call and propagated back into resumed model-tool-loop context instead of surfacing as a hard exception;
+    - resumed loop now receives explicit structured tool-failure feedback (`Tool <name> failed`) so the model can repair/retry in-turn;
+    - added regression coverage in `backend/tests/worker/test_assistant_tool_loop.py::test_resolve_confirmation_conveys_tool_execution_failure_back_to_model_loop`.
+
+- `508bdf9` (2026-03-29): Raster transform reliability, overwrite-control parity, and semantic CRS matching hardening:
+  - unified overwrite semantics for `raster.transform` with `raster.calculate`:
+    - added canonical `overwrite_mode` (`ask` | `never` | `always`) handling in `RasterTransformRequest`;
+    - kept legacy `overwrite` compatibility while normalizing to canonical behavior;
+    - added assistant-side argument sanitation and confirmation override handling for `raster.transform` so overwrite prompts/resolutions follow the same path as `raster.calculate`;
+    - removed legacy `overwrite` from model-facing `raster.transform` schema to reduce malformed tool calls while preserving backend compatibility;
+  - fixed semantic CRS agreement across runtime/test paths so unnamed-but-equivalent lunar stereographic WKTs are accepted:
+    - added shared CRS comparator (`backend/core/crs_semantics.py`) with strict `pyproj` equality fast-path;
+    - added stereographic-only fallback equivalence (polar/oblique families) using forward/reverse identity transform checks with tight tolerances;
+    - wired comparator into raster delivery (`ensure_map_display_raster`), vector delivery CRS normalization, map algebra input alignment checks, and eval raster postcondition assertions;
+    - replaced strict ESRI authority-centric eval CRS checks with semantic equivalence checks;
+    - added focused CRS semantics tests (`backend/tests/core/test_crs_semantics.py`) and updated raster-delivery expectations accordingly;
+  - improved `raster.transform` parser compatibility for model-generated scripts:
+    - treat `import numpy as np` as a no-op compatibility line (ignored/stripped during validation);
+    - continue rejecting `import numpy` (without alias) and non-facade `np.<fn>` calls (for example `np.sin`) as validation errors;
+    - added targeted runtime tests covering all three behaviors;
+  - updated eval prompts/cases to reduce async ambiguity where immediate execution is required:
+    - functional `func_dsl_transform_001` prompt now explicitly requests immediate mode;
+    - benchmark raster-transform prompts updated to explicitly request immediate mode for existing deterministic cases;
+    - added a dedicated queued-mode benchmark case (`route_raster_011`) to preserve async coverage as an explicit test intent.
+
+- `9d9a578` (2026-03-28): Expanded assistant leaderboard/eval observability and stabilized local-model context controls:
+  - added a Python desktop leaderboard runner UI (`backend/evals/assistant/leaderboard_ui.py`) with model/case selection, per-case result tables, detailed case inspection, and a Past Runs panel for browsing timestamped runs;
+  - improved Past Runs UX so selecting a run row auto-loads it, and completed runs are inserted/selected automatically to keep all result/detail panels synchronized;
+  - added persistent leaderboard UI settings in `backend/evals/assistant/.leaderboard_ui_state.json` (gitignored);
+  - added model-lineage telemetry to eval artifacts and UI details:
+    - `requested_model`, `final_model`, `fallback_used`, `model_attempts`, and `fallback_chain`;
+  - added explicit Ollama context-window telemetry to eval artifacts and UI details:
+    - `num_ctx`, `num_ctx_capture_count`, and per-attempt `num_ctx_captures`;
+  - updated Ollama provider context-window handling to set `num_ctx` explicitly per request with stable per-model sizing:
+    - use configured/model-capped maximum context window (defaulting to 32768 when model limits are unknown), instead of shrinking to prompt-sized windows;
+    - avoid unnecessary `num_ctx` churn that can force model reloads;
+    - continue capturing `num_predict`/`num_ctx` metadata per completion;
+  - expanded eval records with full injected RAG context capture (opt-in for eval runs) and surfaced it in human-readable case details:
+    - `rag_context_text`, `rag_context_chars`, `rag_context_capture_count`, and `rag_context_captures`;
+  - normalized injected RAG context formatting for better determinism/readability:
+    - coerce to ASCII-safe text for local model compatibility;
+    - compact excessive newlines/whitespace while preserving source-tag boundaries;
+  - updated leaderboard runners/reports (`leaderboard.py`, `benchmark_core.py`) so CSV/XLSX/human reports include new model-lineage, `num_ctx`, and RAG-context observability fields.
+  - `raster.transform` DSL reliability hardening:
+    - added internal non-public prefilter validation stage for eval/benchmark classification (`eligible`, failure stage/code, planner summary) before mutating execution;
+    - added repair-oriented DSL diagnostics for common failures (missing `result`, BoolOp misuse, unknown function suggestions, temporal binding mismatch hints);
+    - added minimal sealed NumPy facade support for `np.where` while keeping imports/builtins restricted;
+    - reserved facade identifier names (for example `np`) so input/assignment shadowing is rejected deterministically;
+    - clarified elementwise boolean policy in guidance/examples (`&`, `|`, `~` with parentheses; no `and/or/not`);
+    - published ADR for this policy and rollout: `docs/ADR.0038.raster_transform_agent_reliability_and_eval_prefilter.md`.
+
+- `1cae4d4` (2026-03-28): Added persistent Ollama model-metadata caching in the global assistant SQLite database (non-scenario DB):
+  - `OllamaProvider` now reads/writes model metadata (`capabilities`, `thinking_mode`) to table `assistant_provider_model_metadata_cache` with TTL-based reuse;
+  - provider startup metadata fetches can now reuse cached values instead of re-querying `ollama show` for each model on every startup;
+  - `AssistantProviderRegistry` now passes a cache DB path into the Ollama provider; by default this uses the configured assistant session-store SQLite path (when `session_store_backend=sqlite`);
+  - added optional Ollama config keys:
+    - `model_metadata_cache_ttl_seconds` (default `86400`);
+    - `model_metadata_cache_db_path` (override path when needed);
+  - added worker test coverage validating cross-instance cache reuse from SQLite:
+    - `backend/tests/worker/test_ollama_provider_models.py::test_list_model_metadata_reuses_sqlite_cache_across_instances`.
+
+- `3cb3902`: Validated CUDA viewshed stability improvement after upgrading Numba in `env_311`:
+  - verified that the previously failing high-observer CUDA viewshed workflow now runs successfully under the upgraded Numba stack (same app/runtime path that had been reproducing `CUDA_ERROR_CONTEXT_IS_DESTROYED`);
+  - this confirms the immediate blocker was runtime-stack related rather than the viewshed algorithm contract itself;
+  - WARNING: this is an environment-level fix (Python env package set), not a committed code-path change by itself; keep this in mind when reproducing on other machines or restored environments.
+
+- `ff69bdf`: Added script runtime-mode isolation, notebook live log/status plumbing, CUDA viewshed diagnostics tooling, and explicit CUDA-risk documentation for `terrain.viewshed`:
+  - implemented ADR.0037 runtime-mode isolation for scenario Python jobs/scripts:
+    - added `runtime_mode` (`osgeo` | `moonlib`, default `osgeo`) to script/notebook launch plumbing across job definitions, runtime context, assistant tool schemas, and Jobs Manager launch templates;
+    - notebook runner now resolves runtime mode from explicit request -> params -> script pragma (`# lunar_runtime: ...`) and applies mode-specific environment policy;
+    - `osgeo` mode now pins GDAL/PROJ env from Python `osgeo` data paths and rejects conflicting `moonlib`/`pythonnet` imports with explicit conflict failure;
+  - added notebook run observability and live operator feedback:
+    - notebook subprocess stdout/stderr are now streamed line-by-line to log files during execution;
+    - added `GET /api/v1/jobs/{job_id}/logs` for `stdout`/`stderr`/`combined` tail/head retrieval;
+    - Jobs Manager now polls run status and combined log tails for queued/running runs and renders live log output in the run detail pane;
+    - improved launch diagnostics and missing-route handling in Jobs Manager (`Run failed: no tool is selected`, route-path fallback for notebook definitions, console diagnostics);
+  - expanded viewshed CUDA runtime instrumentation and controls in `terrain.viewshed`:
+    - added configurable CUDA ray-casting controls (`cuda_progress_observer_batch_size`, `cuda_ray_direction_count`, `cuda_ray_step_size_pixels`);
+    - added per-batch CUDA diagnostics payloads (`phase`, observer/ray counters, launch config, preview observers) and structured progress fields including ETA/rate for GDAL merge path;
+    - preserved the original supercover CUDA kernel snapshot in-source for debugging (`_build_raycast_kernel_snapshot_2026_03_25`) and documented it in `docs/dev_notes/cuda_viewshed_kernel_snapshot_2026-03-25.md`;
+    - added standalone CUDA kernel ladder diagnostics tool (`backend/tools/cuda_viewshed_diagnostics.py`) with test coverage;
+  - updated viewshed routing/fallback behavior:
+    - auto routing is now biased more aggressively toward CUDA via lowered auto thresholds in `[backend.viewshed]`;
+    - when CUDA runtime fails on high-observer workloads, GDAL fallback is intentionally disabled and the run fails with explicit `viewshed_cuda_runtime_failed` error;
+  - documentation updates:
+    - added `docs/ADR.0037.script_runtime_mode_isolation_for_osgeo_and_moonlib.md`;
+    - added `docs/BUG.md` detailing the open CUDA context-destruction failure in high-observer `terrain.viewshed` workloads and current investigation status.
+  - WARNING: `terrain.viewshed` CUDA backend remains unstable on the current Numba path for high-observer jobs (observed `CUDA_ERROR_CONTEXT_IS_DESTROYED`). Treat CUDA for this operation as experimental until the runtime issue is resolved; use non-CUDA backend paths for reliability-critical runs.
+
+- `8c6800f`: Assistant hybrid reliability pipeline (ADR 0026-0034) implementation and scenario-switch extent/zoom hardening:
+  - implemented prompt-segmentation assistant pipeline in runtime (`backend/services/assistant/assistant_service.py`) with ordered stages:
+    - segmentation -> classification -> planner build/validation -> deterministic/model execution -> segment state merge -> success semantics;
+  - added new assistant pipeline modules:
+    - `backend/services/assistant/prompt_segmenter.py`
+    - `backend/services/assistant/prompt_classifier.py`
+    - `backend/services/assistant/turn_planner.py`
+    - `backend/services/assistant/turn_state_manager.py`
+    - `backend/services/assistant/tool_argument_repair.py`
+    - `backend/services/assistant/success_semantics.py`
+    - `backend/services/assistant/telemetry_codes.py`
+    - `backend/services/assistant/scenario_ref_normalization.py`;
+  - wired segmentation model config through backend/container config:
+    - `backend.api.dependencies`: `prompt_segmentation_model` resolver;
+    - `config/lunar_analyst.toml`: `backend.llm.prompt_segmentation_model`;
+  - expanded assistant event contract with stage-level lifecycle events:
+    - `prompt_segmentation_completed`, `prompt_classification_completed`, `turn_planner_built`,
+      `turn_planner_validation_failed`, `segment_execution_started`, `segment_execution_finished`,
+      `deterministic_handoff_built`, `turn_merge_completed`, `turn_status_finalized`;
+  - integrated bounded deterministic argument repair before tool execution:
+    - alias normalization (`handler_name`/`run_id`),
+    - safe defaults/enums/path normalization,
+    - out-of-root path blocking with clarification-required outcomes;
+  - added success-semantics aggregation and per-segment outcome metadata on assistant responses;
+  - added stage latency metadata in turn usage (`latency_segmentation_ms`, `latency_classification_ms`, `latency_planner_ms`);
+  - added explicit pipeline observability via structured stage/error codes and enriched assistant logging;
+  - temporarily reformatted key `assistant_service` runtime logs into multi-line, human-readable blocks (to be reverted later);
+  - expanded assistant eval/scoring contract and implementation:
+    - weighted component scoring and mandatory-fail safety overrides;
+    - suite-level scores and blocking suite gates;
+    - benchmark fields `suite` and `required_prompt_family`;
+    - docs updates in `docs/ASSISTANT_EVAL_SPEC.md` and `docs/DESIGN.md`;
+  - added hybrid architecture documentation:
+    - `docs/ASSISTANT_HYBRID_RELIABILITY_ARCHITECTURE.md`;
+  - added extensive segmentation/classification tests and golden corpus:
+    - `backend/tests/worker/test_prompt_segmenter.py`
+    - `backend/tests/worker/test_prompt_classifier.py`
+    - `backend/tests/worker/test_turn_planner.py`
+    - `backend/tests/worker/test_tool_argument_repair.py`
+    - `backend/tests/worker/test_assistant_hybrid_metadata.py`
+    - `backend/tests/worker/test_segmentation_classification_golden.py`
+    - `backend/tests/worker/test_segmentation_classification_invariants.py`
+    - `backend/tests/worker/test_segmentation_classification_snapshot.py`
+    - fixture corpus `backend/tests/fixtures/assistant_segmentation_classification/golden_cases.jsonl`;
+  - hardened scenario-switch intent handling and matching:
+    - normalize prompt references like `switch to <name-or-id> scenario`;
+    - treat `_`/`-`/space variants as equivalent during scenario matching;
+    - added targeted tests in `backend/tests/worker/test_hybrid_command_router.py` and `backend/tests/worker/test_scenario_matching.py`;
+  - fixed assistant-driven map auto-zoom behavior on scenario switch:
+    - ignore placeholder extents (`[-1,-1,1,1]`) on frontend assistant scenario-change events (`useAssistantSession`);
+    - when scenario footprint is placeholder, compute fallback DEM extent from `primary_dem_path`;
+    - resolve relative `primary_dem_path` against `scenario.directory`;
+    - reproject fallback DEM bounds to ESRI:103878 before emitting `dem_extent`;
+    - fixed CRS comparison bug that previously caused `dem_extent` fallback to return `null`.
+
+- `e492c81`: Reworked assistant functional evals into explicit pytest test functions and added evaluation triage guidance:
+  - converted assistant eval cases to standard pytest test-function style (one case per `test_*` function) under:
+    - `backend/tests/evals/test_assistant_functional.py`
+    - `backend/tests/evals/test_assistant_domain.py`;
+  - updated eval harness to enforce one assistant session per test and support multi-turn within that session via `run_turn`;
+  - added per-test isolated scenario cloning with setup/teardown hygiene and large-data-friendly copy/link behavior in `backend/tests/evals/conftest.py`;
+  - changed functional contract handling so first-turn tool detours are warnings, not automatic failures, when required execution tools are later used in-session;
+  - added richer functional test robustness:
+    - output artifact polling (reduces false negatives from delayed file materialization);
+    - fixture preparation for missing `nir.tif`/`red.tif` inputs;
+    - layer-state setup helpers for manipulation/reorder cases;
+    - follow-up-turn enforcement prompts for search-first/tool-detour model behavior;
+  - expanded human-readable/CSV/XLSX prediction reporting with warning fields (`warning_count`, `warnings_json`) and non-fatal warning summary sections;
+  - updated benchmark runner/docs to reflect pytest-suite source of truth and deprecated benchmark-file execution path (`--benchmark` now informational only);
+  - added design guidance for interpreting eval logs:
+    - `docs/DESIGN.md` section `4.1 Assistant Eval Log Interpretation (Quick Guide)`;
+  - added captured run analysis and model-agnostic improvement plan in:
+    - `doc/test-case-observations.txt`.
+
+- `3394235`: Hardened assistant tool-calling reliability for `raster.calculate` with schema-safe argument handling:
+  - added assistant-side `raster.calculate` argument sanitization before execution to drop unsupported/noisy fields, remove invalid optional values, and normalize nested `inputs`/`publish_layer` payloads;
+  - added one-shot model repair retry on tool-argument validation failure in model tool-loop:
+    - assistant now requests exactly one corrected call using the model-facing schema;
+    - if still invalid after retry, assistant returns explicit clarification-required guidance;
+  - introduced a narrowed model-facing schema for `raster.calculate` (safe subset) while keeping canonical execution schema unchanged for runtime validation;
+  - this reduces schema drift failures from over-specified/invalid model calls (for example unsupported keys and invalid enums/defaults);
+  - added worker coverage for:
+    - noisy argument sanitization behavior;
+    - single-retry invalid-argument repair flow;
+    - narrowed model-facing schema contract for `raster.calculate`.
+
+- `66db3be`: Scoped mask transparency behavior for map-algebra layer publishing:
+  - added `publish_layer.transparent_background` (default `false`) to `raster.calculate` publish options;
+  - `raster.calculate` now sets `output_nodata=0` for `uint8` mask outputs only when `publish_layer.enabled=true` and `publish_layer.transparent_background=true`;
+  - default published mask behavior remains unchanged (binary `0/1` with no nodata) unless transparency is explicitly requested;
+  - updated assistant system prompt and map-algebra procedural guidance so highlight/selection requests use `publish_layer.transparent_background=true` while explicit binary-class requests keep `0/1` classes;
+  - added regression coverage for both paths:
+    - transparent background enabled => GeoTIFF nodata is `0.0`;
+    - transparent background omitted => GeoTIFF nodata remains unset.
+
+- `4a08ffd`: Assistant map-algebra overwrite confirmation flow, raster publish ergonomics, tool-discovery scalability, and Jobs Manager UX updates:
+  - map algebra overwrite semantics for `raster.calculate` are now tri-state via `overwrite_mode`:
+    - `ask` (default): requires user confirmation when output exists;
+    - `always`: overwrite existing output;
+    - `never`: fail if output exists;
+  - assistant/tool-loop confirmation path now supports overwrite-ask flow end-to-end:
+    - existing-output conflicts produce confirmation-required behavior instead of repeated failing retries;
+    - approving confirmation executes the original pending tool call with runtime override to `overwrite_mode="always"` (single logical tool-call record retained);
+  - added `publish_layer` support on `raster.calculate` so models can create/update and show a layer in the same tool call, including result metadata (`published_layer_id/title/visible`);
+  - added DSL invalid-pixel helpers and aliases (`nodata()` and compatible forms) in map algebra/transform runtime to better match common model-generated expressions for transparent-selection masks;
+  - improved assistant guidance and routing docs for map algebra:
+    - explicit binary-vs-transparent mask intent guidance;
+    - `raster.calculate`/`raster.transform` unified guidance updates;
+    - system prompt guidance updated for `overwrite_mode` and one-step `publish_layer` usage;
+  - moved assistant system prompt text out of embedded code into `backend/services/assistant/system_prompt.txt`, with config-driven path resolution via `config/lunar_analyst.toml`;
+  - improved model tool-schema scaling:
+    - added `tools.search` and `tools.describe` for targeted tool discovery/expansion instead of forcing full-catalog reasoning every turn;
+    - integrated selective schema injection and describe-triggered schema expansion in model-tool-loop execution;
+  - fixed product/file hydration race affecting layer source resolution:
+    - catalog hydration now updates scenario product/file entries atomically (add/update then prune) to avoid transient empty-catalog windows that caused valid layers to be dropped as stale;
+  - enhanced websocket event stream cursor handling:
+    - `/api/v1/events` and `/api/v1/notebook/events` now support `?cursor=latest` (and numeric cursor values), enabling clients to subscribe without replaying historical events by default;
+  - Jobs Manager UI updates:
+    - added `Clear History` control in the main action row (`Run Tool` / `Cancel Run` / `Parameters`);
+    - removed `Show Details` toggle; selected-run details are now always shown;
+    - Jobs Manager event subscription now uses `cursor=latest` so page reload does not repopulate prior run history in UI.
+
+- `955846d`: Advanced hybrid assistant routing reliability, deterministic intent handling, and RAG/observability behavior:
+  - expanded deterministic command routing coverage and partial deterministic execution handoff for mixed prompts;
+  - tightened command-routing guardrails around imperative layer/scenario intents and added additional route/plan telemetry;
+  - added explicit per-turn prompt logging in assistant runtime for easier failure triage;
+  - hardened provider-fallback behavior and cross-provider fallback policy controls (`allow_cross_provider_fallback`);
+  - improved model-context compaction/replay policy for large read-only tool outputs to reduce tool-loop stalls;
+  - added/updated RAG guidance/routing docs and procedural guidance corpus entries, including layer-visibility few-shot guidance.
+
+- `6334895`: YAML-backed deterministic router specs and bounded deterministic sub-agent execution (ADR 0023):
+  - moved deterministic action registry definitions from in-code `_build_action_specs()` into human-editable YAML (`config/assistant_action_router.yaml`);
+  - added startup fail-fast loader/validator (`backend/services/assistant/action_router_config.py`) for:
+    - schema/version checks;
+    - regex compilation;
+    - action id uniqueness;
+    - tool-name existence;
+    - placeholder binding validation;
+    - bounded `agent_call` step validation (including read-only allowlist enforcement);
+  - updated `HybridCommandRouter` to load YAML specs and plan typed steps (`tool_call`, `agent_call`);
+  - extended deterministic action execution to support bounded model sub-steps (`agent_call`) with strict controls:
+    - tool allowlist filtering;
+    - iteration/token/time budgets;
+    - required JSON output;
+    - JSON-schema validation before slot binding into subsequent deterministic tool calls;
+  - added llm config wiring for router spec path and sub-agent-step enablement:
+    - `backend.llm.action_router_spec_path`;
+    - `backend.llm.deterministic_agent_substeps_enabled`;
+    - kept legacy parser code for rollback but disabled by default (`legacy_parser_enabled = false`);
+  - added test coverage for YAML loader validation and bounded agent-substep deterministic execution paths;
+  - updated architecture docs for ADR 0023 and YAML-router behavior (`docs/DESIGN.md`, `docs/ADR.0023.deterministic_router_with_bounded_agent_substeps.md`).
+
+- `81a9f99`: Fixed OpenAI function-tool schema compatibility for assistant tool-calling:
+  - removed top-level JSON-schema combinator (`anyOf`) from `layer.update_state` assistant tool parameters so OpenAI function schema validation accepts the toolset;
+  - preserved runtime contract enforcement in tool execution/argument normalization (either `layer_id`, or `scenario_id` + `layer_name`) while keeping model-facing schema provider-compatible;
+  - verified no remaining top-level `anyOf`/`oneOf`/`allOf`/`not` in model tool schemas and updated MCP/tool-registry schema tests accordingly;
+  - validation: `backend/tests/worker/test_mcp_tool_registry.py` and `backend/tests/worker/test_openai_provider.py` passed.
+
+- `0eb7028`: Unified and hardened assistant RAG configuration, ingestion, retrieval, and provider wrapping behavior:
+  - consolidated RAG runtime configuration under `[backend.llm.rag]` (single config path) and removed legacy `rag_ollama` / `rag_openai` compatibility parsing;
+  - standardized provider wrapping through a shared RAG wrapper path for configured tool-loop providers (`ollama`, `openai`), and documented that external CLI providers are currently not RAG-wrapped;
+  - expanded RAG corpus ingestion support for inline and external sources with metadata-driven parsing, including `.pdf`, `.html`/`.htm`, and `.json` external content;
+  - added corpus discovery controls for descriptor-vs-binary handling, including support for colocated `name.txt` + `name.pdf` workflows and optional indexing behavior for corpus README content;
+  - added explicit RAG observability:
+    - document refresh action logs (added/updated/skipped/deleted);
+    - per-turn retrieval routing/hit logs by channel;
+    - injected reference logs (doc/chunk ids and counts only, without chunk body text);
+  - fixed retrieval selection so `mixed` channel documents are eligible during routed `procedural` and `domain` retrieval passes;
+  - fixed wrapper/provider argument compatibility so wrapper-level kwargs (for example `thinking`) are filtered before dispatch to providers that do not accept them;
+  - fixed assistant frontend model initialization to honor backend/provider defaults rather than forcing `qwen3.5:35b-a3b` as the initial selection, and ensured empty model selections can defer to backend defaults.
+
+- `1497354`: Added assistant RAG wrapper/index integration and a configurable benchmark/eval harness for routing/tool-loop behavior:
+  - added RAG index/retrieval/provider wrapper path (`rag_wrapper_provider`, `rag_index`, `rag_retriever`) and integrated RAG-backed provider options into assistant provider registration/catalog without replacing existing providers;
+  - added assistant-side source reference plumbing on completions and message metadata, preserving existing WS/session/tool-loop contracts while exposing retrieval provenance for downstream rendering;
+  - added `scenario.rag_ingest` assistant tool + handler integration and startup refresh wiring for retrieval indexes, with scenario-root safety checks and focused RAG path/chunking/startup tests;
+  - added ADR and documentation for the RAG wrapper/index approach (`docs/ADR.0021.assistant_rag_wrapper_and_scenario_index.md`), plus crash investigation notes for the observed Windows native bootstrap failure (`docs/rag_bug_crash.txt`);
+  - added assistant benchmark assets under `backend/evals/assistant`:
+    - benchmark spec (`docs/ASSISTANT_EVAL_SPEC.md`);
+    - scorer (`score.py`) with gating metrics for mode/tool/args/schema/unsafe-block behavior;
+    - benchmark runner (`run_benchmark.py`) with provider/model selection, scenario-context injection, and human-readable reporting;
+  - made benchmark input human-editable with Excel-first workflow:
+    - default benchmark path is `backend/evals/assistant/benchmark.xlsx`;
+    - `.xlsx`/`.csv`/`.jsonl` benchmark input support (extension-driven);
+    - generated benchmark/template variants in CSV and XLSX;
+  - made runner output format default to the input format when `--output` is omitted (for example `benchmark.xlsx` -> `predictions.xlsx`), while still supporting explicit `.jsonl`/`.csv`/`.xlsx` outputs;
+  - extended scorer to accept predictions from `.jsonl`, `.csv`, or `.xlsx` and benchmark definitions from `.xlsx`/`.csv`/`.jsonl`;
+  - added benchmark-run confirmation handling so confirmation-required tool calls can be auto-resolved during evaluation (`--confirmation-decision`, default `allow_once`);
+  - separated benchmark model defaults from app defaults via `[backend.llm.evals]` in `config/lunar_analyst.toml`, with runner precedence: CLI override > eval defaults > app defaults.
+
+- `2f5e53a`: Completed ADR 0019 unified tool model implementation across runtime, assistant/MCP, API metadata, frontend terminology, and docs:
+  - formalized internal capability naming around **tool contracts**, **tools**, and **jobs** while preserving compatibility for existing job/runtime flows;
+  - introduced `ToolImplementations` as the primary backend implementation class in `backend/jobs/handlers.py` with `JobHandlers` retained as a compatibility alias;
+  - added canonical implementation discovery path `discover_tool_implementations` in `backend/api/job_runtime.py` (with compatibility alias `discover_job_handlers`), and updated route generation/cache naming to implementation-oriented terms;
+  - expanded contract models so tool definitions carry `implementation_name` (alongside compatibility `handler_name`) and tool invocation responses include `job_id` plus compatibility `run_id`;
+  - aligned backend discovery/introspection endpoints by adding `GET /api/v1/jobs/implementations` and keeping `GET /api/v1/jobs/handlers` as a compatibility view of the same payload;
+  - updated assistant/MCP tool metadata and execution wiring to prefer `implementation_name`/`job_id` while accepting legacy `handler_name`/`run_id` inputs, and refreshed assistant parser fast-path command argument mapping accordingly;
+  - updated native worker subprocess context payload handling to include `implementation_name` while accepting legacy `handler_name`;
+  - kept analyst/notebook/frontend compatibility shims while moving canonical naming forward (tool service typing, template derivation, and job cancellation helpers);
+  - updated primary docs (`docs/ADR.0019.unified_tool_model.md`, `docs/TOOL_CATALOG.md`, `docs/DESIGN.md`, `docs/DEVELOPER_GUIDE.md`) to reflect the tool-contract/tool/job model and migration status;
+  - verification:
+    - backend worker/assistant suites passed (`45` tests): `test_analyst_tools`, `test_job_runtime_discovery`, `test_mcp_tool_registry`, `test_assistant_tool_loop`, `test_assistant_session_store`;
+    - frontend `jobsManager` suite passed (`11` tests);
+    - frontend production build passed.
+
+- `bcd89ee`: Fixed raster display validity for warped outputs and aligned notebook/script scenario resolution across Jobs Manager and direct script execution:
+  - changed warped display derivative generation in `backend/services/raster_delivery.py` to synthesize an explicit alpha band when reprojection creates invalid output coverage, preserving valid sample values including byte value `0` instead of relying on nodata/value collisions;
+  - exposed display-alpha metadata through `GET /api/v1/lunar-analyst/files/{file_id}/raster-stats`, including `alpha_band` and alpha-aware min/max calculation, and removed the legacy bootstrap `nodataCutoff: 0` hillshade style injection;
+  - updated frontend raster styling and layer hydration so raster layers honor explicit `alphaBand` masking and clear stale persisted `nodataCutoff` values when the raster no longer reports nodata;
+  - fixed `scenario_dem()` and related raster-transform notebook helpers to use notebook job-runner context first, preventing Jobs Manager script runs from falling back to `test_scenario` when another scenario is selected;
+  - added standalone scenario-root inference from the executing script path / cwd and wrapped notebook-helper `write_output_raster()` so relative outputs land in the active scenario directory rather than the process working directory;
+  - added a `backend/notebook/examples/morning-sun.py` example plus backend/frontend regression coverage for byte-zero hillshade display, alpha-band styling, job-context scenario resolution, standalone script scenario inference, and scenario-root-relative notebook outputs;
+  - documented the diagnosis, fix plan, and shipped behavior in `docs/byte_nodata_display_bug.txt`, `docs/BYTE_NODATA_DISPLAY_FIX_PLAN.md`, and `docs/BUG_RECORD.md`.
+
+- `14c18e6`: Added scripted raster-transform execution (`raster_transform`) and exposed it through jobs, assistant, MCP, and notebook helper surfaces:
+  - added typed `JobHandlers.raster_transform`, `backend/jobs/raster_transform.py`, and the generated `POST /api/v1/jobs/raster-transform` contract for restricted NumPy-style raster scripts with intermediate variables and explicit `result` output;
+  - exposed the new capability as assistant/MCP tool `raster.transform`, feature-gated by `[backend.features].enable_raster_transform` and confirmation-classified as `launch_job`;
+  - implemented input binding support for scenario-relative rasters, `product_id` references, reserved `times` bindings, and horizon-derived `temporal_source` bindings, while keeping legacy `signal` plus top-level `time_*` fields as a compatibility path;
+  - added planning/resource-gate behavior with execution-strategy selection (`full_extent_static`, `full_extent_temporal`, `tiled_temporal`) and configurable working-set thresholds under `[backend.raster_transform]`;
+  - added conservative output-validity handling for participating raster inputs, plus missing-horizon patch short-circuiting to output nodata instead of failing whole temporal jobs;
+  - re-exported the shared raster authoring surface through `backend.notebook.notebook_helper` (`Raster`, `GridSpec`, `ExecutionHints`, `raster_let`, `scenario_dem`, `raster_file`, `slope_raster`, `aspect_raster`, `hillshade_raster`, `write_output_raster`) to align local scripts/notebooks with the new planner/runtime model;
+  - added backend coverage for the raster-transform parser, planner, handler runtime, assistant/MCP tool registry, and contract/OpenAPI exposure, and documented targeted verification flows in `docs/HOW_TO_TEST.md`;
+  - added Windows launch wrappers `analyst.ps1` and `lunar_analyst.bat` for starting the backend with the repo-local `env_311` Python, optional browser-open behavior, and configurable host/port/app-path overrides.
+
+- `365cfff`: Fixed deferred `GDAL_NODATA` GeoTIFF rendering failures for scenario raster layers:
+  - backend warped-display derivative generation now uses a hybrid nodata policy in `backend/services/raster_delivery.py`, keeping nodata when geometry proves the output rectangle cannot be fully covered and otherwise clearing nodata metadata when the warped output is fully valid;
+  - bumped the display-derivative hash policy version so previously generated buggy derivatives are not reused after the fix;
+  - added a frontend `geotiff.js` compatibility patch so deferred `GDAL_NODATA` reads return `null` instead of aborting OpenLayers `GeoTIFF` source initialization;
+  - added scenario raster source error logging in the React map controller to make future GeoTIFF source failures visible in the browser console;
+  - added backend regression coverage for nodata-clearing vs nodata-preserving warp outcomes and frontend coverage for the deferred-tag patch behavior;
+  - documented the bug and fix path in `docs/BUG_RECORD.md` and the implementation plan in `docs/NODATA_GDAL_DEFERRED_TAG_FIX_PLAN.md`.
+
+- `069f8bf`: Expanded assistant rich-output handling, artifact tools, and prompt-efficiency behavior:
+  - added typed assistant render outputs (`table`, `image`, `plot`, `artifact_card`) on persisted assistant messages/tool results and wired the response pane to render them directly;
+  - split GeoTIFF assistant tooling into metadata (`artifact.describe_geotiff`), preview generation (`artifact.preview_geotiff`), and numeric statistics (`artifact.stats_geotiff`);
+  - added `scenario.write_run_script` as the preferred script-authoring + execution path and updated guidance so scenario scripts run from the active scenario root using scenario-relative paths by default;
+  - changed assistant model-context replay to use compact tool summaries plus artifact references instead of replaying full rich payloads, reducing prompt bloat during tool loops;
+  - enabled OpenAI prompt caching with stable cache keys derived from prompt/tool/session prefix state and exposed cache telemetry through existing assistant usage fields;
+  - resumed model-loop execution correctly after confirmation-approved mutation tools, preventing turns from stopping after `scenario.run_script` / `scenario.write_run_script`;
+  - added duplicate-tool-call loop protection so repeated identical tool calls within one assistant turn are collapsed instead of re-executed indefinitely;
+  - refreshed Scenario Explorer automatically after completed assistant turns so newly created scenario files appear without manual navigation;
+  - changed assistant plot/image artifact handling to prefer file-backed outputs for scenario-local files, including assistant-generated plot files, while keeping raw tool-result logging intact for observability;
+  - added regression coverage for typed output API responses, confirmation-resume behavior, scenario-root script execution, artifact-path identity resolution, and response-pane rendering.
+
+- `947e9aa`: Replaced the fixed React workspace shell with a persistent dockable desktop layout and aligned frontend design docs:
+  - introduced a `flexlayout-react` workspace with dedicated dockable panels for Scenario Explorer, Map, Layer Manager, Jobs Manager, Assistant Input, Assistant Output, and Moon Trek Layers;
+  - enforced a single non-closable Map panel, while keeping the other standard panels closable/re-dockable and restoring them through `Reset Layout`;
+  - persisted workspace layout in browser storage under a schema-versioned key, deleting incompatible older saved layouts and preserving layout state across frontend/server restarts;
+  - persisted the active scenario selection across runs in browser storage, including recovery after abrupt server stops (`Ctrl+C`);
+  - preserved assistant prompt drafts and Jobs Manager parameter drafts across panel close/reopen and component remounts;
+  - updated map resize behavior for docked layouts using `ResizeObserver`, restored visible docking headers/drag affordances, changed the page title to `Lunar Analyst`, and refreshed `docs/DESIGN.md` / workspace ADR guidance to match the implemented desktop workspace model.
+
+- `1ed32f4`: Added map algebra DSL execution (`raster_calculate`) and MCP/assistant tool exposure (`raster.calculate`):
+  - implemented a restricted AST-validated raster DSL with local arithmetic/comparison/boolean operators and temporal reducers (`min`, `max`, `avg`, `std`);
+  - added typed `JobHandlers.raster_calculate` as the computation contract (no parallel compute-contract layer), with result persistence and product/file registration under scenario outputs;
+  - target grid/schema now follows the active scenario DEM; raster inputs are aligned/reprojected to DEM grid in v1 (default resampling `bilinear`, configurable `nearest`/`cubic`);
+  - added no-data propagation policy in evaluation/writes, with byte outputs defaulting to nodata-disabled behavior and non-byte outputs preserving/propagating nodata when supported;
+  - added temporal 3D input support via signal-bound inputs (`lighting_raster`, `earth_above_horizon`, `sun_above_horizon`) over `[time_start_utc, time_stop_utc, time_step_hours]`;
+  - added explicit map algebra error-code taxonomy (parse/syntax, invalid args, input/output path errors, temporal contract errors, reprojection/stream failures, cancellation/internal failures);
+  - added backend coverage for DSL parser/evaluator and handler execution paths (reprojection, temporal reducers, output registration, and failure modes).
+
+- `1ed32f4`: Fixed assistant turn-routing and confirmation UX regressions in command/tool-call flows:
+  - hardened parser fast-path scenario switching so `set scenario to ... .` normalizes scenario refs (`to` prefix and trailing punctuation removed);
+  - prevented multiline prompts that start with `set scenario ...` from being incorrectly hijacked into `scenario.set_current` fast-path parsing;
+  - confirmation-required turns now emit a visible assistant message/delta instead of appearing to stall when mutation tools (for example `raster.calculate`) require approval;
+  - added explicit confirmation-transition logging with session/turn/tool/action/confirmation-id/arguments context;
+  - added regression tests for scenario-reference normalization, multiline prompt routing, and confirmation-required assistant message behavior.
+
+- Unreleased: Hardened external Codex/Gemini MCP agent reliability and transport compatibility:
+  - added `POST /api/v1/mcp/sse` JSON-RPC compatibility endpoint for clients that post directly to configured SSE URLs;
+  - expanded external-agent prompt guidance and retry behavior when model output indicates MCP tool-invocation confusion;
+  - added deterministic safe fallback for explicit numbered prompts (`1) Call \`tool.name\` with {...}`), executing non-mutating tool sequences server-side and returning raw `{"tool_outputs":[...]}` payloads;
+  - broadened failure detection for newer Codex CLI behavior (`unknown MCP server`, `No MCP server named ...`, and PowerShell cmdlet/not-recognized frames), including ANSI escape sanitization of returned CLI text;
+  - improved Codex CLI MCP override behavior to only emit bearer token env wiring when a token is actually present;
+  - surfaced fallback execution metadata in assistant messages/usage (`fallback_used`, `fallback_kind`) and added response-pane fallback tagging in UI.
+
+- `b8b532c`: Implemented LOS/viewshed execution + routing metrics tooling (GDAL-first, CUDA optional) and exposed routing diagnostics as callable tools/jobs:
+  - added new public viewshed tool/job `terrain.viewshed` (`ToolImplementations.generate_los_viewshed`) with typed request/response contracts and generated route (`POST /api/v1/jobs/generate-los-viewshed`);
+  - implemented single/list/mask observer modes with:
+    - GDAL base execution (`osgeo.gdal.ViewshedGenerate`) for single/small-list runs;
+    - deterministic merge reducers for multi-observer runs (`any_visible`, `visibility_count`);
+    - optional CUDA path (Numba) with preflight checks and auto-mode fallback to GDAL when CUDA is unavailable;
+  - added backend routing policy inputs to job runtime metadata and results:
+    - observer distribution metrics (`observer_count`, `observer_density`, `adjacency_ratio`, `component_count`, `largest_component_size`);
+    - selected backend/fallback reason and routing decision payload;
+  - added parabolic-error tolerance policy + precision controls for viewshed runs, including configuration wiring under `[backend.viewshed]`;
+  - added routing-mask cleanup controls for metric extraction only (`routing_mask_cleanup`, `routing_cleanup_iterations`) with supported modes `none | erosion | opening`;
+  - implemented/standardized shared internal helper `ToolImplementations._compute_mask_connectivity_metrics(...)` (8-connectivity labels + adjacency ratio via `scipy.ndimage`) and used it for:
+    - viewshed backend-routing metrics extraction from observer masks;
+    - `terrain.mask_connectivity_metrics` tool/job execution;
+  - added new public analysis tool/job `terrain.mask_connectivity_metrics` (`ToolImplementations.analyze_observer_mask_connectivity`) to expose `_compute_mask_connectivity_metrics(...)` as:
+    - assistant-callable tool;
+    - user-runnable task in Jobs/Tools;
+  - switched connectivity metric implementation to `scipy.ndimage` (label/convolve-based) for improved performance and deterministic component/adjacency outputs;
+  - added worker coverage for:
+    - viewshed run paths (gdal, auto fallback, forced-cuda failure, assistant tool call);
+    - routing cleanup behavior for mask-based routing metrics;
+    - connectivity metrics task/tool execution;
+  - regenerated contract artifacts to include new jobs/tool schemas (`docs/contracts/generated/v1/openapi.json`, contract schema outputs);
+  - updated planning docs for tranche `4.5.1h` implementation detail and ADR alignment (`docs/PLAN.md`).
+
+- `299b79b`: Added script/notebook-facing raster mask helper functions and tests:
+  - added `backend.notebook.notebook_helper` array helpers for agent-authored Python scripts and notebook jobs:
+    - `label_regions(mask)` -> 2D `int32` connected-component labels (8-connectivity);
+    - `find_borders(mask)` -> 2D boolean inner-border mask (True cells adjacent to at least one False neighbor);
+    - `compute_mask_connectivity_metrics(mask, cleanup_mode, cleanup_iterations)` -> `(component_count, largest_component, adjacency_ratio)` with optional `none | erosion | opening` cleanup;
+  - exported these helpers through `notebook_helper.__all__` so they are directly importable in scripts/notebooks;
+  - added worker tests in `backend/tests/worker/test_notebook_helper.py` for expected outputs, cleanup behavior, and 2D-input validation errors.
+
+- `a9e04eb`: Expanded map-algebra region operations with cleanup-aware labeling, component-size rasters, and shape-preserving size filters:
+  - extended `label_regions(...)` to support optional cleanup arguments:
+    - `label_regions(mask[, cleanup_mode[, cleanup_iterations]])`;
+    - cleanup modes: `none | erosion | opening`;
+  - added new DSL operation `region_sizes(mask[, cleanup_mode[, cleanup_iterations]])`:
+    - returns `int32` raster where each connected component pixel stores that component's size in pixels;
+  - added new DSL operation `filter_regions_by_size(mask, threshold, comparator[, cleanup_mode[, cleanup_iterations]])`:
+    - comparator supports `>=` and `<=`;
+    - applies cleanup for seed/selection but projects kept selection back to original connected-component labels to preserve original region geometry;
+    - returns mask semantic output (boolean/`uint8` in finalized raster output);
+  - added equivalent notebook/script helpers in `backend.notebook.notebook_helper`:
+    - `label_regions(..., cleanup_mode, cleanup_iterations)`;
+    - `region_sizes(..., cleanup_mode, cleanup_iterations)`;
+    - `filter_regions_by_size(mask, threshold, comparator, cleanup_mode, cleanup_iterations)`;
+  - updated assistant model-facing `raster.calculate` DSL guidance (`backend/services/assistant/tool_registry.py`) to include `region_sizes` and `filter_regions_by_size`;
+  - added/updated worker coverage across DSL evaluation, typed `raster_calculate` handler runs, and notebook helper behavior, including comparator validation and cleanup/shape-preservation cases.
+
+- Unreleased: Reduced GDAL/native import-order conflicts in backend startup and service code:
+  - added best-effort native bootstrap preflight before broader backend imports and repeated startup preflight logging for diagnosis;
+  - moved rasterio usage behind lazy runtime import helper (`import_rasterio`) in services/routers/assistant describers to avoid module-import side effects;
+  - updated Trek feature proxy GDAL/OGR initialization to runtime lazy-load through shared GDAL runtime configuration.
+
+- Unreleased: Fixed Moon Trek base-layer deep-zoom tiling regressions in the React map:
+  - replaced the single generic Moon Trek fallback grid with deterministic base-profile selection for `LRO_WAC_Mosaic_SPole60_100mp` + `default028mm`, aligned to the layer's native matrix levels (`0..4`) and precise base resolution;
+  - retained deep client zoom support while constraining base tile URL matrix ids to the selected base profile, preventing invalid matrix requests that led to base-layer disappearance;
+  - disabled horizontal wrapping (`wrapX: false`) on the Moon Trek base `XYZ` source to avoid incorrect wrapped-tile draws in south-polar projection space;
+  - added frontend regression coverage for base-profile selection behavior (`moonTrekBaseProfile.test.ts`).
+
+- Unreleased: Jobs UX overhaul + post-run refresh + filtering correctness + native runtime conflict fix:
+  - redesigned the Jobs Manager for operator workflow:
+    - parameters are hidden from the main pane and edited via a dedicated table-first modal (`Parameters`) with typed inputs, validation, reset/apply actions, and optional debug JSON view;
+    - run monitoring is now run-centric with a primary current-job card (status chip, progress %, elapsed time, latest message), recent-job list, and expandable details (summary, launch-parameter snapshot, message timeline with raw payload drill-down);
+    - copy/spacing pass tightened labels and density for faster scanning in the right workspace pane.
+  - fixed job filter semantics in shared frontend filter utilities:
+    - replaced permissive character-subsequence matching with strict token-substring matching (case-insensitive) so query token `psr` matches token `psr` but does not match non-adjacent character sequences in unrelated tokens;
+    - updated associated tests (`filterMatch`, `treeVisibility`) to enforce token-substring behavior.
+  - wired Scenario Explorer to refresh automatically after terminal job events (`job_completed`, `job_failed`, `job_cancelled`) for the active scenario so new/updated artifacts appear without manual scenario switching.
+  - fixed native lightmap-reduction job startup ordering to avoid strict DLL-root conflicts (`proj_9.dll`):
+    - native bootstrap (`LightmapStreamingClient(force_bootstrap=True, ...)`) now occurs before Python GDAL import in native reduction path;
+    - added regression coverage ensuring bootstrap happens before Python GDAL dataset open in this path.
+
+- Unreleased: Implemented architecture-evaluation tranche work across backend runtime, persistence, frontend orchestration, and test ergonomics:
+  - backend job execution now uses a real queued worker thread for typed handlers (`queued -> running -> completed|failed|cancelled`) with immediate-mode support preserved;
+  - long-running native handlers execute via isolated subprocess dispatcher (`backend.worker.native_job_dispatcher`) and emit live progress/cancellation-compatible status updates;
+  - websocket event fanout moved from polling loops to blocking cursor waits with bounded in-memory buffers for API events and assistant events;
+  - assistant session persistence now defaults to transactional SQLite (`assistant_sessions.db`) with JSON fallback backend and one-time legacy JSON import support;
+  - assistant artifact path resolution now enforces workspace/scenario-root allowlist checks for raw absolute `path` inputs;
+  - draft job handlers are now gated from auto-published job routes unless explicitly enabled (`LUNAR_ANALYST_INCLUDE_DRAFT_JOB_HANDLERS`);
+  - frontend `App.tsx` orchestration was decomposed into domain hooks (`useScenarioWorkspace`, `useLayerSync`, `useAssistantSession`, `useBackendEventStreams`, `useWorkspaceLayout`), reducing app-shell complexity and isolating state/effect concerns;
+  - Moon Trek base tile URL initialization now honors configured capabilities host/path through deterministic URL derivation without blocking startup on live capabilities fetches;
+  - introduced an initial repository extraction for layer-state persistence (`LayerStateRepository`) and renamed production `Stub*` service classes to canonical names with compatibility aliases retained;
+  - added root `pytest.ini` to make plain `pytest` reliable in this repo by setting `pythonpath = .` and scoping default discovery to backend worker/contract/integration suites;
+  - fixed system-job template generation in the Jobs panel to hydrate selected-scenario paths and prefill common path params (`scenario_root_dir`, `dem_path`, `horizons_dir`, `output_path`) instead of empty placeholders;
+  - updated `generate_psr_raster` contract signature so path inputs are optional (`str | None`) and can rely on scenario-root fallbacks, matching runtime behavior;
+  - fixed template default handling to preserve explicit `null` defaults (instead of coercing them to empty strings) for optional job params;
+  - added focused backend/frontend tests for queue runtime semantics, draft-handler discovery gating, artifact path allowlist enforcement, bounded event buffer waits, repository round-trip behavior, websocket event classification, assistant stream event reduction, and Moon Trek URL derivation.
+
+- Unreleased: Added external CLI agent runtime path (Codex CLI and Gemini CLI) over MCP SSE:
+  - added `external_mcp_agent` provider execution mode with first-class provider registration for:
+    - `local_codex_cli`;
+    - `local_gemini_cli`;
+  - added MCP SSE transport contract in main app API (`GET /api/v1/mcp/sse`, `POST /api/v1/mcp/sse/{session_id}`) with session-scoped message relay and contract tests;
+  - replaced unsupported CLI launch flags with provider-specific integration behavior:
+    - Codex: per-run MCP server wiring via `codex exec -c mcp_servers.<name>...` overrides;
+    - Gemini: project-scoped MCP server add/remove calls (`gemini mcp add/remove`) for SSE endpoint registration;
+  - added Windows-safe executable resolution for external CLI launch (`.cmd`/`.exe` shim resolution) to address command-not-found launch failures;
+  - added headless Gemini invocation (`--prompt`) to avoid interactive CLI hangs in turn execution;
+  - added per-turn assistant access-mode plumbing (`mcp_only` vs `scenario_root`) through API, service, provider, and UI flow for external-agent providers;
+  - fixed scenario-root launch behavior so external CLI cwd is the active scenario directory (resolved from `scenario_id`) instead of the scenarios container root, enabling scenario switching across turns without restarting integration;
+  - added/updated backend tests for external CLI provider config/runtime behavior, assistant tool-loop external-agent path, and MCP SSE contract behavior.
+
+- Unreleased: Assistant model selection/discovery and fallback hardening:
+  - added Assistant Input model selector wiring in React and turn payload `model_id` propagation;
+  - frontend startup now hydrates model options from `GET /api/v1/assistant/providers` and appends configured remote model choices;
+  - backend Ollama provider now discovers installed models from `GET /api/tags` (with configured-list fallback) and exposes the merged set through provider catalog;
+  - added `qwen3.5:27b` to local Ollama configured models;
+  - parser fast-path describe flows now attempt one model follow-up pass for user-facing prose, then safely fall back to tool summary text when provider output is empty/unavailable;
+  - model tool-loop now retries alternate provider/model pairs on provider-call failures (for example Ollama HTTP 500 runner failures) before failing the turn;
+  - configured slow-turn fallback model set to `qwen2.5-coder:7b-instruct-q4_K_M` to improve recovery from large-model instability;
+  - added backend/frontend tests for provider catalog fetch, Ollama model discovery fallback, parser describe summarization, and provider-failure fallback behavior.
+
+- Unreleased: Added assistant/LLM + MCP integration across backend, frontend, contracts, and docs:
+  - added assistant REST + WS surfaces under `/api/v1/assistant`:
+    - session create/list/detail/messages;
+    - turn execution with tool-call audit trail;
+    - confirmation resolution with session-scoped allow-once / always-allow-action-type / deny-once behavior;
+    - policy update, provider catalog, and session compaction endpoints;
+  - added assistant contracts/events (`assistant_models`, `assistant_events`) and generated assistant contract schemas/OpenAPI updates;
+  - added assistant orchestration services:
+    - persistent session/message/turn/tool-call/confirmation store;
+    - context builder + compactor;
+    - tool registry for capability description, scenario/product queries, artifact description (GeoTIFF/table/plot), job launch/cancel, file import/move, and layer updates;
+    - provider registry/adapters for local Ollama + subprocess and remote OpenAI/Anthropic/Google with cache telemetry fields;
+  - added MCP server support for external clients:
+    - HTTP JSON-RPC transport at `/api/v1/mcp`;
+    - stdio transport via `python -m backend.tools.run_mcp_server`;
+    - tool metadata includes confirmation hints; mutating MCP calls require explicit `_confirmed` argument;
+  - added assistant UI in React app:
+    - new `Assistant Input` panel (session controls, prompt entry, confirmation controls);
+    - new `Assistant Response` panel (message log);
+    - websocket event listener and session resume/compact wiring;
+  - added focused backend and frontend tests for assistant/MCP contracts and client behavior, including confirmation and websocket coverage;
+  - updated architecture/testing docs:
+    - refreshed `docs/DESIGN.md` with assistant + MCP architecture details and current known gaps;
+    - added `docs/LLM_HAND_TESTING.md` with end-to-end manual verification steps.
+  - expanded assistant/MCP behavior for scenario and script UX:
+    - assistant can switch current scenario from prose with fuzzy matching, ambiguity disambiguation, and explicit scenario-change audit messaging;
+    - assistant emits `assistant_scenario_changed` events and frontend now syncs Scenario Explorer selection + map fit-to-DEM extent from those events;
+    - notebook job discovery now supports recursive scenario `**/*.py` implicit script discovery with stable path-derived job ids;
+    - MCP tools now include predefined job listing/execution, scenario script/notebook listing/execution, run status/log polling (`head`/`tail` slices + size metadata), and run cancellation;
+    - script write/overwrite path added with session-scoped overwrite approvals in assistant runtime (including revoke operation), plus auto-approval for scripts created in the same assistant session;
+    - notebook/script execution now records per-run log metadata and applies fallback auto-registration of newly produced renderable artifacts when scripts do not self-register outputs (idempotent by path check).
+
+- Unreleased: Fixed layer persistence hydration and duplicate bootstrap overlays:
+  - hydrate scenario-local `products` and `product_files` from `scenario.db` before layer hydration/reconcile;
+  - hydrate `layer_state` on startup/list paths, with stale-layer cleanup when `source_file_id` is missing or source file no longer exists;
+  - wire hydration through backend service-container/layer-service hydrate paths so persisted style/colormap state is restored across restarts;
+  - add contract coverage for restart colormap persistence and stale-layer removal after source deletion;
+  - operational cleanup performed in `D:\lunar_analyst_scenarios\lunar_analyst\scenario.db`: removed duplicate `Hillshade Overlay` rows, keeping one canonical layer.
+  - fixed Lunar Analyst colormap app-path default resolution so `config/colormaps/map_colormaps.json` is loaded correctly;
+  - added custom app colormaps:
+    - `slope_pale_10_15` (pale green/yellow/red stepped thresholds);
+    - `psr_thresh_200_blue` (transparent below threshold, medium blue above threshold);
+  - updated frontend layer colormap selector to use backend-provided colormap registry instead of a hardcoded five-option list;
+  - updated raster rendering pipeline to consume the same dynamic colormap registry (with builtin fallback) so selected custom maps render on the map.
+
+- Unreleased: Added Moon Trek catalog/proxy APIs and hardened Trek overlay UX:
+  - added Trek API routes:
+    - `GET /api/v1/trek/layers`;
+    - `GET /api/v1/trek/layers:search`;
+    - `GET /api/v1/trek/layers/{product_label}/features`;
+  - added backend Trek services for catalog search and feature proxy with fallback flow (ArcGIS feature service -> archive parse/vector extraction -> WMTS/footprint fallback);
+  - added in-memory Trek cache TTL controls (`[backend.trek].catalog_cache_ttl_seconds`, `feature_cache_ttl_seconds`);
+  - expanded React Trek UI:
+    - dedicated Moon Trek side panel + search;
+    - add/remove Trek overlays through normal layer workflow;
+    - overlay tone controls + stack ordering integration;
+  - added Trek frontend/backend test coverage (router config, catalog/proxy service behavior, frontend service calls).
+
+- `4029564`: Added persistent Moon Trek catalog metadata cache in the primary app database:
+  - added SQLite-backed catalog metadata cache table (`moon_trek_catalog_cache`) in `scenario_catalog.db` to persist Trek layer-menu metadata across backend restarts;
+  - updated `TrekCatalogService` to use layered caching (`L1` in-memory TTL + `L2` SQLite cache) for `GET /api/v1/trek/layers` and `GET /api/v1/trek/layers:search`;
+  - retained `force_refresh=true` behavior for explicit full-list refresh while keeping individual-layer refresh out of the layer-menu workflow;
+  - added stale-cache fallback behavior when live catalog fetch fails (non-`force_refresh` requests);
+  - moved Trek catalog service initialization to lazy router-time creation to avoid import-time DB writes;
+  - added backend regression coverage for persistent cache behavior across simulated restart (`test_trek_router_persistent_cache.py`) and service-level persistence (`test_trek_catalog_service.py`).
+
+- Unreleased: Hardened assistant tool-calling and provider telemetry:
+  - improved assistant tool-loop/model-response handling for cross-provider tool-call flows;
+  - extended provider/runtime telemetry for assistant turns (latency/usage and cache-attempt/cache-applied metadata surfaces);
+  - added tests for provider tool-call contract handling and assistant latency metadata behavior.
+
+- Unreleased: Startup performance and scenario-scoped Trek display state:
+  - Trek overlay display state is now scoped to the active scenario in frontend state, while Trek catalog/feature caching remains global;
+  - frontend startup now loads bootstrap/config/colormaps concurrently instead of serially;
+  - Moon Trek base layer initialization no longer blocks on live WMTS `GetCapabilities`; map startup uses deterministic TileGrid defaults for slow-changing Moon Trek base metadata;
+  - backend startup is now non-blocking for readiness:
+    - service container initialization is lazy and thread-safe;
+    - startup warmup, Marimo auto-start, and scenario auto-discovery run in background tasks;
+    - scenario product/file catalogs are lazily hydrated per scenario from `scenario.db` and memoized;
+  - updated `docs/DESIGN.md` to document these startup and Moon Trek behavior policies.
+
+- b38cd7c: Initial project scaffold: introduced baseline planning and architecture docs ("API_CONTRACT", roadmap, plan artifacts).
+- 4e489a5: Phase-0 planning reset: established "AGENTS.md" protocol and reorganized planning docs for implementation workflow.
+- d9d2f38: Added core ADR set: formalized process model, scenario filesystem/catalog model, and stage-gate approach.
+- 62a795e: Bootstrapped backend contract surface: initial FastAPI router patterns, core request/response models, and job runtime scaffolding.
+- d80d37b: Completed phase-0 API contract pass: standardized error envelope/request-id behavior and generated OpenAPI/schema artifacts.
+- 45d299b: Added first native worker prototype: bootstrap configuration for "pythonnet"/"moonlib", plus end-to-end horizon/hillshade worker tests.
+- 20f2fa0: Improved native dependency loading: explicit managed/native dependency search/preload flow, with real bridge integration coverage.
+- 71e8ef9: Introduced first map milestone web app path: OpenLayers-based map route and API wiring for raster visualization.
+- db9c672: Stabilized tiled layer rendering path (still with heavy debug logging) and updated local test data/config.
+- 7096145: Removed temporary OpenLayers debug spam and documented the display issue/fix path.
+- 5e59c97: Added scenario and UI toolkit architecture docs ("SCENARIO.md", ADR for web UI component toolkit).
+- 15565af: Phase-1 backend hardening: added artifact catalog service, native health checks, and CRS delivery ADR alignment.
+- 100775c: Implemented map-display raster warping service: backend now produces CRS-normalized derivatives for map rendering.
+- 42c8c12: Added initial raster styling system: colormap definitions, styling APIs, and layer-style UI contract.
+- 4b776ed: Added map scale bar and layer controller UX iteration.
+- 0a02321: Phase-2 backend completion: expanded scenario/product/layer/job APIs, websocket event flow, migrations, and COG tooling.
+- bc7099e: Major UX pass before session work: substantial map workspace frontend reshaping and related contract tests.
+- dc76964: Phase-3.1 workspace contract progress: scenario workspace behaviors and map raster-file API/test coverage.
+- 1a977cd: Incremental UI behavior polish for the phase-3.1 workspace.
+- 31ee48e: Phase-3.1 completion pass: finalized workspace UI flow and manual test guidance.
+- b623ad9: Initial Marimo integration: notebook session lifecycle, launch/status APIs, and example notebook integration.
+- d76872e: Imported full "new_horizon" native stack into repo: horizon engine, pipeline/native assets, and supporting tools/tests.
+- 1effd60: Planned shared horizon architecture and drafted additional geospatial job contract direction.
+- 509427a: Implemented shared horizon store baseline: keying/resolution services and API surfaces for reusable horizon sets.
+- 16de8c7: Added scenario auto-discovery/ingest from filesystem ("scenario.toml") with scenario deletion/management flow.
+- 79f4e26: Made hillshade generation work in job flow with robust scenario path resolution and GDAL runtime setup.
+- 3291007: Started path-first product identity transition and explorer/file prominence changes.
+- b9b8fc6: Implemented broad path-first identity behaviors: explorer nodes, move-path operations, and corresponding API/contracts.
+- cff8777: Added planning baseline for notebook task system.
+- fb20d5d: Implemented notebook task system v1: notebook job discovery/catalog, runner path, and typed job-definition APIs.
+- 7f3bfe0: Expanded notebook script-mode runtime helpers (context, cancellation, output registration) ahead of MoonLayers merge.
+- 6d582dc: Integrated "moonlayers_pkg" into repo: notebook widget stack, GeoTIFF serving path, and supporting examples/tests.
+- 6f81814: Added complex notebook job for GDAL DEM derivative generation and test coverage.
+- ae581d2: Simplified/tightened GDAL-derivative notebook job around shared notebook runtime helpers.
+- 50895c2: Fixed colormap scaling and introduced reusable filter/list UI components; improved raster stats handling.
+- 0ed2d96: Began React conversion: introduced Vite/React app shell, TS map controller, and migration documentation.
+- a7df6a2: Completed key React conversion fix: removed large legacy JS/CSS paths and shifted to new component structure.
+- ef71da6: Fixed root "npm run test" workflow/documentation expectations.
+- 455661c: Removed obsolete handler paths and stale associated test dependencies.
+- 4dfc264: Added notebook horizon job integration iterations and related contract/runtime updates.
+- 43108b6: Updated native bridge horizon invocation path while troubleshooting notebook horizon execution.
+- 80c4d48: Hardened native bootstrap DLL import strategy; horizon generation callable from app path.
+- 615773f: Introduced broader "notebook_helper" abstraction layer (params, bridge bootstrapping, path/stats/progress helpers) with tests.
+- 87827bb: Moved web entry routing to "/lunar_analyst" with mount-path normalization and redirect behavior.
+- 8e49ca5: Renamed/moved frontend project to "backend/web/lunar_analyst" mount path; synchronized frontend package assets.
+- fedc51c: Added runtime detection "is_running_under_job_runner()" to make notebook behavior context-aware.
+- ab6ca65: Refined notebook helper scenario identity/root resolution for runner and non-runner contexts.
+- cb84e5f: Landed core lightmap streaming integration: native bridge job lifecycle, tile buffering/polling, probe jobs, and tests.
+- e3879ca: Initial Blueprint UI migration commit for explorer/layers/jobs panels.
+- 4e69332: Improved scenario filtering behavior and matching logic in explorer UI.
+- e7f72f2: Tweaked scenario file UI + context menu + toolbar integration.
+- 0210230: Large notebook runtime uplift: "LightmapRunConfig" pattern, safer helper primitives, and script authoring guidance/docs.
+- 933fa89: Restored nodata transparency in raster styling (regression fix).
+- 8b6e3b2: Rewrote "LightmapArrayStreamingBridge" internals to staged pipeline architecture ("Pipeline"/"PipelineStep").
+- b7332ab: Updated architecture/design documentation after streaming pipeline changes.
+- 1f5d390: Job runner now correctly executes script-style notebooks guarded by "if __name__ == '__main__'".
+- 69b7fc0: Added Marimo phase-2 planning and story docs.
+- 7f70041: Added map zoom-to-file command and improved Marimo GeoTIFF load path + tests.
+- 15d6aff: Added Libro/Jupyter prompt-cell spike planning docs.
+- f6c961c: Added Marimo+GPT-5 experiment docs and prompt material for notebook generation workflow.
+- 723de2f: Added lightmap extension design pack: terrain-relative Sun/Earth signal model, V2 streaming/reduction plan, and reducer protocol direction.
+- c255b3e: Major capability expansion:
+  - added PSR raster generation job ("generate_psr_raster") through isolated native subprocess execution;
+  - added lightmap V2 worker/native APIs ("SignalStream" + "NativeReduce");
+  - added native temporal reduction jobs (average sun fraction, Earth-above-terrain duration, combined Sun+Earth contiguous duration);
+  - added contract/OpenAPI outputs for reduction result types.
+- 30edc62: Added root "README.md" and "docs/RUNNING_TESTS.md"; changed frontend token filtering to subsequence matching for more forgiving search.
+- 8de439b: Operational reliability + interruption release:
+  - tracked notebook job subprocesses for cancellation/shutdown;
+  - installed SIGINT/SIGTERM termination hooks to stop active notebook job runners;
+  - normalized horizon DEM dimension native failures to structured "422 invalid_dem_dimensions" API errors;
+  - fixed scenario reconcile race ("dictionary changed size during iteration");
+  - tightened "compress_horizons" behavior (enforced compression, validation, and fallback logging);
+  - updated native horizon generation for ".cbin" path handling and observer elevation passthrough;
+  - improved jobs pane launch error visibility;
+  - added Marimo upgrade/token-caching assessment docs;
+  - renamed "docs/NEW_DESIGN.md" to "docs/DESIGN.md".
+- e3cf402: Set raster delivery derivatives to nearest-neighbor resampling end-to-end (warp + overviews), aligning output with non-interpolated layer rendering intent.
+- e64c480: Fixed GeoJSON map rendering CRS handling:
+  - added map-delivery vector normalization endpoint (`/api/v1/lunar-analyst/files/{file_id}/vector`);
+  - normalized GeoJSON geometries to map CRS (`ESRI:103878`) with feature-level CRS override support;
+  - switched frontend vector loading to the new map-delivery endpoint and added contract coverage.

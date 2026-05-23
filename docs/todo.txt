@@ -1,0 +1,21 @@
+Done
+1. Make the scenario selection persistant across runs, even if I control-C to stop the server.
+2. The webpage title is Lunar Analyst Map Milestone (React). It should be just Lunar Analyst.
+
+TODO
+3. Refactor assistant tool names globally to a single provider-safe
+   naming scheme that satisfies OpenAI, Google, and Anthropic
+   function/tool naming constraints. Replace all dot-delimited tool
+   names with canonical snake_case names (for example,
+   capabilities.describe -> capabilities_describe) across backend
+   registry, execution paths, parser fast-path logic, fallback logic,
+   MCP bridge exposure, UI/provider metadata, and test fixtures.
+   Remove provider-specific tool-name aliasing so every provider
+   receives and returns the same canonical tool names. Update all
+   prompts/system guidance/docs/ADR/CHANGELOG references and all tests
+   to use the new names, and provide an old->new mapping table in
+   docs. Preserve tool behavior and confirmation-policy semantics
+   exactly; only identifiers should change. Run full relevant backend
+   tests and frontend build/tests, and report failures with fixes. Do
+   not stop until implemented end-to-end unless you hit a blocker you
+   cannot resolve.

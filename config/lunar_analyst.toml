@@ -1,0 +1,263 @@
+[backend]
+# Scenario workspace root. Relative paths are resolved from this file's directory.
+workspace_root = "/e/lunar_analyst_scenarios"
+# Backend log level for console output (DEBUG, INFO, WARNING, ERROR).
+log_level = "INFO"
+
+[backend.raster_transform]
+# Upper bound for accepted planned working-set estimates.
+max_estimated_working_set_bytes = 2147483648
+# Full-extent temporal plans above this limit are rejected during planning.
+max_temporal_full_extent_bytes = 805306368
+# Tiled temporal plans above this limit are rejected during planning.
+max_tiled_temporal_working_set_bytes = 805306368
+
+[backend.viewshed]
+# Backend selection policy: gdal | cuda | auto.
+backend_mode = "auto"
+# Parabolic approximation tolerance (meters). Larger estimated error auto-triggers high-fidelity mode.
+parabolic_error_tolerance_m = 0.5
+# Auto-routing heuristics for gdal -> cuda crossover.
+auto_cuda_min_observers = 64
+auto_cuda_min_density = 0.002
+auto_cuda_min_adjacency_ratio = 0.05
+auto_cuda_min_largest_component = 32
+# CUDA observer batch size used for progress/ETA reporting cadence.
+cuda_progress_observer_batch_size = 2
+# CUDA ray-casting controls (observer-outward directional lattice).
+cuda_ray_direction_count = 360
+cuda_ray_step_size_pixels = 0.5
+# Optional cleanup of observer-mask occupancy before routing metric extraction.
+# Applied to routing metrics only (not to actual observer selection).
+routing_mask_cleanup = "none" # none | erosion | opening
+routing_cleanup_iterations = 1
+
+[backend.web]
+# URL mount point for the browser application (must start with `/`).
+# Example: "/lunar_analyst" serves the app at http://127.0.0.1:8000/lunar_analyst/
+mount_path = "/lunar_analyst"
+
+[backend.logging]
+# Optional logging block for finer control.
+# Valid level strings: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# This is the default level applied to backend.* loggers.
+level = "INFO"
+
+[backend.logging.loggers]
+# Optional per-logger overrides by exact logger name.
+# Valid level strings: DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Example:
+# "backend.api.app" = "DEBUG"
+# "backend.api.dependencies" = "INFO"
+# "backend.services.raster_delivery" = "WARNING"
+
+[backend.native]
+# Optional. Relative paths are resolved from this file's directory.
+# If unset, bootstrap resolves moonlib from standard build outputs.
+moonlib_dll_path = "../native/new_horizon/moonlib/bin/Debug/net9.0/linux-x64/moonlib.dll"
+# dotnet_runtime_config_path = "../native/new_horizon/moonlib/bin/Debug/net9.0/moonlib.runtimeconfig.json"
+expected_target_framework = "net9.0"
+# `debug` | `release` | `auto_newest`
+build_profile = "auto_newest"
+
+[backend.native.dll_resolver]
+# `strict` keeps native loading on a single build root and avoids path-based mixing.
+mode = "strict"
+# Optional native library search roots used before loading moonlib.
+search_dirs = [
+  "../native/new_horizon/moonlib/bin/Debug/net9.0/linux-x64",
+  "../native/third_party/cspice/linux-x64",
+]
+
+[backend.lunar_analyst]
+# Browser app inputs.
+hillshade_path = "../test_data/test_hillshade_viper.tif"
+hillshade_opacity = 0.7
+moon_trek_capabilities_url = "https://trek.nasa.gov/tiles/Moon/SP/LRO_LOLA_Shade_SPole75_30mp_v04/1.0.0/WMTSCapabilities.xml"
+moon_trek_layer = "LRO_LOLA_Shade_SPole75_30mp_v04"
+moon_trek_tile_matrix_set = "default028mm"
+moon_trek_style = "default"
+# hillshade_path = "../test_data/test_hillshade_viper.tif"
+# hillshade_opacity = 0.7
+# moon_trek_capabilities_url = "https://trek.nasa.gov/tiles/Moon/SP/LRO_WAC_Mosaic_SPole60_100mp/1.0.0/WMTSCapabilities.xml"
+# moon_trek_layer = "LRO_WAC_Mosaic_SPole60_100mp"
+# moon_trek_tile_matrix_set = "default028mm"
+# moon_trek_style = "default"
+
+[backend.trek]
+# Moon Trek API cache TTLs in seconds (14 days default). Longer values avoid repeated
+# catalog pulls and feature archive downloads across sessions while backend remains running.
+catalog_cache_ttl_seconds = 1209600
+feature_cache_ttl_seconds = 1209600
+
+[backend.marimo]
+# Default Marimo endpoint used by GET /api/v1/marimo/status and launch results.
+base_url = "http://127.0.0.1:2718"
+# If true, FastAPI startup will automatically launch/attach Marimo from this profile.
+auto_start = false
+# If true, Marimo UI requires a token; if false, token auth is disabled (`--no-token`).
+# Applies to default launch command generation (python_executable/env fallback).
+# If you set `command = [...]`, that explicit command is used as-is.
+use_token_auth = false
+# Preferred Python interpreter for default Marimo launch.
+python_executable = "/e/projects/lunar_analyst/.venv/bin/python"
+# Optional path to append Marimo stdout/stderr logs (tail this file while debugging).
+log_path = "../logs/marimo.log"
+# Optional explicit launch command used by POST /api/v1/marimo/launch when no command is supplied.
+# command = ["python3.11", "-m", "marimo", "edit", "--headless", "--port", "2718"]
+
+[backend.notebook_jobs]
+# Optional roots scanned for notebook-defined jobs (`*.job.json`).
+# Relative paths are resolved from this file's directory.
+search_roots = ["../backend/notebook/jobs"]
+# Prune per-run notebook working folders older than this many hours.
+run_dir_retention_hours = 24
+
+# Optional Python interpreter override used for headless notebook job subprocesses.
+python_executable = "/e/projects/lunar_analyst/.venv/bin/python"
+
+[backend.scenario_discovery]
+# If true, run the same scenario.toml discovery pass as POST /api/v1/scenarios:discover at startup.
+auto_discover_on_startup = true
+# If true, startup discovery also forgets scenarios that are still cataloged but whose directories are missing.
+reconcile_missing_on_startup = true
+
+[backend.llm]
+enabled = true
+default_provider = "openai"
+default_model = "gpt-5.4"
+system_prompt_path = "../backend/services/assistant/system_prompt.txt"
+action_router_spec_path = "../config/assistant_action_router.yaml"
+require_confirmation_for_mutations = false
+session_store_path = ".assistant/assistant_sessions.db"
+session_store_legacy_json_path = ".assistant/assistant_sessions.json"
+max_context_tokens = 32768
+default_max_output_tokens = 8192
+
+[backend.llm.evals]
+# Separate defaults for benchmark runs (backend/evals/assistant/run_benchmark.py).
+# Keep this on local/free models by default; demo/app defaults can remain remote.
+default_provider = "ollama"
+default_model = "gemma4:e4b-it-q8_0"
+
+[backend.llm.ollama]
+enabled = true
+base_url = "http://127.0.0.1:11434"
+model = "gemma4:e4b-it-q8_0"
+discover_models = true
+keep_alive = "15m"
+models = [
+  "gemma4:e4b-it-q8_0",
+]
+
+[backend.llm.performance]
+# Upper bound on model->tool->model loop passes per turn.
+max_tool_iterations_per_turn = 6
+# Max tool calls accepted from a single model response.
+max_tool_calls_per_iteration = 4
+# Initial output-token budget for command-style prompts.
+command_max_output_tokens = 2048
+# Initial output-token budget for non-command/analysis prompts.
+analysis_max_output_tokens = 8192
+# Ceiling for adaptive retry when completion ends with length and no visible output.
+empty_completion_retry_max_output_tokens = 16384
+# "Slow response" threshold used by fallback logic.
+first_token_timeout_ms = 10000
+# Provider/model fallback target when a turn is slow or provider call fails.
+slow_turn_fallback_provider = "ollama"
+slow_turn_fallback_model = "gpt-oss:20b"
+# Keep-alive hint for Ollama-backed providers.
+ollama_keep_alive = "15m"
+# Provider/model override for command-style prompts.
+command_provider = "ollama"
+command_model = "gemma4:e4b-it-q8_0"
+
+[backend.llm.local_subprocess]
+enabled = false
+command = ["python3.11", "-m", "backend.tools.local_llm_worker"]
+model = "local-subprocess-model"
+models = ["local-subprocess-model"]
+
+[backend.llm.codex_cli]
+enabled = true
+persistent = true
+stdin_mode = "turn_eof"
+model = "gpt-5.3-codex"
+models = ["gpt-5.3-codex", "gpt-5.1-codex-mini"]
+command = ["codex", "exec"]
+args = ["--model", "{model_id}", "--json"]
+access_mode = "scenario_root"
+mcp_only_args = ["--sandbox", "read-only", "--skip-git-repo-check"]
+scenario_root_args = ["--sandbox", "workspace-write", "--skip-git-repo-check"]
+scenario_root = "/e/lunar_analyst_scenarios"
+mcp_sse_url = "http://127.0.0.1:8000/api/v1/mcp/sse"
+mcp_server_name = "lunar_analyst"
+mcp_auth_token_env = "LUNAR_ANALYST_MCP_TOKEN"
+timeout_seconds = 180
+
+[backend.llm.gemini_cli]
+enabled = false
+persistent = true
+stdin_mode = "turn_eof"
+model = "auto"
+models = ["pro", "flash", "flash-lite", "auto"]
+command = ["gemini"]
+args = ["--model", "{model_id}", "--allowed-mcp-server-names", "{mcp_server_name}", "--output-format", "json"]
+access_mode = "scenario_root"
+mcp_only_args = ["--approval-mode", "plan"]
+scenario_root_args = ["--approval-mode", "default", "--include-directories", "{scenario_root}"]
+# Omit an explicit scenario_root to inherit backend.workspace_root on platforms
+# where Gemini CLI is enabled.
+mcp_sse_url = "http://127.0.0.1:8000/api/v1/mcp/sse"
+mcp_server_name = "lunar_analyst"
+mcp_auth_token_env = "LUNAR_ANALYST_MCP_TOKEN"
+timeout_seconds = 180
+
+[backend.llm.remote.openai]
+enabled = true
+api_key_env = "OPENAI_API_KEY"
+token_caching = true
+prompt_cache_retention = "24h"
+model = "gpt-5-mini"
+models = ["gpt-5-mini", "gpt-5-nano", "gpt-5.4", "gpt-5.3-chat-latest", "gpt-5.2", "gpt-4.1-mini"]
+[backend.llm.remote.anthropic]
+enabled = false
+api_key_env = "ANTHROPIC_API_KEY"
+token_caching = true
+model = "claude-3-7-sonnet-latest"
+models = ["claude-3-7-sonnet-latest"]
+
+[backend.llm.remote.google]
+enabled = false
+api_key_env = "GOOGLE_API_KEY"
+token_caching = true
+model = "gemini-2.0-flash"
+models = ["gemini-2.0-flash"]
+
+[backend.llm.rag]
+enabled = true
+apply_to_providers = ["ollama", "openai"]
+top_k = 6
+max_context_chars = 6000
+routing_enabled = true
+default_channel = "mixed"
+max_query_terms = 24
+fallback_query_mode = "and_then_or"
+log_references = true
+channel_budget_procedural = { procedural = 0.8, domain = 0.2 }
+channel_budget_domain = { procedural = 0.2, domain = 0.8 }
+channel_budget_mixed = { procedural = 0.5, domain = 0.5 }
+global_index_relative_path = ".assistant/rag/global_rag.db"
+corpus_relative_root = "docs/rag_corpus"
+allowed_extensions = ["md", "txt", "csv", "pdf", "html", "htm", "json"]
+allow_external_file_sources = true
+allow_url_fetch = false
+external_source_allow_roots = ["docs/rag_corpus"]
+auto_refresh_on_startup = true
+
+[backend.mcp]
+enabled = true
+http_enabled = true
+stdio_enabled = true
+sse_enabled = true
+http_auth_token_env = "LUNAR_ANALYST_MCP_TOKEN"

@@ -1,0 +1,6 @@
+{"id":"cmd_001","suite":"deterministic_command","prompt":"Turn on slope layer.","expected_segments":[{"text":"Turn on slope layer.","class":"command","command":"layer.set_visible_by_name"}]}
+{"id":"other_001","suite":"generic_other","prompt":"Explain the scientific tradeoffs.","expected_segments":[{"text":"Explain the scientific tradeoffs.","class":"other"}]}
+{"id":"prod_001","suite":"create_product","prompt":"Create a hillshade from the primary DEM.","expected_segments":[{"text":"Create a hillshade from the primary DEM.","class":"create_product","product_type":"hillshade_raster"}]}
+{"id":"prod_002","suite":"create_product","prompt":"Create a slope raster from the primary DEM.","expected_segments":[{"text":"Create a slope raster from the primary DEM.","class":"create_product","product_type":"slope_raster"}]}
+{"id":"prod_003","suite":"create_product","prompt":"Create a threshold mask where slope <= 5 degrees.","expected_segments":[{"text":"Create a threshold mask where slope <= 5 degrees.","class":"create_product","product_type":"threshold_mask"}]}
+{"id":"prod_004","suite":"create_product_fallback","prompt":"Create a roughness raster from the primary DEM.","expected_segments":[{"text":"Create a roughness raster from the primary DEM.","class":"create_product","product_type":"roughness_raster"}]}

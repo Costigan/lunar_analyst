@@ -1,0 +1,37 @@
+Bug Report: Warped Display Derivatives Need Explicit Validity, Not Pixel-Value Sentinels
+Date: 2026-03-06
+
+Description:
+When a raster is warped for browser map display, uncovered collar pixels can be introduced around the transformed footprint. If the source raster has no nodata metadata, the current display derivative path can write those uncovered pixels without any explicit validity channel. For single-band byte hillshades this creates a visible collision: valid shadow pixels with value 0 become indistinguishable from uncovered collar pixels that also land as 0.
+
+Observed Failure:
+In the failing case, a hillshade with valid zero-valued pixels is warped into the map CRS (`ESRI:103878`). The warped rectangle appears in the correct location, but interior zero-valued shadow pixels render as transparent or hole-punched in the web map.
+
+Current Best Diagnosis:
+1. Warping & Collars: `backend/services/raster_delivery.py` reprojects rasters for map display. Rotated or skewed source grids can produce uncovered collar pixels in the rectangular output raster.
+2. Missing Validity Semantics: If the source has no nodata metadata, the current derivative generation path carries no explicit invalid-pixel signal into the warped output.
+3. Value Collision: For byte rasters, uncovered output cells can land as numeric 0, which collides with valid hillshade shadow values of 0.
+4. Frontend Consequence: The browser display path ends up treating some zero-valued pixels as transparent, but the precise mechanism still needs confirmation in the OpenLayers/geotiff.js/render-style stack. The important confirmed point is that the derivative does not currently encode validity separately from sample values.
+
+What I Think Is Correct:
+- The core bug is in the display-derivative contract, not in hillshade math.
+- We should not repurpose a valid sample value such as 0 to mean "transparent".
+- We should not clamp valid hillshade values from `[0, 255]` to `[1, 255]` just to reserve a sentinel.
+- The display derivative should synthesize explicit validity when reprojection creates invalid output coverage.
+- Synthesizing an alpha band for display, when needed, is the right direction for all pixel datatypes, not just bytes.
+
+Preferred Solution Direction:
+1. Detect when a map-display derivative contains invalid output pixels after warp, regardless of source datatype.
+2. Preserve data-band sample values exactly as display data; do not remap valid 0 values.
+3. When invalid pixels are present, synthesize explicit display validity (preferred: alpha band; acceptable equivalent: explicit mask that the frontend can honor reliably).
+4. Update the frontend map render path so transparency follows that explicit validity channel rather than any implicit pixel-value heuristic.
+5. Keep fully valid warped outputs on the simpler fast path with no extra transparency channel.
+
+Why This Is Better:
+- It keeps transparency semantics separate from scientific/sample values.
+- It works for byte, float, and other datatypes.
+- It avoids another collision later with different raster products or colormaps.
+- It aligns with display-layer concerns: this is a map-delivery encoding problem, not a source-raster mutation problem.
+
+Non-Preferred Alternative:
+- Forcing `nodata=0` and clamping valid byte data to `[1, 255]` would probably hide the symptom for hillshades, but it bakes display workarounds into data values and does not generalize cleanly across datatypes.

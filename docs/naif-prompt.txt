@@ -1,0 +1,47 @@
+Browse the NAIF SPICE kernel directories starting at https://naif.jpl.nasa.gov/naif/data.html and https://naif.jpl.nasa.gov/pub/naif/. 
+
+Two tasks for you are described below.
+
+I'm asking you to do these tasks to enable an agent (a large language
+model) integrated into the lunar_analyst application has the
+information it needs to discuss the spice kernels with users and to
+retrieve them from the NAIF website when needed.
+
+The scope of the lunar_analyst application is robotic or manned space
+missions that land on the moon.  Therefore, the relevant data or
+products (e.g., spice kernels) need to be related to the moon, the
+sun, the earth, locations on the moon or earth, e.g., ground stations,
+supporting products, like kernels describing leap-seconds or
+coordinate systems, or space missions that orbited, landed on or
+impacted the moon.  Data or kernels for other planets are not
+relevant, and you don't need to describe them.
+
+### Task A: generate a dataset for a SQLite database named 'space_data.db' in a table called 'spice_kernels'.
+Put this SQLite database in the docs/ directory.
+
+The scope 
+
+1. **Table Schema**: Create a table if it does not exist with the following columns:
+   - url (TEXT, Primary Key)
+   - filename (TEXT)
+   - date_range (TEXT)
+   - summary (TEXT)
+   - detailed_description (TEXT)
+
+2. **Data Extraction**: Visit the "Generic Kernels" (pub/naif/generic_kernels/) and at least three major "PDS Archived" missions (like Cassini, MRO, and Juno). For each major kernel file (specifically .bsp, .bc, .tls, and .tpc):
+   - Capture the full URL and the filename.
+   - Extract the date or date range the kernel covers (often found in accompanying .txt or .cmt summary files).
+   - Provide a 1-sentence summary of what the file represents.
+   - Provide a detailed description of its contents/purpose.
+
+3. **Output**: Generate the SQL 'CREATE TABLE' and 'INSERT OR IGNORE' statements for at least 15 representative kernel products. 
+
+4. **Execution**: Provide the output as a block of SQL code that I can pipe directly into 'sqlite3 space_data.db'. Do not download the files themselves; only scrape the metadata.
+
+### Task B: Write a description of the kernels and how to access them.
+    Pull information from the web pages and linked descriptions.
+    Include references.  Put this description in this project's docs/
+    directory.
+
+Write this document into the docs/ directory.
+

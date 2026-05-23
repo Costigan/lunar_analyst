@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "docs/contracts/schemas/v1/job.schema.json",
+  "title": "Job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id",
+    "scenario_id",
+    "job_type",
+    "mode",
+    "status",
+    "requested_at_utc",
+    "updated_at_utc"
+  ],
+  "properties": {
+    "job_id": { "type": "string", "minLength": 1 },
+    "scenario_id": { "type": "string", "minLength": 1 },
+    "job_type": { "type": "string", "minLength": 1 },
+    "mode": { "type": "string", "enum": ["queued", "immediate"] },
+    "status": { "type": "string", "enum": ["queued", "running", "completed", "failed", "cancelled"] },
+    "params": { "type": "object" },
+    "requested_at_utc": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$" },
+    "started_at_utc": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$" },
+    "finished_at_utc": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$" },
+    "updated_at_utc": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$" }
+  }
+}

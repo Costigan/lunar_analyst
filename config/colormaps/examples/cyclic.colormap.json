@@ -1,0 +1,17 @@
+{
+  "id": "aspect_phase_wheel",
+  "name": "Aspect Phase Wheel",
+  "mode": "cyclic",
+  "cyclic": {
+    "period": 360.0,
+    "domain_min": 0.0,
+    "domain_max": 360.0
+  },
+  "stops": [
+    { "value": 0.0, "color": [255, 0, 0, 1] },
+    { "value": 0.25, "color": [255, 255, 0, 1] },
+    { "value": 0.5, "color": [0, 255, 255, 1] },
+    { "value": 0.75, "color": [255, 0, 255, 1] },
+    { "value": 1.0, "color": [255, 0, 0, 1] }
+  ]
+}

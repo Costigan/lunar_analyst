@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "AssistantAccessMode": {
+      "enum": [
+        "mcp_only",
+        "scenario_root"
+      ],
+      "title": "AssistantAccessMode",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "prompt": {
+      "minLength": 1,
+      "title": "Prompt",
+      "type": "string"
+    },
+    "scenario_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scenario Id"
+    },
+    "constraints": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Constraints"
+    },
+    "base_layer_visible": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Layer Visible"
+    },
+    "provider_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Provider Id"
+    },
+    "model_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model Id"
+    },
+    "access_mode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssistantAccessMode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "thinking": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Thinking"
+    }
+  },
+  "required": [
+    "prompt"
+  ],
+  "title": "CreateAssistantTurnRequest",
+  "type": "object"
+}

@@ -1,0 +1,182 @@
+# Introduction
+
+The .NET Core solution in the current directory, called new_horizon, is
+the foundation of a tool I'm building, called lunar_analyst, that
+supports searching for and analyzing landing sites for lunar missions.
+
+lunar_analyst frames most of this analysis as map algebra operations
+producing new maps, plots or tables that select candidate landing
+sites (that meet a combination of constraints) or that answer an
+analyst's questions about those candidate landing sites.
+
+lunar_analyst uses an LLM to assist the human analyst in using the
+tools, responding to requests or questions and/or converting them into
+code that generates an answer, running that code and presenting the results.
+
+# new_horizon's existing capability
+
+Currently, new_horizon can take a list of nested digital elevation
+maps (geotiff files) and generate files containing horizons for the
+DEM pixel in the inner DEM.  Each file contains horizons for a patch
+of DEM 128 by 128 pixels in size.
+
+Using these horizons, new_horizon can calculate the illumination on
+the surface at the pixel of the inner DEM at any time between 1970 and
+2050.  new_horizon uses the Spice library developed by JPL's NAIF
+facility to do this.
+
+Each horizon is represented by a 1440 array of floats representing the
+elevation of the horizon in degrees at an azimuthal resolution
+of 0.25 degrees.
+
+new_horizon contains code in @LightmapPipeline that demonstrates how
+to calculate the illumination at a pixel.
+
+Using this, new_horizon calculates the 2D arrays representing the
+illumination at each DEM pixel in the range of 0 (no illumination) to
+255 (full illumination).  It writes arrays to geotiff files.
+
+I also want new_horizon to generate arrays of illumination values
+(either floats from 0 to 1 or bytes from 0 to 255) representing
+illumination over time.  (This code hasn't been written yet.)
+
+On this base, I want to extend new_horizon to implement map algebra
+operations based on the DEMs, functions of the DEMs like slope or
+roughness, and these lightmaps.
+
+In order to support plots and tables as well as images, I want to add
+python to the architecture.  My intent is to call new_horizon from a
+jupyter or marimo notebook.  This means that we need to compile this
+code into a DLL that can be called from python using Python.NET.
+
+I also want the user or the LLM to be able to specify a multi-step
+calculation involving arrays, to pass that specification to the C#
+DLL, and to have it carry that calculation out and return the result.
+In general, these will be functions over arrays, and they will be
+numpy arrays on the python size.
+
+I could do this with numpy in python, but the purpose of doing it in
+C# is to do the calculations with most of the computer's cores.
+
+The approach I'm considering is to pass an F# quoted expression which
+gets evaluated on the DLL side.
+
+user <-> LLM <-> Python + F#_code_in_strings <-> dotnet core dll <-> multi-core -or- ILGPU <-> GPU
+
+
+
+
+
+==============================================================================
+
+The intended stack is:
+
+
+
+Give me a detailed document covering this architecture and an implementation plan.
+
+This architecture extends the new_horizon application.
+
+This architecture specifically addresses the **2033 NASA delivery** requirement for high-reliability, compute-heavy lunar analysis by combining a flexible AI frontend with a "hardened" .NET compute backend.
+
+---
+
+# Architecture: Lunar Compute Bridge (LCB)
+
+## 1. System Stack Overview
+
+| Layer | Component | Technical Implementation |
+| --- | --- | --- |
+| **User Interface** | LLM Orchestrator | Translates user intent into Python scripts and F# Kernels. |
+| **Logic Layer** | Python 3.x | Manages GeoTIFF I/O via Rasterio/GDAL; handles NumPy buffers. |
+| **Bridge** | Python.NET (clr) | Hosts the .NET Core Runtime and manages interop. |
+| **Compiler Service** | F# Compiler Service | Compiles F# strings into IL/Delegates at runtime. |
+| **Execution Engine** | .NET / ILGPU | Executes logic on CPU (Parallel.For) or GPU (CUDA/PTX). |
+| **Memory** | Shared Memory | Zero-copy access via `IntPtr` to `Span<T>` mapping. |
+
+---
+
+## 2. Data Flow Architecture
+
+1. **Generation:** The LLM generates an F# code snippet (the "Kernel") and a Python script to call it.
+2. **Marshalling:** Python allocates a NumPy array for the LROC image. It passes the **Memory Address** (`IntPtr`) to the .NET DLL.
+3. **JIT Compilation:** The DLL uses **FSharp.Compiler.Service (FCS)** to compile the kernel string into an executable delegate.
+4. **Acceleration:**
+* **CPU Path:** Uses `System.Threading.Tasks` to process the array across all laptop cores.
+* **GPU Path:** Uses **ILGPU** to transpile the IL into a CUDA kernel for the **NVIDIA 5090 Mobile GPU**.
+
+
+5. **Return:** Since the memory is shared, the NumPy array in Python is updated instantly without a "return" copy.
+
+---
+
+## 3. Core Implementation (F# DLL)
+
+This is the internal logic for the `.NET Core` component that handles the LLM's string.
+
+```fsharp
+namespace LunarCompute
+
+open System
+open System.Runtime.InteropServices
+open FSharp.Compiler.SourceCodeServices
+
+type Engine() =
+    let checker = FSharpChecker.Create()
+
+    member this.Execute(fsharpCode: string, dataPtr: IntPtr, length: int) =
+        // 1. Wrap the NumPy pointer in a Span for safety
+        let buffer = Span<float32>(dataPtr.ToPointer(), length)
+        
+        // 2. Compile the string (Simplification of FCS logic)
+        // In practice, you'd use checker.CompileToDynamicAssembly
+        let kernel = this.CompileString(fsharpCode) 
+        
+        // 3. Multi-core execution
+        System.Threading.Tasks.Parallel.For(0, length, fun i ->
+            buffer.[i] <- kernel buffer.[i]
+        ) |> ignore
+
+    member private this.CompileString(code: string) : (float32 -> float32) =
+        // Dynamic compilation logic goes here
+        unimplemented()
+
+```
+
+---
+
+## 4. Implementation Plan
+
+### Phase 1: The Shared Memory Bridge (Weeks 1-2)
+
+* Build the .NET Core DLL project targeting `net8.0`.
+* Implement `IntPtr` to `Span<float32>` mapping.
+* Verify Python.NET can pass a `numpy.ctypeslib.as_ctypes` pointer without crashing the CLR.
+
+### Phase 2: Compiler Service Integration (Weeks 3-4)
+
+* Integrate `FSharp.Compiler.Service`.
+* Implement a **Kernel Cache**: Hash the F# string from the LLM. If the same math is requested again, skip compilation and use the cached delegate.
+* Define a "Standard Library" for the LLM (e.g., `LunarMath.Slope`, `LunarMath.HorizonShadow`).
+
+### Phase 3: ILGPU Accelerator (Weeks 5-8)
+
+* Implement the `ILGPU` Context and Accelerator (targeting the 5090).
+* Create a "Kernel Wrapper" that takes the compiled F# IL and pushes it to the GPU.
+* Add logic to handle 2D/3D grids for LROC image processing.
+
+### Phase 4: LLM Feedback Loop (Weeks 9+)
+
+* Establish an "Error Pipe": If the F# code fails to compile, return the specific compiler error message to the LLM so it can fix the code and retry.
+
+---
+
+## 5. Deployment Constraints (NASA 2033/2036)
+
+* **Safety:** The .NET DLL must run in a "No-IO" sandbox to prevent LLM-generated code from accessing the file system.
+* **Precision:** Support both `float32` (for speed) and `float64` (for landing site precision).
+* **Hardware:** Optimized for NVIDIA Ada Lovelace / Blackwell mobile architectures.
+
+---
+
+**Would you like me to focus on the specific ILGPU "Boilerplate" code required to turn that F# string into a GPU kernel?**

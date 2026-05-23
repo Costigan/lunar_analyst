@@ -1,0 +1,64 @@
+direction: right
+theme: 200
+
+# Entities
+UserPrompt: {
+  shape: text
+  label: "User Prose / Command"
+}
+
+Orchestrator: Assistant Service {
+  style: {
+    fill: "#f3e5f5"
+    stroke: "#4a148c"
+  }
+  Router: Hybrid Command Router {
+    ActionSpecs: YAML Config
+    Deterministic: Regex/Intent Match
+    ModelReasoned: LLM Tool Loop
+  }
+  Memory: Hierarchical Memory {
+    History: Message Transcript
+    Compaction: Summarized State
+  }
+}
+
+RAG: RAG Wrapper {
+  Retrieval: Channel-Aware {
+    Procedural: System Docs
+    Domain: Scientific Context
+  }
+  Index: global_rag.db
+}
+
+Providers: LLM Providers {
+  Local: Ollama (Subprocess)
+  Remote: OpenAI / Anthropic
+  External: Codex / Gemini CLI
+}
+
+MCP: MCP Gateway {
+  HTTP_SSE: POST /api/mcp
+  Stdio: run_mcp_server
+}
+
+Tools: Unified Tool Surface {
+  Registry: Tool Registry
+  Implementations: {
+    Scenario: Switch/List
+    Raster: Calc/Transform
+    Layer: Show/Hide
+    Job: Launch/Poll
+  }
+}
+
+# Flow
+UserPrompt -> Orchestrator.Router: Turn Start
+Orchestrator.Router -> RAG: Fetch Context
+RAG -> Orchestrator.Router: Augmented Prompt
+Orchestrator.Router -> Providers: Model Inference
+Providers -> Orchestrator.Router: Tool Proposals
+Orchestrator.Router -> MCP: External Agent Dispatch
+MCP -> Tools: Tool Invocation
+Tools -> Orchestrator.Router: Results / Artifacts
+Orchestrator.Router -> UserPrompt: Final Prose + Rich Artifacts

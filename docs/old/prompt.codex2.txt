@@ -1,0 +1,50 @@
+# Your Task
+
+Your task is to update the implementation plan for this product in lunar_analyst/docs/PLAN.md based on your review and these comments.
+
+I've read your plan review and here are my comments regarding your findings:
+
+- #1: I agree with all of your recommendations regarding the process model and marimo.
+- #2: I agree with your recommendations regarding pythonnet.  We will use use .net core 9.0.  We will run initially on windows 11 and will port to linux (probably ubuntu) later.  The C# compute code is heavily threaded using the task parallel library.  I think it is ok to use a single .net core compute process.
+- #3: The .NET core desktop application is a prototype only, and parity is not a requirement.  It is to be used for suggestions.
+- #4: I don't understand the issue in #4 API contract.  Put a discussion of this topic, with pros and cons,  in lunar_analyst/docs/API_CONTRACT.md .
+- #5: I agree with your reordering suggestion in #5.
+- #6: I agree with your recommendations.  Use SpatiaLite for local project DB and geotiff and GeoPackage for import and export formats.
+- #7: I agree with your recommendation.
+- #8: I agree with your recommendations.
+- #9. I agree with your recommendations
+
+Additions
+
+I agree with additions 1, 2 and 3.
+We won't have a parity test benchmark suite.
+I will need to work on tests, though.
+#5 is vague.  I need more detail.
+
+I accept the recommendation of separating the FastAPI and Marimo processes, but I need more detail about how they will communicate.
+
+I agree with the new phase ordering.
+
+Open questions
+
+1. Yes. The first release should be windows-only
+2. C# compute tasks should be asynchronous.  There should be a queue available, and it should be possible to start a job asynchronously, which runs in parallel with the processing of the queue.  Both kinds of tasks should support progress + cancellation.
+3. Use Spatialite as the project database.  Geotiffs, directories of Geotiffs and GeoPackages are formats for importing and exporting data.
+
+Analysis will be scenario-based.
+
+Each scenario will have a primary Digital Elevation Map (DEM).
+This is called ElevationMap in C#.  You need to create a class for python.
+This DEM provides coordinate system for the analysis, the rectangular area bounds for the analysis, and the pixel resolution for the analysis.
+The scenario will also contain products imported from outside or derived using the tools in this project.
+Many of the products will be geotiff files.  These should be stored in the filesystem with SpatiaLite keeping track of where they are.
+Files associated with a single scenario must be in a single directory.
+Files containing a given kind of data should be in their own subdirectories.
+
+We can work on what 'kind of data' means here, and how to cluster similar files together.
+For now, these are the kinds I know about
+1. The DEM and products derived directly from the DEM like slope, roughness, aspect, 
+2. Products related to lighting. This includes a directory containing horizon data calculated by new_horizon.  There will also be time-series lightmaps, which are directories of geotiff light map (or lightmap) images with timestamps in their names.   A light map is a byte geotiff whose values represent full shadow (0), full sun (255) and values in between, interpolated linearly.  There can also be individual gdal products that give the amount of time a each pixel is in sun over a time interval and so on.  Metadata for these products and their location in the filesystem needs to be tracked in SpatiaLite.
+
+If you have more questions, you can ask them before generating your new plan.
+If not, write your new plan into lunar_analyst/docs/PLAN_BY_CODEX.md

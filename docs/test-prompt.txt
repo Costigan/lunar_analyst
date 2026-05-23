@@ -1,0 +1,37 @@
+Use tool calls only.
+
+1) Call `capabilities.describe` with {}.
+2) Call `scenario.list` with {}.
+3) Return the raw tool outputs.
+
+If any tool is unavailable, return the exact error and stop.
+Do not answer from memory.
+
+Then, set scenario to test_scenario .
+Do not write or run Python scripts. Use only the raster.calculate tool.
+
+Compute three rasters for time range:
+- start_utc: 2027-01-01T00:00:00Z
+- stop_utc: 2027-01-03T00:00:00Z
+- step_in_hours: 1
+
+1) Average illumination fraction:
+   expression: avg(light) / 255.0
+   inputs: { "light": { "signal": "lighting_raster" } }
+   output_relative_path: analysis/map_algebra/avg_light_fraction.tif
+
+2) Worst Earth-above-horizon margin (degrees):
+   expression: min(earth)
+   inputs: { "earth": { "signal": "earth_above_horizon" } }
+   output_relative_path: analysis/map_algebra/min_earth_margin_deg.tif
+
+3) Sun-above-horizon variability:
+   expression: std(sun)
+   inputs: { "sun": { "signal": "sun_above_horizon" } }
+   output_relative_path: analysis/map_algebra/std_sun_margin_deg.tif
+
+Use mode=immediate and report each run_id, file_id, and output path.
+Also show the exact expressions you used before launching each job.
+
+Using raster.calculate only, run expression "light > 0" with input { "light": { "signal": "lighting_raster" } } over 2027-01-01T00:00:00Z to 2027-
+01-01T03:00:00Z step 1 hour. Use mode=immediate. Report the returned error code.

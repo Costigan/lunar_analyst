@@ -1,0 +1,40 @@
+I want to refactor the CompareHorizons project.
+
+I want to create reusable windows forms controls for the information
+displayed on the form in @CompareHorizons/CompareHorizonsForm.cs so
+that I can reuse these components in different configurations.
+
+Before any changes, CompareHorizonsForm contains:
+
+1. A simplified map that shows nested ElevationMaps.  The coordinate system in the map is based on the innermost ElevationMap.
+2. Multiple horizons on an elevation angle vs azimuth angle plot
+3. Multiple rays cast out from an observer (part of the algorithms for generating horizons) on a distance vs (elevation angle or slope or dem elevation or sample x or sample y) plot
+4. A list of checkboxes controlling visibility of various parts of the plots
+5. A time selector that uses a trackbar
+6. Some buttons
+
+I want you to create these components:
+
+1. A MapComponent for showing the spatial relationships between nested ElevationMaps
+   * This component has an ElevationMaps property that holds a list of ElevationMap objects. Assume they're ordered inner-to-outer.
+   * This component has a LineStrings property containing a list of LineString objects to be rendered. Each LineString has a name, a color, a line width, a pointer to an ElevationMap and a list of points.  The ElevationMap must be a member of the ElevationMaps property.  If it isn't, the LineString is ignored.  The points are in the coordinate system of the referenced ElevationMap.
+   * This component has a Layers property containing ImageMapLayer objects. Each ImageMapLayer has a string that is the name of the layer, a string that is the file paths of an image file (a geotiff or a png), a pointer to an ElevationMap and an opacity from 0 to 1.  The ElevationMap must be a member of the ElevationMaps property.  If it isn't, the ImageMapLayer is ignored.  The image is assumed to cover the ElevationMap and is displayed scaled and/or rotated to its four corners.  There can be multiple images associated with an ElevationMap.  The layers are drawn from the outer ElevationMap to the inner one, in reverse order in the ImageMapLayer list. That is, earlier ImageMapLayers on the list appear on top of later ones in the map.
+   * The map can be zoomed and scrolled by the mouse left button as currently happens.
+   * A property called SelectedPoint containing a PointF object on the map can be selected or moved by the mouse right button, as currently happens.
+   * An event that triggers when LineStrings changes.
+   * An event that triggers when Layers changes.
+   * An event that triggers when SelectedPoint changes.
+
+2. A HorizonPlot component
+   * This component has a Horizons property that contains a list of DisplayHorizon objects. Each DisplayHorizon object has a name, a color, a line width and an array of 1440 floats that represent the horizon.  The component draws all horizons in reverse order of the Horizons property.
+   * This component implements an event that triggers when Horizons changes.
+
+3. A RayPlot component
+   * This component has a RayTraces property that contains a list of RayTrace objects. RayTrace objects have a name, a line width, a color and a list of RayTraceSample instances.
+   * An event that triggers when RayTraces changes
+
+4. A component that contains a list of checkboxes. It lays these out vertically and sizes itself so that all of the checkboxes fit vertically and horizontally.
+   * A method that accepts a string and an event handler which adds a new checkbox to the end of the list of checkboxes, attaches the event handler to the new checkbox and updates its layout.
+
+Create these windows forms components.  Will you make each a UserControl?
+Then refactor CompareHorizonsForm to use them.

@@ -1,0 +1,77 @@
+PROMPT: I've generated 170 horizons and then shadow images.  The
+artifacts remain, when the sun is low.  Either we haven't implemented
+the fix correctly, or the artifacts in the shadow maps at the 128x128
+pixel patch boundaries has another cause.  Brainstore what they might
+be?  Note that we observed fairly large elevation differences in some
+azimuths for adjacent pixels across the patch boundaries.  The
+artifacts are visible at both the top and bottom edges as well as the
+left and right edges of the patches.  The true north explanation was a
+good one, but the effect doesn't seem large enough to be causing this.
+But maybe we're still confused.
+
+
+RESPONSE:
+
+* You're right - if the artifacts persist after the bin offset fix,
+  there's likely a deeper issue. Let me brainstorm potential root
+  causes:
+
+Most Likely Causes
+
+1. Ray Start Point Translation Issues
+
+In Compact Mode, we translate the ray start point from tile center to each pixel:
+
+ startPx = seg.StartPixel.X + dCol * scaleRatio;
+ startPy = seg.StartPixel.Y + dRow * scaleRatio;
+
+Problem: If scaleRatio or the translation is wrong, adjacent pixels
+could be sampling completely different terrain rather than slightly
+offset versions of the same ray.
+
+2. Polynomial Approximation Breakdown
+
+The cubic polynomial is fitted for the tile center ray, but used for all pixels. At tile edges (±64 pixels from center), the approximation might be fundamentally invalid.
+Evidence: You mentioned "large elevation differences" - suggests rays are hitting different terrain features entirely.
+
+3. DEM Resolution/Scaling Mismatches
+
+ float scaleRatio = primaryRes / activeRes;
+
+Problem: If multiple DEMs have different resolutions, adjacent tiles might use different scaleRatio values, causing ray start points to jump.
+
+Secondary Causes
+
+4. Observer Height Discontinuities
+
+Each pixel samples observer height from primary DEM:
+
+ float obsTerrain = SampleBilinear(primaryPV.DataLevel0, ...);
+
+If there are elevation jumps in the DEM data at tile boundaries, this creates artificial terrain steps.
+
+5. Coordinate Transform Precision
+
+At 85°S, coordinate transforms are numerically sensitive. Small precision errors could accumulate into large terrain sampling differences.
+
+6. Pipeline Processing Issues
+
+Maybe horizon generation is correct, but the shadow mapping pipeline has tile boundary artifacts when combining multiple horizon files.
+
+Diagnostic Questions
+
+ 1. Ray start point jumps: Are startPx, startPy continuous across tile boundaries?
+ 2. Polynomial validity: How far do rays deviate from the polynomial approximation at tile edges?
+ 3. Observer height: Are there elevation discontinuities in the primary DEM at tile boundaries?
+ 4. Multi-DEM scaling: Do all DEMs have consistent resolution and alignment?
+
+Next Steps to Isolate
+
+Would you like me to:
+
+ 1. Add debug logging to check ray start point continuity across boundaries?
+ 2. Create a visualization showing where rays actually sample terrain?
+ 3. Compare Compact vs Full Mode on a small region to see if the polynomial approximation is the issue?
+ 4. Check DEM data integrity at tile boundaries?
+
+The "large elevation differences" strongly suggests ray path errors rather than just azimuth bin issues.

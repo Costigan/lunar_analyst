@@ -1,0 +1,19 @@
+The problem is that 
+
+Write a new test to examine this problem.
+
+Use the usual ElevationMaps:
+
+            var demPaths = new[] {
+                @"D:\\datasets\\viper_v71_2024_medium\\other\\dem.tif",
+                @"D:/viper/maps/gsfc/site_20v2/Site20v2_final_adj_5mpp_surf.tif",
+                @"D:/viper/maps/lola/LDEM_80S_20M-2017-06-15-processed.tif"
+            };
+
+Focus on the 128 x 128 pixel patch whose upper left corner is at x=2048,y=128 in the inner DEM (dem.tif).
+Generate QT and Reference horizons at that location.
+
+Then generate QT and Reference horizons at the pixel above that
+x=2048,y=127, which is in a different patch.
+
+Compare elevation angles at azimuth 55 degrees.

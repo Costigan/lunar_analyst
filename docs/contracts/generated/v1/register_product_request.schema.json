@@ -1,0 +1,83 @@
+{
+  "$defs": {
+    "PolygonGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "default": "Polygon",
+          "pattern": "^Polygon$",
+          "title": "Type",
+          "type": "string"
+        },
+        "coordinates": {
+          "items": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "coordinates"
+      ],
+      "title": "PolygonGeometry",
+      "type": "object"
+    },
+    "Producer": {
+      "enum": [
+        "import",
+        "python_pipeline",
+        "new_horizon",
+        "manual"
+      ],
+      "title": "Producer",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "kind": {
+      "title": "Kind",
+      "type": "string"
+    },
+    "subkind": {
+      "title": "Subkind",
+      "type": "string"
+    },
+    "producer": {
+      "$ref": "#/$defs/Producer"
+    },
+    "crs": {
+      "title": "Crs",
+      "type": "string"
+    },
+    "footprint": {
+      "$ref": "#/$defs/PolygonGeometry"
+    },
+    "lineage": {
+      "additionalProperties": true,
+      "title": "Lineage",
+      "type": "object"
+    }
+  },
+  "required": [
+    "scenario_id",
+    "kind",
+    "subkind",
+    "producer",
+    "crs",
+    "footprint"
+  ],
+  "title": "RegisterProductRequest",
+  "type": "object"
+}

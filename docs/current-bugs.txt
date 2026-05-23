@@ -1,0 +1,1918 @@
+=========================================================================================== FAILURES ===========================================================================================
+________________________________________________________________ test_action_plan_fast_path_persists_selected_thinking_setting _________________________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_action_plan_fast_path_per0')
+
+    def test_action_plan_fast_path_persists_selected_thinking_setting(tmp_path: Path) -> None:
+        provider_registry = _ThinkingCapturingQueueProviderRegistry(
+            completions=[ProviderCompletion(text="Capabilities summary from model.", finish_reason="stop")],
+        )
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="describe-thinking"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt="describe capabilities",
+                provider_id="ollama",
+                model_id="gpt-oss:20b",
+                thinking="high",
+            ),
+        )
+        assert response.turn.status.value == "completed"
+        assert provider_registry.last_thinking is None
+        user_messages = [message for message in service.list_messages(session.session_id).messages if message.role.value == "user"]
+>       assert user_messages[-1].metadata.get("thinking") == "high"
+E       AssertionError: assert None == 'high'
+E        +  where None = <built-in method get of dict object at 0x7ac87cb590c0>('thinking')
+E        +    where <built-in method get of dict object at 0x7ac87cb590c0> = {}.get
+E        +      where {} = AssistantMessage(message_id='msg_48f15f9a1e6e49fbb492281f0bb75493', session_id='as_1ca3131410564f4cb059361f8574ef95', ... 'user'>, content='describe capabilities', created_at_utc='2026-04-05T23-38-38', turn_id=None, metadata={}, outputs=[]).metadata
+
+backend/tests/worker/test_assistant_tool_loop.py:1644: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  scenario_id=
+  prompt="describe capabilities"
+INFO: backend.services.assistant.assistant_service: assistant action planner result
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  action_count=1
+  actions=["capabilities.describe"]
+  unmatched=[]
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  request_provider=ollama
+  request_model=gpt-oss:20b
+  selected_provider=ollama
+  selected_model=gpt-oss:20b
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=action_plan:1
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  segment_count=1
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "describe capabilities",
+    "start_char": 0,
+    "end_char": 21,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  labels=["router_candidate"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "router_candidate",
+    "confidence": 0.9,
+    "matched_action_ids": [
+      "capabilities.describe"
+    ],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch action_plan_fast_path
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  provider=ollama
+  model=gpt-oss:20b
+  action_count=1
+  actions=["capabilities.describe"]
+INFO: backend.services.assistant.assistant_service: assistant action plan step
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  action=capabilities.describe
+  index=1
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  tool_call_id=call_163542330370492abe0db38dc6d8afca
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_1ca3131410564f4cb059361f8574ef95
+  turn_id=turn_6ac32e303f0343778674114d0649441c
+  tool_call_id=call_163542330370492abe0db38dc6d8afca
+  tool=capabilities.describe
+  result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+_______________________________________________________________ test_external_mcp_agent_provider_falls_back_when_model_not_found _______________________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_external_mcp_agent_provid3')
+
+    def test_external_mcp_agent_provider_falls_back_when_model_not_found(tmp_path: Path) -> None:
+        provider_registry = _ExternalAgentModelFallbackRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="external-agent-model-fallback"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(prompt="Describe dem.tif"),
+        )
+>       assert response.turn.status.value == "completed"
+E       AssertionError: assert 'failed' == 'completed'
+E
+E         - completed
+E         + failed
+
+backend/tests/worker/test_assistant_tool_loop.py:1727: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_e3298b4f835b4756afea1059ea1c36fd
+  scenario_id=
+  prompt="Describe dem.tif"
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_e3298b4f835b4756afea1059ea1c36fd
+  turn_id=turn_ef2a8cce9ca64eea900db76251c3fba0
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=artifact.describe_geotiff
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_ef2a8cce9ca64eea900db76251c3fba0
+  session_id=as_e3298b4f835b4756afea1059ea1c36fd
+  segment_count=1
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Describe dem. tif",
+    "start_char": 0,
+    "end_char": 16,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_ef2a8cce9ca64eea900db76251c3fba0
+  session_id=as_e3298b4f835b4756afea1059ea1c36fd
+  labels=["model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch parser_fast_path session_id=as_e3298b4f835b4756afea1059ea1c36fd turn_id=turn_ef2a8cce9ca64eea900db76251c3fba0 provider=None model=None tool=artifact.describe_geotiff
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_e3298b4f835b4756afea1059ea1c36fd
+  turn_id=turn_ef2a8cce9ca64eea900db76251c3fba0
+  tool_call_id=call_c0e2192b77844c5daa447c267142d326
+  tool=artifact.describe_geotiff
+  arguments={"path": "dem.tif"}
+______________________________________________________________ test_external_mcp_agent_provider_retries_unknown_mcp_server_error _______________________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_external_mcp_agent_provid4')
+
+    def test_external_mcp_agent_provider_retries_unknown_mcp_server_error(tmp_path: Path) -> None:
+        provider_registry = _ExternalAgentUnknownServerRetryRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="external-agent-retry"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt=(
+                    "Use tool calls only.\n"
+                    "1) Call `capabilities.describe` with {}.\n"
+                    "2) Call `scenario.list` with {}."
+                ),
+            ),
+        )
+        assert response.turn.status.value == "completed"
+        assert response.assistant_message is not None
+>       assert response.assistant_message.content == '{"capabilities":{"text":"ok"},"scenarios":{"items":[],"count":0}}'
+E       assert '{"tool_outpu...count": 0}}]}' == '{"capabiliti...],"count":0}}'
+E
+E         - {"capabilities":{"text":"ok"},"scenarios":{"items":[],"count":0}}
+E         + {"tool_outputs": [{"tool_name": "capabilities.describe", "arguments": {}, "output": {"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather t...
+E
+E         ...Full output truncated (1 line hidden), use '-vv' to show
+
+backend/tests/worker/test_assistant_tool_loop.py:1750: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  scenario_id=
+  prompt="Use tool calls only.\n1) Call `capabilities.describe` with {}.\n2) Call `scenario.list` with {}."
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  segment_count=5
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Use tool calls only.",
+    "start_char": 0,
+    "end_char": 20,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "1) Call `capabilities.",
+    "start_char": 21,
+    "end_char": 43,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s3",
+    "text": "describe` with {}.",
+    "start_char": 43,
+    "end_char": 61,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s4",
+    "text": "2) Call `scenario.",
+    "start_char": 62,
+    "end_char": 80,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s5",
+    "text": "list` with {}.",
+    "start_char": 80,
+    "end_char": 94,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  labels=["model_required", "model_required", "model_required", "model_required", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s3",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s4",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s5",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch explicit_tool_sequence session_id=as_54cf0802338144f38472859f46dd5e69 turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55 provider=None model=None call_count=2
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_54cf0802338144f38472859f46dd5e69 turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55 index=1 tool=capabilities.describe arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  tool_call_id=call_d7308d5756fc44b0b6aab1790e2c0ad0
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  tool_call_id=call_d7308d5756fc44b0b6aab1790e2c0ad0
+  tool=capabilities.describe
+  result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_54cf0802338144f38472859f46dd5e69 turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55 index=1 tool=capabilities.describe result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_54cf0802338144f38472859f46dd5e69 turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55 index=2 tool=scenario.list arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  tool_call_id=call_5715579102284bb5b05fe901f1ac8838
+  tool=scenario.list
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_54cf0802338144f38472859f46dd5e69
+  turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55
+  tool_call_id=call_5715579102284bb5b05fe901f1ac8838
+  tool=scenario.list
+  result={"items": [], "count": 0}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_54cf0802338144f38472859f46dd5e69 turn_id=turn_c7e712a5e67e4e73a7fc482e10684b55 index=2 tool=scenario.list result={"items": [], "count": 0}
+_____________________________________________________ test_external_mcp_agent_provider_unknown_server_falls_back_to_explicit_tool_sequence _____________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_external_mcp_agent_provid5')
+
+    def test_external_mcp_agent_provider_unknown_server_falls_back_to_explicit_tool_sequence(tmp_path: Path) -> None:
+        provider_registry = _ExternalAgentAlwaysUnknownServerRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="external-agent-safe-fallback"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt=(
+                    "Use tool calls only.\n\n"
+                    "1) Call `capabilities.describe` with {}.\n"
+                    "2) Call `scenario.list` with {}.\n"
+                    "3) Return the raw tool outputs."
+                ),
+            ),
+        )
+        assert response.turn.status.value == "completed"
+        assert response.assistant_message is not None
+        assert "tool_outputs" in response.assistant_message.content
+        assert "capabilities.describe" in response.assistant_message.content
+        assert "scenario.list" in response.assistant_message.content
+>       assert response.assistant_message.metadata.get("fallback_used") is True
+E       AssertionError: assert None is True
+E        +  where None = <built-in method get of dict object at 0x7ac87c5bca80>('fallback_used')
+E        +    where <built-in method get of dict object at 0x7ac87c5bca80> = {'explicit_tool_sequence': True}.get
+E        +      where {'explicit_tool_sequence': True} = AssistantMessage(message_id='msg_646590a25bb64d20b1236f9074d171c0', session_id='as_4f959f28a3734e5f91edc7f9a978a956', ...4-05T23-38-48', turn_id='turn_48898b881dab45cbb5937ae3d645f3d9', metadata={'explicit_tool_sequence': True}, outputs=[]).metadata
+E        +        where AssistantMessage(message_id='msg_646590a25bb64d20b1236f9074d171c0', session_id='as_4f959f28a3734e5f91edc7f9a978a956', ...4-05T23-38-48', turn_id='turn_48898b881dab45cbb5937ae3d645f3d9', metadata={'explicit_tool_sequence': True}, outputs=[]) = CreateAssistantTurnResponse(turn=AssistantTurn(turn_id='turn_48898b881dab45cbb5937ae3d645f3d9', session_id='as_4f959f2..., completed_at_utc='2026-04-05T23-38-48', result={'count': 0, 'items': []}, error=None, action_type=None, outputs=[])]).assistant_message
+
+backend/tests/worker/test_assistant_tool_loop.py:1776: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  scenario_id=
+  prompt="Use tool calls only.\n\n1) Call `capabilities.describe` with {}.\n2) Call `scenario.list` with {}.\n3) Return the raw tool outputs."
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  segment_count=6
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Use tool calls only.",
+    "start_char": 0,
+    "end_char": 20,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "1) Call `capabilities.",
+    "start_char": 22,
+    "end_char": 44,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s3",
+    "text": "describe` with {}.",
+    "start_char": 44,
+    "end_char": 62,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s4",
+    "text": "2) Call `scenario.",
+    "start_char": 63,
+    "end_char": 81,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s5",
+    "text": "list` with {}.",
+    "start_char": 81,
+    "end_char": 95,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s6",
+    "text": "3) Return the raw tool outputs.",
+    "start_char": 96,
+    "end_char": 127,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  labels=["model_required", "model_required", "model_required", "model_required", "model_required", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s3",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s4",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s5",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s6",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch explicit_tool_sequence session_id=as_4f959f28a3734e5f91edc7f9a978a956 turn_id=turn_48898b881dab45cbb5937ae3d645f3d9 provider=None model=None call_count=2
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_4f959f28a3734e5f91edc7f9a978a956 turn_id=turn_48898b881dab45cbb5937ae3d645f3d9 index=1 tool=capabilities.describe arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  tool_call_id=call_38861efc81504d5fb6b65cb6b5055275
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  tool_call_id=call_38861efc81504d5fb6b65cb6b5055275
+  tool=capabilities.describe
+  result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_4f959f28a3734e5f91edc7f9a978a956 turn_id=turn_48898b881dab45cbb5937ae3d645f3d9 index=1 tool=capabilities.describe result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_4f959f28a3734e5f91edc7f9a978a956 turn_id=turn_48898b881dab45cbb5937ae3d645f3d9 index=2 tool=scenario.list arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  tool_call_id=call_524c367d4cd941739dafd47263638c8f
+  tool=scenario.list
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_4f959f28a3734e5f91edc7f9a978a956
+  turn_id=turn_48898b881dab45cbb5937ae3d645f3d9
+  tool_call_id=call_524c367d4cd941739dafd47263638c8f
+  tool=scenario.list
+  result={"items": [], "count": 0}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_4f959f28a3734e5f91edc7f9a978a956 turn_id=turn_48898b881dab45cbb5937ae3d645f3d9 index=2 tool=scenario.list result={"items": [], "count": 0}
+______________________________________________________ test_external_mcp_agent_provider_cmdlet_error_falls_back_to_explicit_tool_sequence ______________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_external_mcp_agent_provid6')
+
+    def test_external_mcp_agent_provider_cmdlet_error_falls_back_to_explicit_tool_sequence(tmp_path: Path) -> None:
+        provider_registry = _ExternalAgentAlwaysCmdletToolErrorRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="external-agent-cmdlet-fallback"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt=(
+                    "Use tool calls only.\n\n"
+                    "1) Call `capabilities.describe` with {}.\n"
+                    "2) Call `scenario.list` with {}.\n"
+                    "3) Return the raw tool outputs."
+                ),
+            ),
+        )
+        assert response.turn.status.value == "completed"
+        assert response.assistant_message is not None
+        assert "tool_outputs" in response.assistant_message.content
+        assert "capabilities.describe" in response.assistant_message.content
+        assert "scenario.list" in response.assistant_message.content
+>       assert response.assistant_message.metadata.get("fallback_used") is True
+E       AssertionError: assert None is True
+E        +  where None = <built-in method get of dict object at 0x7ac87cbaef40>('fallback_used')
+E        +    where <built-in method get of dict object at 0x7ac87cbaef40> = {'explicit_tool_sequence': True}.get
+E        +      where {'explicit_tool_sequence': True} = AssistantMessage(message_id='msg_cc897d3c3f394cca892a31d75ad7df42', session_id='as_3cdc3a698189458a91bc6834410596ba', ...4-05T23-38-49', turn_id='turn_e7d74b68b4c34d348e590cb0f114c360', metadata={'explicit_tool_sequence': True}, outputs=[]).metadata
+E        +        where AssistantMessage(message_id='msg_cc897d3c3f394cca892a31d75ad7df42', session_id='as_3cdc3a698189458a91bc6834410596ba', ...4-05T23-38-49', turn_id='turn_e7d74b68b4c34d348e590cb0f114c360', metadata={'explicit_tool_sequence': True}, outputs=[]) = CreateAssistantTurnResponse(turn=AssistantTurn(turn_id='turn_e7d74b68b4c34d348e590cb0f114c360', session_id='as_3cdc3a6..., completed_at_utc='2026-04-05T23-38-49', result={'count': 0, 'items': []}, error=None, action_type=None, outputs=[])]).assistant_message
+
+backend/tests/worker/test_assistant_tool_loop.py:1802: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  scenario_id=
+  prompt="Use tool calls only.\n\n1) Call `capabilities.describe` with {}.\n2) Call `scenario.list` with {}.\n3) Return the raw tool outputs."
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  segment_count=6
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Use tool calls only.",
+    "start_char": 0,
+    "end_char": 20,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "1) Call `capabilities.",
+    "start_char": 22,
+    "end_char": 44,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s3",
+    "text": "describe` with {}.",
+    "start_char": 44,
+    "end_char": 62,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s4",
+    "text": "2) Call `scenario.",
+    "start_char": 63,
+    "end_char": 81,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s5",
+    "text": "list` with {}.",
+    "start_char": 81,
+    "end_char": 95,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s6",
+    "text": "3) Return the raw tool outputs.",
+    "start_char": 96,
+    "end_char": 127,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  labels=["model_required", "model_required", "model_required", "model_required", "model_required", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s3",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s4",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s5",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s6",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch explicit_tool_sequence session_id=as_3cdc3a698189458a91bc6834410596ba turn_id=turn_e7d74b68b4c34d348e590cb0f114c360 provider=None model=None call_count=2
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_3cdc3a698189458a91bc6834410596ba turn_id=turn_e7d74b68b4c34d348e590cb0f114c360 index=1 tool=capabilities.describe arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  tool_call_id=call_130515d2f96142e0a74df675d848b5b5
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  tool_call_id=call_130515d2f96142e0a74df675d848b5b5
+  tool=capabilities.describe
+  result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_3cdc3a698189458a91bc6834410596ba turn_id=turn_e7d74b68b4c34d348e590cb0f114c360 index=1 tool=capabilities.describe result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_3cdc3a698189458a91bc6834410596ba turn_id=turn_e7d74b68b4c34d348e590cb0f114c360 index=2 tool=scenario.list arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  tool_call_id=call_50fc5b14467e45db921bd1ff3e0420f5
+  tool=scenario.list
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_3cdc3a698189458a91bc6834410596ba
+  turn_id=turn_e7d74b68b4c34d348e590cb0f114c360
+  tool_call_id=call_50fc5b14467e45db921bd1ff3e0420f5
+  tool=scenario.list
+  result={"items": [], "count": 0}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_3cdc3a698189458a91bc6834410596ba turn_id=turn_e7d74b68b4c34d348e590cb0f114c360 index=2 tool=scenario.list result={"items": [], "count": 0}
+_________________________________________________ test_external_mcp_agent_provider_pwsh_frame_only_error_falls_back_to_explicit_tool_sequence __________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_external_mcp_agent_provid7')
+
+    def test_external_mcp_agent_provider_pwsh_frame_only_error_falls_back_to_explicit_tool_sequence(tmp_path: Path) -> None:
+        provider_registry = _ExternalAgentAlwaysPwshFrameOnlyErrorRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="external-agent-pwsh-frame-fallback"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt=(
+                    "Use tool calls only.\n\n"
+                    "1) Call `capabilities.describe` with {}.\n"
+                    "2) Call `scenario.list` with {}.\n"
+                    "3) Return the raw tool outputs."
+                ),
+            ),
+        )
+        assert response.turn.status.value == "completed"
+        assert response.assistant_message is not None
+        assert "tool_outputs" in response.assistant_message.content
+        assert "capabilities.describe" in response.assistant_message.content
+        assert "scenario.list" in response.assistant_message.content
+>       assert response.assistant_message.metadata.get("fallback_used") is True
+E       AssertionError: assert None is True
+E        +  where None = <built-in method get of dict object at 0x7ac87ccb9e40>('fallback_used')
+E        +    where <built-in method get of dict object at 0x7ac87ccb9e40> = {'explicit_tool_sequence': True}.get
+E        +      where {'explicit_tool_sequence': True} = AssistantMessage(message_id='msg_c1a66ba5155f4eedbacf28f65928c1dc', session_id='as_34c91240f05f41e19b516f440f3f4b0d', ...4-05T23-38-50', turn_id='turn_18983524a8a04d5d924f94fd114c7751', metadata={'explicit_tool_sequence': True}, outputs=[]).metadata
+E        +        where AssistantMessage(message_id='msg_c1a66ba5155f4eedbacf28f65928c1dc', session_id='as_34c91240f05f41e19b516f440f3f4b0d', ...4-05T23-38-50', turn_id='turn_18983524a8a04d5d924f94fd114c7751', metadata={'explicit_tool_sequence': True}, outputs=[]) = CreateAssistantTurnResponse(turn=AssistantTurn(turn_id='turn_18983524a8a04d5d924f94fd114c7751', session_id='as_34c9124..., completed_at_utc='2026-04-05T23-38-50', result={'count': 0, 'items': []}, error=None, action_type=None, outputs=[])]).assistant_message
+
+backend/tests/worker/test_assistant_tool_loop.py:1828: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  scenario_id=
+  prompt="Use tool calls only.\n\n1) Call `capabilities.describe` with {}.\n2) Call `scenario.list` with {}.\n3) Return the raw tool outputs."
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  segment_count=6
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Use tool calls only.",
+    "start_char": 0,
+    "end_char": 20,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "1) Call `capabilities.",
+    "start_char": 22,
+    "end_char": 44,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s3",
+    "text": "describe` with {}.",
+    "start_char": 44,
+    "end_char": 62,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s4",
+    "text": "2) Call `scenario.",
+    "start_char": 63,
+    "end_char": 81,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s5",
+    "text": "list` with {}.",
+    "start_char": 81,
+    "end_char": 95,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s6",
+    "text": "3) Return the raw tool outputs.",
+    "start_char": 96,
+    "end_char": 127,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  labels=["model_required", "model_required", "model_required", "model_required", "model_required", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s3",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s4",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s5",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s6",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch explicit_tool_sequence session_id=as_34c91240f05f41e19b516f440f3f4b0d turn_id=turn_18983524a8a04d5d924f94fd114c7751 provider=None model=None call_count=2
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_34c91240f05f41e19b516f440f3f4b0d turn_id=turn_18983524a8a04d5d924f94fd114c7751 index=1 tool=capabilities.describe arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  tool_call_id=call_596af02af20747a48bdd95c4c4e0daca
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  tool_call_id=call_596af02af20747a48bdd95c4c4e0daca
+  tool=capabilities.describe
+  result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_34c91240f05f41e19b516f440f3f4b0d turn_id=turn_18983524a8a04d5d924f94fd114c7751 index=1 tool=capabilities.describe result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_34c91240f05f41e19b516f440f3f4b0d turn_id=turn_18983524a8a04d5d924f94fd114c7751 index=2 tool=scenario.list arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  tool_call_id=call_26893da1682048a6876099f50ea06a97
+  tool=scenario.list
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_34c91240f05f41e19b516f440f3f4b0d
+  turn_id=turn_18983524a8a04d5d924f94fd114c7751
+  tool_call_id=call_26893da1682048a6876099f50ea06a97
+  tool=scenario.list
+  result={"items": [], "count": 0}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_34c91240f05f41e19b516f440f3f4b0d turn_id=turn_18983524a8a04d5d924f94fd114c7751 index=2 tool=scenario.list result={"items": [], "count": 0}
+____________________________________________________ test_external_mcp_agent_provider_handshake_error_falls_back_to_explicit_tool_sequence _____________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_external_mcp_agent_provid8')
+
+    def test_external_mcp_agent_provider_handshake_error_falls_back_to_explicit_tool_sequence(tmp_path: Path) -> None:
+        provider_registry = _ExternalAgentAlwaysMcpHandshakeErrorRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="external-agent-handshake-fallback"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt=(
+                    "Use tool calls only.\n\n"
+                    "1) Call `capabilities.describe` with {}.\n"
+                    "2) Call `scenario.list` with {}.\n"
+                    "3) Return the raw tool outputs."
+                ),
+            ),
+        )
+        assert response.turn.status.value == "completed"
+        assert response.assistant_message is not None
+        assert "tool_outputs" in response.assistant_message.content
+        assert "capabilities.describe" in response.assistant_message.content
+        assert "scenario.list" in response.assistant_message.content
+>       assert response.assistant_message.metadata.get("fallback_used") is True
+E       AssertionError: assert None is True
+E        +  where None = <built-in method get of dict object at 0x7ac87cbd2dc0>('fallback_used')
+E        +    where <built-in method get of dict object at 0x7ac87cbd2dc0> = {'explicit_tool_sequence': True}.get
+E        +      where {'explicit_tool_sequence': True} = AssistantMessage(message_id='msg_fad801569b294a8d892c8898b6a77ed4', session_id='as_8fa3ca6c4046421c957fc658a40990ee', ...4-05T23-38-52', turn_id='turn_a99872da394545eba043bc3d26a95f5f', metadata={'explicit_tool_sequence': True}, outputs=[]).metadata
+E        +        where AssistantMessage(message_id='msg_fad801569b294a8d892c8898b6a77ed4', session_id='as_8fa3ca6c4046421c957fc658a40990ee', ...4-05T23-38-52', turn_id='turn_a99872da394545eba043bc3d26a95f5f', metadata={'explicit_tool_sequence': True}, outputs=[]) = CreateAssistantTurnResponse(turn=AssistantTurn(turn_id='turn_a99872da394545eba043bc3d26a95f5f', session_id='as_8fa3ca6..., completed_at_utc='2026-04-05T23-38-52', result={'count': 0, 'items': []}, error=None, action_type=None, outputs=[])]).assistant_message
+
+backend/tests/worker/test_assistant_tool_loop.py:1854: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  scenario_id=
+  prompt="Use tool calls only.\n\n1) Call `capabilities.describe` with {}.\n2) Call `scenario.list` with {}.\n3) Return the raw tool outputs."
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  segment_count=6
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Use tool calls only.",
+    "start_char": 0,
+    "end_char": 20,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "1) Call `capabilities.",
+    "start_char": 22,
+    "end_char": 44,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s3",
+    "text": "describe` with {}.",
+    "start_char": 44,
+    "end_char": 62,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s4",
+    "text": "2) Call `scenario.",
+    "start_char": 63,
+    "end_char": 81,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s5",
+    "text": "list` with {}.",
+    "start_char": 81,
+    "end_char": 95,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s6",
+    "text": "3) Return the raw tool outputs.",
+    "start_char": 96,
+    "end_char": 127,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  labels=["model_required", "model_required", "model_required", "model_required", "model_required", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s3",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s4",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s5",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s6",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch explicit_tool_sequence session_id=as_8fa3ca6c4046421c957fc658a40990ee turn_id=turn_a99872da394545eba043bc3d26a95f5f provider=None model=None call_count=2
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_8fa3ca6c4046421c957fc658a40990ee turn_id=turn_a99872da394545eba043bc3d26a95f5f index=1 tool=capabilities.describe arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  tool_call_id=call_4cda6b45e2fa408da6e9e372ac355296
+  tool=capabilities.describe
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  tool_call_id=call_4cda6b45e2fa408da6e9e372ac355296
+  tool=capabilities.describe
+  result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_8fa3ca6c4046421c957fc658a40990ee turn_id=turn_a99872da394545eba043bc3d26a95f5f index=1 tool=capabilities.describe result={"text": "Lunar Analyst can manage scenarios, import and catalog geospatial products, render map layers, launch typed compute jobs, stream job events, and inspect artifacts (GeoTIFFs, tables, plots). Use `tools.search` for keyword lookup and `tools.describe` for exact tool contract/schema lookup when needed. Use metadata tools, preview tools, and stats tools deliberately rather than expecting one tool to do all three. If an inspection tool exists, use it instead of describing an artifact from memory. If no typed job exists and script tools are available, prefer `scenario.write_run_script` over separate write and run calls, then inspect the resulting artifacts. Scenario scripts run with the scenario root as the working directory, so prefer scenario-relative paths instead of absolute local paths. New user-requested outputs should default to the scenario top-level directory unless the user asks for a different location.", "tool_count": 42, "tool_names": ["artifact.describe_geotiff", "artifact.describe_plot", "artifact.describe_table", "artifact.preview_geotiff", "artifact.stats_geotiff", "assistant_rag_ingest", "capabilities.describe", "generate_average_sun_fraction_raster", "generate_combined_sun_earth_max_contiguous_duration_raster", "generate_earth_above_terrain_duration_raster", "generate_horizons", "generate_psr_raster", "job.cancel", "job.launch", "jobs.list_predefined", "jobs.run_predefined", "layer.list_visible", "layer.update_state", "product.files", "product.list", "raster.calculate", "raster.transform", "runs.cancel", "runs.get_logs", "runs.get_status", "scenario.get", "scenario.import_geotiff", "scenario.list", "scenario.list_notebooks", "scenario.list_scripts", "scenario.move_path", "scenario.rag_ingest", "scenario.revoke_script_overwrite", "scenario.run_marimo_notebook", "scenario.run_script", "scenario.set_current", "scenario.write_run_script", "scenario.write_script", "terrain.mask_connectivity_metrics", "terrain.viewshed", "tools.describe", "tools.search"], "tools": [{"name": "artifact.describe_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_plot", "requires_confirmation": false, "action_type": null}, {"name": "artifact.describe_table", "requires_confirmation": false, "action_type": null}, {"name": "artifact.preview_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "artifact.stats_geotiff", "requires_confirmation": false, "action_type": null}, {"name": "assistant_rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "capabilities.describe", "requires_confirmation": false, "action_type": null}, {"name": "generate_average_sun_fraction_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_combined_sun_earth_max_contiguous_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_earth_above_terrain_duration_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_horizons", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "generate_psr_raster", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "job.launch", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "jobs.list_predefined", "requires_confirmation": false, "action_type": null}, {"name": "jobs.run_predefined", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "layer.list_visible", "requires_confirmation": false, "action_type": null}, {"name": "layer.update_state", "requires_confirmation": true, "action_type": "update_layer_state"}, {"name": "product.files", "requires_confirmation": false, "action_type": null}, {"name": "product.list", "requires_confirmation": false, "action_type": null}, {"name": "raster.calculate", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "raster.transform", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.cancel", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "runs.get_logs", "requires_confirmation": false, "action_type": null}, {"name": "runs.get_status", "requires_confirmation": false, "action_type": null}, {"name": "scenario.get", "requires_confirmation": false, "action_type": null}, {"name": "scenario.import_geotiff", "requires_confirmation": true, "action_type": "import_file"}, {"name": "scenario.list", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_notebooks", "requires_confirmation": false, "action_type": null}, {"name": "scenario.list_scripts", "requires_confirmation": false, "action_type": null}, {"name": "scenario.move_path", "requires_confirmation": true, "action_type": "move_path"}, {"name": "scenario.rag_ingest", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.revoke_script_overwrite", "requires_confirmation": false, "action_type": null}, {"name": "scenario.run_marimo_notebook", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.set_current", "requires_confirmation": false, "action_type": null}, {"name": "scenario.write_run_script", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "scenario.write_script", "requires_confirmation": true, "action_type": "write_notebook"}, {"name": "terrain.mask_connectivity_metrics", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "terrain.viewshed", "requires_confirmation": true, "action_type": "launch_job"}, {"name": "tools.describe", "requires_confirmation": false, "action_type": null}, {"name": "tools.search", "requires_confirmation": false, "action_type": null}]}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence call session_id=as_8fa3ca6c4046421c957fc658a40990ee turn_id=turn_a99872da394545eba043bc3d26a95f5f index=2 tool=scenario.list arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  tool_call_id=call_b742bb8590f04f19808e431533a9e0b8
+  tool=scenario.list
+  arguments={}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_8fa3ca6c4046421c957fc658a40990ee
+  turn_id=turn_a99872da394545eba043bc3d26a95f5f
+  tool_call_id=call_b742bb8590f04f19808e431533a9e0b8
+  tool=scenario.list
+  result={"items": [], "count": 0}
+INFO: backend.services.assistant.assistant_service: assistant explicit tool sequence result session_id=as_8fa3ca6c4046421c957fc658a40990ee turn_id=turn_a99872da394545eba043bc3d26a95f5f index=2 tool=scenario.list result={"items": [], "count": 0}
+______________________________________________________________________ test_provider_switch_triggers_compaction_and_reset ______________________________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_provider_switch_triggers_0')
+
+    def test_provider_switch_triggers_compaction_and_reset(tmp_path: Path) -> None:
+        class _SwitchingRegistry(_CompactionResetRegistry):
+            def __init__(self) -> None:
+                super().__init__()
+                self._calls = 0
+
+            def select_for_prompt(self, *, provider_id, model_id, is_command_turn):  # noqa: ANN001
+                del provider_id, model_id, is_command_turn
+                self._calls += 1
+                if self._calls == 1:
+                    return ProviderSelection(provider_id="codex_cli", model_id="gpt-5.3-codex", execution_mode="external_mcp_agent")
+                return ProviderSelection(provider_id="gemini_cli", model_id="pro", execution_mode="external_mcp_agent")
+
+            def complete(self, **kwargs):  # noqa: ANN003, ANN201
+                provider_id = str(kwargs.get("provider_id", ""))
+                return ProviderCompletion(text=f"{provider_id} response", finish_reason="stop")
+
+            def catalog(self):  # noqa: ANN201
+                return {
+                    "providers": [
+                        {"provider_id": "codex_cli", "models": ["gpt-5.3-codex"]},
+                        {"provider_id": "gemini_cli", "models": ["pro"]},
+                    ]
+                }
+
+        provider_registry = _SwitchingRegistry()
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="provider-switch"))
+
+        first = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(prompt="Describe dem.tif"),
+        )
+>       assert first.turn.status.value == "completed"
+E       AssertionError: assert 'failed' == 'completed'
+E
+E         - completed
+E         + failed
+
+backend/tests/worker/test_assistant_tool_loop.py:1911: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_1c8db2c802244b1dbfee418831e967c2
+  scenario_id=
+  prompt="Describe dem.tif"
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_1c8db2c802244b1dbfee418831e967c2
+  turn_id=turn_23892e7013df490bafbaf672fd5f1f44
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=artifact.describe_geotiff
+  scenario_id=
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_23892e7013df490bafbaf672fd5f1f44
+  session_id=as_1c8db2c802244b1dbfee418831e967c2
+  segment_count=1
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Describe dem. tif",
+    "start_char": 0,
+    "end_char": 16,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_23892e7013df490bafbaf672fd5f1f44
+  session_id=as_1c8db2c802244b1dbfee418831e967c2
+  labels=["model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch parser_fast_path session_id=as_1c8db2c802244b1dbfee418831e967c2 turn_id=turn_23892e7013df490bafbaf672fd5f1f44 provider=None model=None tool=artifact.describe_geotiff
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_1c8db2c802244b1dbfee418831e967c2
+  turn_id=turn_23892e7013df490bafbaf672fd5f1f44
+  tool_call_id=call_b00fbc02a0b34c1a9003776c087cc4b9
+  tool=artifact.describe_geotiff
+  arguments={"path": "dem.tif"}
+_____________________________________________________________ test_action_plan_partial_handoff_runs_deterministic_then_model_loop ______________________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_action_plan_partial_hando0'), monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ac87dbafc20>
+
+    def test_action_plan_partial_handoff_runs_deterministic_then_model_loop(
+        tmp_path: Path,
+        monkeypatch,
+    ) -> None:
+        provider_registry = _QueueProviderRegistry(
+            completions=[ProviderCompletion(text="Capabilities summary from model.", finish_reason="stop")]
+        )
+        service = _build_service(tmp_path, provider_registry)
+        session = service.create_session(CreateAssistantSessionRequest(title="action-plan-partial-handoff"))
+        calls: list[tuple[str, dict[str, object]]] = []
+
+        def _fake_execute_tool(_services, *, tool_name: str, arguments: dict[str, object]):  # noqa: ANN001
+            calls.append((tool_name, dict(arguments)))
+            if tool_name == "scenario.set_current":
+                return {
+                    "status": "selected",
+                    "scenario": {"scenario_id": "scn_test_scenario"},
+                }
+            raise AssertionError(f"Unexpected tool execution: {tool_name}")
+
+        monkeypatch.setattr("backend.services.assistant.assistant_service.execute_tool", _fake_execute_tool)
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt="Switch to test_scenario, then describe capabilities.",
+                scenario_id="scn_1",
+            ),
+        )
+        assert response.turn.status.value == "completed"
+>       assert response.turn.usage.get("turn_handling_mode") == "model_tool_loop"
+E       AssertionError: assert 'action_plan_fast_path' == 'model_tool_loop'
+E
+E         - model_tool_loop
+E         + action_plan_fast_path
+
+backend/tests/worker/test_assistant_tool_loop.py:2228: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  scenario_id=scn_1
+  prompt="Switch to test_scenario, then describe capabilities."
+INFO: backend.services.assistant.assistant_service: assistant action planner result
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  action_count=1
+  actions=["scenario.switch"]
+  unmatched=["describe capabilities."]
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=action_plan_partial:1
+  scenario_id=scn_1
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  segment_count=2
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "Switch to test_scenario",
+    "start_char": 0,
+    "end_char": 23,
+    "confidence": 0.88,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "describe capabilities.",
+    "start_char": 30,
+    "end_char": 52,
+    "confidence": 0.88,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  labels=["router_candidate", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "router_candidate",
+    "confidence": 0.96,
+    "matched_action_ids": [
+      "scenario.switch"
+    ],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch action_plan_partial session_id=as_bc79a385b4264038b2bebb28b9a550b5 turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a provider=None model=None action_count=1 unmatched=['describe capabilities.']
+INFO: backend.services.assistant.assistant_service: assistant action plan step
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a
+  action=scenario.switch
+  index=1
+  tool=scenario.set_current
+  arguments={"scenario_ref": "test_scenario"}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a
+  tool_call_id=call_14ac6ab78e144c988863a1e3137a7319
+  tool=scenario.set_current
+  arguments={"scenario_ref": "test_scenario"}
+INFO: backend.services.assistant.assistant_service: assistant tool execute result
+  session_id=as_bc79a385b4264038b2bebb28b9a550b5
+  turn_id=turn_8368aa7f5cf441e58e1192a1f4f6bf1a
+  tool_call_id=call_14ac6ab78e144c988863a1e3137a7319
+  tool=scenario.set_current
+  result={"status": "selected", "scenario": {"scenario_id": "scn_test_scenario"}}
+________________________________________________________ test_action_plan_agent_substep_resolves_layer_name_then_requires_confirmation _________________________________________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_action_plan_agent_substep0')
+
+    def test_action_plan_agent_substep_resolves_layer_name_then_requires_confirmation(tmp_path: Path) -> None:
+        provider_registry = _QueueProviderRegistry(
+            completions=[ProviderCompletion(text='{"layer_name":"slope"}', finish_reason="stop")]
+        )
+        service = _build_service(
+            tmp_path,
+            provider_registry,
+            deterministic_agent_substeps_enabled=True,
+        )
+        session = service.create_session(CreateAssistantSessionRequest(title="agent-substep"))
+        response = service.create_turn(
+            session.session_id,
+            CreateAssistantTurnRequest(
+                prompt="set visibility for layer slope to on",
+                scenario_id="scn_1",
+            ),
+        )
+>       assert response.turn.status.value == "confirmation_required"
+E       AssertionError: assert 'failed' == 'confirmation_required'
+E
+E         - confirmation_required
+E         + failed
+
+backend/tests/worker/test_assistant_tool_loop.py:2251: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_7b68507eef6447c3adff0f6f638b08ce
+  scenario_id=scn_1
+  prompt="set visibility for layer slope to on"
+INFO: backend.services.assistant.assistant_service: assistant action planner result
+  session_id=as_7b68507eef6447c3adff0f6f638b08ce
+  action_count=1
+  actions=["layer.resolve_visibility_with_agent"]
+  unmatched=[]
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_7b68507eef6447c3adff0f6f638b08ce
+  turn_id=turn_6ee2aefbf76041b6ab651e4310672c21
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=action_plan:1
+  scenario_id=scn_1
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_6ee2aefbf76041b6ab651e4310672c21
+  session_id=as_7b68507eef6447c3adff0f6f638b08ce
+  segment_count=1
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "set visibility for layer slope to on",
+    "start_char": 0,
+    "end_char": 36,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_6ee2aefbf76041b6ab651e4310672c21
+  session_id=as_7b68507eef6447c3adff0f6f638b08ce
+  labels=["router_candidate"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "router_candidate",
+    "confidence": 0.9,
+    "matched_action_ids": [
+      "layer.resolve_visibility_with_agent"
+    ],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch action_plan_fast_path
+  session_id=as_7b68507eef6447c3adff0f6f638b08ce
+  turn_id=turn_6ee2aefbf76041b6ab651e4310672c21
+  provider=None
+  model=None
+  action_count=1
+  actions=["layer.resolve_visibility_with_agent"]
+INFO: backend.services.assistant.assistant_service: assistant action plan agent step session_id=as_7b68507eef6447c3adff0f6f638b08ce turn_id=turn_6ee2aefbf76041b6ab651e4310672c21 action=layer.resolve_visibility_with_agent index=1 allowed_tools=['layer.list_visible', 'product.list'] objective="Resolve the target layer name for query \"slope\" in the active scenario and return JSON."
+________________________________________________________________________ test_segmentation_classification_golden_cases _________________________________________________________________________
+
+    def test_segmentation_classification_golden_cases() -> None:
+        segmenter = PromptSegmenter()
+        classifier = PromptClassifier()
+        router = HybridCommandRouter(enabled=True)
+
+        for case in _load_cases():
+            prompt = str(case.get("prompt", ""))
+            expected_segments = list(case.get("expected_segments", []))
+            expectations = dict(case.get("expectations", {}))
+
+            actual_segments = segmenter.segment(prompt)
+            actual_classes = classifier.classify(
+                segments=actual_segments,
+                scenario_id="scn_test",
+                router=router,
+            )
+            actual_texts = [item.text for item in actual_segments]
+            actual_labels = [item.label for item in actual_classes]
+
+            expected_texts = [str(item.get("text", "")) for item in expected_segments]
+            expected_labels = [str(item.get("label", "")) for item in expected_segments]
+
+            case_id = str(case.get("id", "unknown"))
+            if bool(expectations.get("strict_text_match", True)):
+                assert actual_texts == expected_texts, f"{case_id}: segment text mismatch"
+            if bool(expectations.get("strict_label_match", True)):
+>               assert actual_labels == expected_labels, f"{case_id}: label mismatch"
+E               AssertionError: det_single_001: label mismatch
+E               assert ['router_candidate'] == ['deterministic_candidate']
+E
+E                 At index 0 diff: 'router_candidate' != 'deterministic_candidate'
+E                 Use -v to get more diff
+
+backend/tests/worker/test_segmentation_classification_golden.py:60: AssertionError
+__________________________________________________________________ test_assistant_api_write_run_and_describe_script_artifact ___________________________________________________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ac8349611f0>, tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_assistant_api_write_run_a0')
+
+    def test_assistant_api_write_run_and_describe_script_artifact(monkeypatch, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        cfg = tmp_path / "lunar_analyst.toml"
+        _write_config(cfg, workspace, ".assistant/assistant.db")
+        _reset_services(monkeypatch, cfg)
+        client = TestClient(create_app())
+
+        session_id = client.post("/api/v1/assistant/sessions", json={"title": "script outputs"}).json()["session_id"]
+
+        scenario = client.post(
+            "/api/v1/scenarios",
+            json={"scenario_root": "assistant_script_scn", "name": "Assistant Script", "owner": "test"},
+        ).json()
+        scenario_id = scenario["scenario_id"]
+        scenario_dir = Path(scenario["directory"])
+
+        script = """from pathlib import Path
+    out = Path("generated_stats.csv")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("value\\n1\\n2\\n3\\n", encoding="utf-8")
+    print(out.as_posix())
+    """
+
+        write_response = client.post(
+            f"/api/v1/assistant/sessions/{session_id}/turns",
+            json={
+                "scenario_id": scenario_id,
+                "prompt": f'write and run script "make_demo_table.py"\n```python\n{script}```',
+            },
+        )
+        assert write_response.status_code == 200
+        write_payload = write_response.json()
+        assert write_payload["turn"]["status"] == "confirmation_required"
+        assert write_payload["confirmation"]["tool_name"] == "scenario.write_run_script"
+        confirmation_id = write_payload["confirmation"]["confirmation_id"]
+
+        run_decision = client.post(
+            f"/api/v1/assistant/sessions/{session_id}/confirmations/{confirmation_id}",
+            json={"decision": "allow_once"},
+        )
+        assert run_decision.status_code == 200
+        run_decision_payload = run_decision.json()
+>       assert run_decision_payload["turn"]["status"] == "completed"
+E       AssertionError: assert 'failed' == 'completed'
+E
+E         - completed
+E         + failed
+
+backend/tests/contract/test_phase6_assistant_api.py:372: AssertionError
+------------------------------------------------------------------------------------- Captured stderr call -------------------------------------------------------------------------------------
+INFO: backend.services.assistant.assistant_service: assistant turn prompt
+  session_id=as_d0c16f20e0f14ec99497e7491a62d29d
+  scenario_id=scn_assistant_script_scn
+  prompt="write and run script \"make_demo_table.py\"\n```python\nfrom pathlib import Path\nout = Path(\"generated_stats.csv\")\nout.parent.mkdir(parents=True, exist_ok=True)\nout.write_text(\"value\\n1\\n2\\n3\\n\", encoding=\"utf-8\")\nprint(out.as_posix())\n```"
+INFO: backend.services.assistant.provider_registry: assistant_provider_init_started
+INFO: backend.services.assistant.provider_registry: assistant_provider_init_succeeded providers=
+INFO: backend.services.assistant.assistant_service: assistant turn planned
+  session_id=as_d0c16f20e0f14ec99497e7491a62d29d
+  turn_id=turn_517a2525aae9473686113a6ecc0c1501
+  request_provider=None
+  request_model=None
+  selected_provider=None
+  selected_model=None
+  execution_mode=tool_loop
+  is_command_turn=True
+  tool_fast_path=
+  scenario_id=scn_assistant_script_scn
+  thinking=None
+INFO: backend.services.assistant.assistant_service: assistant pipeline segmentation
+  turn_id=turn_517a2525aae9473686113a6ecc0c1501
+  session_id=as_d0c16f20e0f14ec99497e7491a62d29d
+  segment_count=8
+  segments=
+[
+  {
+    "segment_id": "s1",
+    "text": "write and run script \"make_demo_table. py\"",
+    "start_char": 0,
+    "end_char": 41,
+    "confidence": 0.82,
+    "is_imperative_candidate": true,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s2",
+    "text": "```python",
+    "start_char": 42,
+    "end_char": 51,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s3",
+    "text": "from pathlib import Path",
+    "start_char": 52,
+    "end_char": 76,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s4",
+    "text": "out = Path(\"generated_stats. csv\") out. parent.",
+    "start_char": 77,
+    "end_char": 122,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s5",
+    "text": "mkdir(parents=True, exist_ok=True) out.",
+    "start_char": 122,
+    "end_char": 161,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s6",
+    "text": "write_text(\"value\\n1\\n2\\n3\\n\", encoding=\"utf-8\")",
+    "start_char": 161,
+    "end_char": 209,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s7",
+    "text": "print(out.",
+    "start_char": 210,
+    "end_char": 220,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  },
+  {
+    "segment_id": "s8",
+    "text": "as_posix()) ```",
+    "start_char": 220,
+    "end_char": 235,
+    "confidence": 0.82,
+    "is_imperative_candidate": false,
+    "has_complexity_guard": false
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant pipeline classification
+  turn_id=turn_517a2525aae9473686113a6ecc0c1501
+  session_id=as_d0c16f20e0f14ec99497e7491a62d29d
+  labels=["model_required", "model_required", "model_required", "model_required", "model_required", "model_required", "model_required", "model_required"]
+  classifications=
+[
+  {
+    "segment_id": "s1",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s2",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s3",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s4",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s5",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s6",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s7",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  },
+  {
+    "segment_id": "s8",
+    "label": "model_required",
+    "confidence": 0.79,
+    "matched_action_ids": [],
+    "missing_required_slots": [],
+    "blocking_reason_code": null,
+    "requires_clarification": false,
+    "classification_origin": "rule_only"
+  }
+]
+INFO: backend.services.assistant.assistant_service: assistant turn dispatch parser_fast_path session_id=as_d0c16f20e0f14ec99497e7491a62d29d turn_id=turn_517a2525aae9473686113a6ecc0c1501 provider=None model=None tool=scenario.write_run_script
+INFO: backend.services.assistant.assistant_service: assistant confirmation required session_id=as_d0c16f20e0f14ec99497e7491a62d29d turn_id=turn_517a2525aae9473686113a6ecc0c1501 tool=scenario.write_run_script action_type=write_notebook confirmation_id=cnf_ede58b48c8a845f78af260baa82aaa43 arguments={"relative_path": "make_demo_table.py", "content": "from pathlib import Path\nout = Path(\"generated_stats.csv\")\nout.parent.mkdir(parents=True, exist_ok=True)\nout.write_text(\"value\\n1\\n2\\n3\\n\", encoding=\"utf-8\")\nprint(out.as_posix())", "scenario_id": "scn_assistant_script_scn", "overwrite": true}
+INFO: backend.services.assistant.assistant_service: assistant tool execute start
+  session_id=as_d0c16f20e0f14ec99497e7491a62d29d
+  turn_id=turn_517a2525aae9473686113a6ecc0c1501
+  tool_call_id=call_92dfa7ad96dc48da847b12425c0f9807
+  tool=scenario.write_run_script
+  arguments={"content": "from pathlib import Path\nout = Path(\"generated_stats.csv\")\nout.parent.mkdir(parents=True, exist_ok=True)\nout.write_text(\"value\\n1\\n2\\n3\\n\", encoding=\"utf-8\")\nprint(out.as_posix())", "overwrite": true, "relative_path": "make_demo_table.py", "scenario_id": "scn_assistant_script_scn"}
+_________________________________________________________________________________ test_mcp_script_run_and_logs _________________________________________________________________________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ac834c7bf50>, tmp_path = PosixPath('/tmp/pytest-of-mhs/pytest-16/test_mcp_script_run_and_logs0')
+
+    def test_mcp_script_run_and_logs(monkeypatch, tmp_path: Path) -> None:
+        workspace = tmp_path / "workspace"
+        workspace.mkdir(parents=True, exist_ok=True)
+        cfg = tmp_path / "lunar_analyst.toml"
+        _write_config(cfg, workspace)
+        _reset_services(monkeypatch, cfg)
+        client = TestClient(create_app())
+
+        scenario = client.post(
+            "/api/v1/scenarios",
+            json={"scenario_root": "mcp_script_scn", "name": "MCP Script Scenario", "owner": "test"},
+        )
+        assert scenario.status_code == 200
+        scenario_id = scenario.json()["scenario_id"]
+        scenario_dir = Path(scenario.json()["directory"])
+        script_rel = "scripts/hello_test.py"
+        script_path = scenario_dir / "scripts" / "hello_test.py"
+        script_path.parent.mkdir(parents=True, exist_ok=True)
+        script_path.write_text(
+            "\n".join(
+                [
+                    "print('hello-from-mcp-script')",
+                    "if __name__ == '__main__':",
+                    "    print('script-main-ran')",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        listed = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {"name": "scenario.list_scripts", "arguments": {"scenario_id": scenario_id}},
+            },
+        )
+        assert listed.status_code == 200
+        listed_payload = listed.json()["result"]["structuredContent"]
+        rel_paths = {item["relative_path"] for item in listed_payload["items"]}
+        assert script_rel in rel_paths
+
+        run = client.post(
+            "/api/v1/mcp",
+            json={
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {
+                    "name": "scenario.run_script",
+                    "arguments": {
+                        "_confirmed": True,
+                        "scenario_id": scenario_id,
+                        "relative_path": script_rel,
+                    },
+                },
+            },
+        )
+        assert run.status_code == 200
+>       run_payload = run.json()["result"]["structuredContent"]
+                      ^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'result'
+
+backend/tests/contract/test_phase6_mcp_http.py:144: KeyError
+======================================================================================= warnings summary =======================================================================================
+backend/tests/worker/test_assistant_product_describer.py::test_describe_geotiff_returns_metadata_only_artifact_card
+backend/tests/worker/test_assistant_product_describer.py::test_describe_geotiff_stats_returns_numeric_summary
+backend/tests/contract/test_phase6_assistant_api.py::test_assistant_api_renders_geotiff_preview_outputs
+backend/tests/contract/test_phase6_assistant_api.py::test_assistant_api_returns_geotiff_statistics
+  /e/projects/env_311/lib/python3.12/site-packages/rasterio/__init__.py:366: NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs. The identity matrix will be returned.
+    dataset = writer(
+
+backend/tests/worker/test_assistant_product_describer.py::test_describe_geotiff_returns_metadata_only_artifact_card
+backend/tests/worker/test_assistant_product_describer.py::test_describe_geotiff_stats_returns_numeric_summary
+backend/tests/contract/test_phase6_assistant_api.py::test_assistant_api_renders_geotiff_preview_outputs
+backend/tests/contract/test_phase6_assistant_api.py::test_assistant_api_returns_geotiff_statistics
+  /e/projects/env_311/lib/python3.12/site-packages/rasterio/__init__.py:356: NotGeoreferencedWarning: Dataset has no geotransform, gcps, or rpcs. The identity matrix will be returned.
+    dataset = DatasetReader(path, driver=driver, sharing=sharing, **kwargs)
+
+backend/tests/contract/test_map_milestone.py::test_map_milestone_hillshade_warps_oblique_source_to_esri_103878
+backend/tests/contract/test_map_milestone.py::test_map_milestone_raster_file_endpoint_serves_map_display_derivative
+backend/tests/contract/test_phase4_marimo_integration.py::test_phase4_map_zoom_command_emits_event
+  /e/projects/lunar_analyst/backend/services/raster_delivery.py:262: NodataShadowWarning: The dataset's nodata attribute is shadowing the alpha band. All masks will be determined by the nodata attribute
+    source_mask = np.asarray(src.dataset_mask(), dtype=np.uint8)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=================================================================================== short test summary info ====================================================================================
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_action_plan_fast_path_persists_selected_thinking_setting - AssertionError: assert None == 'high'
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_external_mcp_agent_provider_falls_back_when_model_not_found - AssertionError: assert 'failed' == 'completed'
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_external_mcp_agent_provider_retries_unknown_mcp_server_error - assert '{"tool_outpu...count": 0}}]}' == '{"capabiliti...],"count":0}}'
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_external_mcp_agent_provider_unknown_server_falls_back_to_explicit_tool_sequence - AssertionError: assert None is True
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_external_mcp_agent_provider_cmdlet_error_falls_back_to_explicit_tool_sequence - AssertionError: assert None is True
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_external_mcp_agent_provider_pwsh_frame_only_error_falls_back_to_explicit_tool_sequence - AssertionError: assert None is True
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_external_mcp_agent_provider_handshake_error_falls_back_to_explicit_tool_sequence - AssertionError: assert None is True
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_provider_switch_triggers_compaction_and_reset - AssertionError: assert 'failed' == 'completed'
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_action_plan_partial_handoff_runs_deterministic_then_model_loop - AssertionError: assert 'action_plan_fast_path' == 'model_tool_loop'
+FAILED backend/tests/worker/test_assistant_tool_loop.py::test_action_plan_agent_substep_resolves_layer_name_then_requires_confirmation - AssertionError: assert 'failed' == 'confirmation_required'
+FAILED backend/tests/worker/test_segmentation_classification_golden.py::test_segmentation_classification_golden_cases - AssertionError: det_single_001: label mismatch
+FAILED backend/tests/contract/test_phase6_assistant_api.py::test_assistant_api_write_run_and_describe_script_artifact - AssertionError: assert 'failed' == 'completed'
+FAILED backend/tests/contract/test_phase6_mcp_http.py::test_mcp_script_run_and_logs - KeyError: 'result'
+13 failed, 476 passed, 3 skipped, 11 warnings in 364.66s (0:06:04)
+(env_311) (port-to-linux) /e/projects/lunar_analyst$

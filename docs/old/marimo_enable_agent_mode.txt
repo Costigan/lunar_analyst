@@ -1,0 +1,31 @@
+There are two different things in marimo that both sound like “agent mode”:
+
+1. Agent (beta) in the regular AI chat panel (built-in AI tools)
+2. Agents (experimental ACP integration) for external agents like Codex CLI
+
+Enable Agent (beta) (chat panel cell editing)
+
+1. Open the left AI chat panel.
+2. Use the mode dropdown in that panel.
+3. Select Agent (beta) (instead of Manual or Ask).
+
+That mode is the one that can edit notebook cells and run stale cells.
+
+Enable the Lab feature for Codex (external agent via ACP)
+
+1. Install/login Codex CLI (Windows):
+    - npm install -g @openai/codex
+    - codex (login), or set OPENAI_API_KEY / CODEX_API_KEY
+2. Start the Codex ACP bridge in a terminal (Windows command from marimo docs):
+    - npx stdio-to-ws "cmd /c npx @zed-industries/codex-acp" --port 3021
+3. In marimo, open Settings -> Lab.
+4. Enable the experimental agents feature flag (UI wording may be Agents or External agents, depending on version).
+5. Open the agents icon in the sidebar.
+6. Select Codex from the dropdown and start chatting.
+
+If you don’t see the Lab flag or agents icon, you likely need a newer marimo version.
+
+Sources:
+
+- https://docs.marimo.io/guides/editor_features/ai_completion/
+- https://docs.marimo.io/guides/editor_features/agents/

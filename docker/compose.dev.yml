@@ -1,0 +1,61 @@
+services:
+  app-dev:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+    image: lunar-analyst-dev
+    working_dir: /workspace/lunar_analyst
+    environment:
+      LUNAR_ANALYST_CONFIG_TOML: /workspace/lunar_analyst/config/lunar_analyst.devcontainer.toml
+      LUNAR_ANALYST_HOST: 0.0.0.0
+      LUNAR_ANALYST_WORKSPACE_ROOT: /var/lib/lunar-analyst/workspace
+      LUNAR_ANALYST_DEV_UID: "${LUNAR_ANALYST_DEV_UID:-1000}"
+      LUNAR_ANALYST_DEV_GID: "${LUNAR_ANALYST_DEV_GID:-1000}"
+      PIP_CACHE_DIR: /var/lib/lunar-analyst/workspace/.container-cache/pip
+      npm_config_cache: /var/lib/lunar-analyst/workspace/.container-cache/npm
+      HOME: /tmp/lunar-analyst-home
+      OPENAI_API_KEY:
+      ANTHROPIC_API_KEY:
+      GOOGLE_API_KEY:
+      LUNAR_ANALYST_MCP_TOKEN:
+    volumes:
+      - ..:/workspace/lunar_analyst
+      - ${LUNAR_ANALYST_HOST_WORKSPACE_ROOT:-/e/lunar_analyst_scenarios}:/var/lib/lunar-analyst/workspace
+    ports:
+      - "8000:8000"
+      - "2718:2718"
+      - "5173:5173"
+    tty: true
+    stdin_open: true
+    command:
+      - sleep
+      - infinity
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lunar-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    # Note: GPU passthrough requires nvidia-container-toolkit on the host
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  ollama-pull-model:
+    image: curlimages/curl:latest
+    container_name: ollama-pull-model
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: >
+      -c "sleep 5;
+      curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"gemma4:e4b-it-q8_0\"}'"
+
+volumes:
+  ollama_data:

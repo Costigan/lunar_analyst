@@ -1,0 +1,3 @@
+This is the long session with claude 4.0
+
+copilot --resume=def0bc99-6f50-48e4-8fbe-207ec5566620

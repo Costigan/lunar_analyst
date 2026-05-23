@@ -1,0 +1,4 @@
+{"id":"extract_001","segment_text":"create a hillshade from the primary DEM","offsets":{"start":0,"stop":37},"expected":{"class":"create_product","product_type":"hillshade_raster","pixel_type":"byte"}}
+{"id":"extract_002","segment_text":"What does slope tell me about landing safety here?","offsets":{"start":0,"stop":47},"expected":{"class":"other"}}
+{"id":"extract_003","segment_text":"create a roughness raster from the primary DEM","offsets":{"start":0,"stop":43},"expected":{"class":"create_product","product_type":"roughness_raster","pixel_type":"float"}}
+{"id":"extract_004","segment_text":"create a science raster","offsets":{"start":0,"stop":23},"expected":{"class":"other"}}

@@ -1,0 +1,343 @@
+Lunar Analyst Bug Fix Plan
+Date: 2026-04-05
+
+Scope
+- This plan covers the 13 failures currently listed in docs/current-bugs.txt.
+- This document is a planning artifact only. No code changes are made here.
+- The goal is to reduce the bug list into shared root causes, define an implementation order, and identify the smallest test set that proves each fix.
+
+Context
+- The failures are concentrated in assistant orchestration, especially deterministic fast paths, provider selection, external-agent fallback handling, and script execution flows.
+- The largest issue appears to be control-flow selection in backend/services/assistant/assistant_service.py.
+- A smaller but distinct issue exists around thinking metadata persistence.
+- There is likely one fixture-or-contract drift in the segmentation golden test.
+- There is also a separate script execution regression affecting both assistant API and MCP script flows.
+
+Summary of Root Causes
+
+Root Cause A: Provider selection is skipped too early
+- Likely primary source file:
+  - backend/services/assistant/assistant_service.py
+- Current behavior:
+  - In create_turn(), provider selection is skipped whenever any deterministic path is detected:
+    - action_plan.actions
+    - tool_name
+    - explicit_tool_sequence_supported
+  - That is currently controlled by provider_selection_required.
+- Why this is wrong:
+  - Some deterministic-first paths still require a provider later:
+    - parser fast path may need a provider for follow-up completion
+    - action-plan partial handoff may need a provider/model for model loop continuation
+    - deterministic agent substeps call _providers.complete()
+    - external-agent fallback tests expect provider selection to occur before choosing the downstream execution mode
+- Failures likely explained by this root cause:
+  - test_external_mcp_agent_provider_falls_back_when_model_not_found
+  - test_external_mcp_agent_provider_retries_unknown_mcp_server_error
+  - test_external_mcp_agent_provider_unknown_server_falls_back_to_explicit_tool_sequence
+  - test_external_mcp_agent_provider_cmdlet_error_falls_back_to_explicit_tool_sequence
+  - test_external_mcp_agent_provider_pwsh_frame_only_error_falls_back_to_explicit_tool_sequence
+  - test_external_mcp_agent_provider_handshake_error_falls_back_to_explicit_tool_sequence
+  - test_provider_switch_triggers_compaction_and_reset
+  - test_action_plan_partial_handoff_runs_deterministic_then_model_loop
+  - test_action_plan_agent_substep_resolves_layer_name_then_requires_confirmation
+
+Root Cause B: Requested thinking metadata is only persisted when provider selection runs
+- Likely primary source file:
+  - backend/services/assistant/assistant_service.py
+- Current behavior:
+  - selected_thinking is only set by provider normalization.
+  - user message metadata only stores selected_thinking.
+  - If provider selection is skipped, requested thinking is dropped.
+- Failure explained by this root cause:
+  - test_action_plan_fast_path_persists_selected_thinking_setting
+
+Root Cause C: Explicit-tool-sequence fallback metadata is not preserved on the assistant message in all paths
+- Likely primary source file:
+  - backend/services/assistant/assistant_service.py
+- Current behavior:
+  - external-agent fallback path sets fallback_used in turn usage and in assistant metadata for external-agent completion.
+  - explicit tool sequence output created directly by _execute_explicit_tool_sequence_turn() uses metadata={"explicit_tool_sequence": True}.
+  - tests expect fallback_used and fallback_kind on the assistant message when the external-agent fallback path is used.
+- Failures explained by this root cause:
+  - test_external_mcp_agent_provider_unknown_server_falls_back_to_explicit_tool_sequence
+  - test_external_mcp_agent_provider_cmdlet_error_falls_back_to_explicit_tool_sequence
+  - test_external_mcp_agent_provider_pwsh_frame_only_error_falls_back_to_explicit_tool_sequence
+  - test_external_mcp_agent_provider_handshake_error_falls_back_to_explicit_tool_sequence
+- Note:
+  - This may disappear automatically if the external-agent path produces the final assistant message itself instead of being bypassed by early deterministic dispatch. Even so, fallback metadata handling should be verified directly.
+
+Root Cause D: Segmentation/classification vocabulary drift
+- Likely primary files:
+  - backend/services/assistant/prompt_classifier.py
+  - backend/tests/fixtures/assistant_segmentation_classification/golden_cases.jsonl
+- Current behavior:
+  - classifier emits label "router_candidate"
+  - golden fixture still expects "deterministic_candidate" for at least one case
+- Failure explained by this root cause:
+  - test_segmentation_classification_golden_cases
+- Risk:
+  - This may be stale test data rather than broken code. Must confirm current contract before changing either code or fixture.
+
+Root Cause E: Script execution regression in scenario.run_script / scenario.write_run_script path
+- Likely primary files:
+  - backend/services/assistant/tool_registry.py
+  - backend/api/dependencies.py
+  - possibly backend/notebook/job_runner.py and related notebook runtime helpers
+- Current behavior:
+  - assistant API confirmation succeeds up to the point of tool execution, then turn status becomes failed
+  - MCP script run test also fails on the same functional area, though the exact error in docs/current-bugs.txt is hidden behind the JSON-RPC envelope
+- Failures explained by this root cause:
+  - test_assistant_api_write_run_and_describe_script_artifact
+  - test_mcp_script_run_and_logs
+- Hypothesis:
+  - The MCP endpoint is probably not the root problem; backend/mcp/server.py returns result when tool execution succeeds and error when it throws.
+  - A thrown exception in scenario.run_script is likely causing the JSON-RPC payload to contain error instead of result.
+
+Detailed Fix Plan
+
+Phase 1: Fix provider selection gating in create_turn()
+- Files:
+  - backend/services/assistant/assistant_service.py
+- Goal:
+  - Decouple "deterministic route exists" from "provider selection is unnecessary".
+- Proposed approach:
+  - Replace the current boolean provider_selection_required with logic based on downstream capability requirements.
+  - Define when a provider/model is required before dispatch:
+    - external agent execution mode selection obviously requires provider selection
+    - parser fast path requires provider selection only if the specific tool can use parser follow-up completion
+    - action-plan partial handoff requires provider selection because it may continue into model loop
+    - action-plan fast path with deterministic agent substeps requires provider selection
+    - explicit tool sequence for plain deterministic execution may not require provider selection unless the intended behavior is to route through external-agent mode first
+  - Add a helper to make this decision explicit, for example:
+    - _provider_selection_needed_for_turn(...)
+  - The helper should use:
+    - prompt
+    - action_plan contents
+    - whether any PlannedAgentStep exists
+    - whether partial handoff is possible
+    - tool_name and whether parser follow-up is relevant
+    - explicit tool sequence presence
+- Design constraints:
+  - Keep deterministic execution cheap where no provider is needed.
+  - Do not regress the existing fast-path behavior for simple pure-tool actions that do not need model reasoning.
+  - Preserve current execution-mode selection semantics for external-agent providers.
+- Acceptance criteria:
+  - provider/model selection is available on paths that later depend on it
+  - pure deterministic paths still work without forcing unnecessary completions
+
+Phase 2: Fix partial-handoff and deterministic agent-substep behavior
+- Files:
+  - backend/services/assistant/assistant_service.py
+- Goal:
+  - Ensure action-plan partial handoff can continue into model loop and deterministic agent substeps can invoke the provider safely.
+- Proposed approach:
+  - After Phase 1, verify these branches:
+    - create_turn() action_plan.actions partial path
+    - _execute_action_plan_turn(..., followup_prompt=...)
+    - _execute_action_plan_agent_step(...)
+  - Confirm that provider_id/model_id are valid when:
+    - can_continue_with_model is evaluated
+    - _execute_action_plan_agent_step() calls _providers.complete(...)
+  - If deterministic agent substeps are allowed, fail early with a precise error if provider/model are unavailable rather than passing placeholder values like "local" and empty string.
+- Acceptance criteria:
+  - partial handoff path ends in model_tool_loop when expected
+  - agent substep path reaches confirmation_required rather than failed
+
+Phase 3: Fix external-agent fallback and metadata propagation
+- Files:
+  - backend/services/assistant/assistant_service.py
+- Goal:
+  - Ensure external-agent model fallback, retry behavior, and explicit fallback metadata are consistent on both turn usage and assistant message metadata.
+- Proposed approach:
+  - Verify create_turn() is actually dispatching external-agent mode in the intended tests after Phase 1.
+  - In _run_external_agent_turn():
+    - preserve fallback_used and fallback_kind exactly once the explicit-tool fallback is chosen
+    - verify final assistant_message metadata carries:
+      - fallback_used
+      - fallback_kind
+      - provider_id/model_id after model fallback
+  - If _run_explicit_tool_sequence_fallback() is used to synthesize final text:
+    - confirm the enclosing external-agent finalization path remains the one producing the assistant message
+    - do not bypass message metadata propagation
+  - Re-check retry response shaping:
+    - test expects a domain-specific JSON object:
+      - {"capabilities":{"text":"ok"},"scenarios":{"items":[],"count":0}}
+    - current raw fallback helper returns:
+      - {"tool_outputs":[...]}
+    - inspect whether retry completion should produce the expected shape itself, or whether the fallback helper should support a "return raw tool outputs" versus "return named JSON object" distinction
+- Specific note:
+  - The retry test and the raw-output fallback tests intentionally expect different outputs.
+  - Do not unify them blindly. Preserve both behaviors.
+- Acceptance criteria:
+  - model-not-found case completes with fallback model metadata
+  - retry path returns expected response content
+  - raw-output fallback path includes fallback_used/fallback_kind metadata
+
+Phase 4: Fix requested thinking persistence independent of provider normalization
+- Files:
+  - backend/services/assistant/assistant_service.py
+  - possibly backend/services/assistant/provider_registry.py if normalization behavior needs reuse
+- Goal:
+  - Preserve user-requested thinking intent even on deterministic fast paths that never call the provider.
+- Proposed approach:
+  - Distinguish:
+    - requested thinking from request payload
+    - normalized/provider-supported thinking used for actual model calls
+  - Store a metadata value for the user turn even when no provider selection occurs.
+  - Possible safe rule:
+    - if provider selection occurred, persist normalized selected_thinking
+    - else, persist request.thinking directly if it is bool or one of low/medium/high
+  - Confirm resumed confirmation paths keep reading the same stored metadata.
+- Acceptance criteria:
+  - user message metadata contains "thinking": "high" in fast-path deterministic test
+  - no change to provider_registry.last_thinking in that specific test
+
+Phase 5: Resolve segmentation golden-case mismatch
+- Files:
+  - backend/services/assistant/prompt_classifier.py
+  - backend/tests/fixtures/assistant_segmentation_classification/golden_cases.jsonl
+  - optionally related tests if label vocabulary changed intentionally
+- Goal:
+  - Reconcile the intended public/test contract for deterministic intent labels.
+- Proposed approach:
+  - First determine which label is authoritative:
+    - current implementation and adjacent tests use router_candidate
+    - golden fixture expects deterministic_candidate
+  - Inspect commit history or nearby comments if needed before deciding.
+  - If router_candidate is the intended current label:
+    - update golden fixtures
+  - If deterministic_candidate is still the intended contract:
+    - change classifier output and any dependent tests/components consistently
+- Caution:
+  - This is not just a string replacement. turn_execution_plan.py and success_semantics.py already consume router_candidate.
+  - Treat this as a contract decision, not a quick patch.
+- Acceptance criteria:
+  - golden cases pass
+  - no inconsistencies remain in classification-dependent tests
+
+Phase 6: Fix script execution regression
+- Files:
+  - backend/services/assistant/tool_registry.py
+  - backend/api/dependencies.py
+  - possibly backend/notebook/job_runner.py and notebook runtime support files
+- Goal:
+  - Restore successful execution of scenario.run_script and scenario.write_run_script in both assistant API and MCP flows.
+- Proposed approach:
+  - Reproduce both failing tests after earlier assistant fixes.
+  - Inspect exact exception for:
+    - scenario.write_run_script confirmation resolution path
+    - scenario.run_script via MCP tools/call
+  - Trace through:
+    - _run_scenario_python_entry()
+    - JobService.run_typed_job(..., mode=IMMEDIATE)
+    - execute_notebook_job()
+    - notebook runner result payload generation
+  - Verify these assumptions:
+    - scenario script is discoverable by resolve_scenario_notebook_job_id()
+    - returned run metadata contains expected stdout/stderr log paths
+    - result payload is generated even when script only prints and writes a CSV
+    - assistant tool wrapper returns the expected dict shape
+  - If MCP still fails after underlying script execution is repaired:
+    - inspect JSON-RPC error response content from backend/mcp/server.py
+    - confirm tool exceptions are not being masked incorrectly
+- Acceptance criteria:
+  - assistant API write-run-describe flow completes
+  - MCP run_script returns jsonrpc result with structuredContent
+  - logs retrieval works with run_id from the script run
+
+Recommended Implementation Order
+1. Root Cause A: provider selection gating
+2. Root Cause B: thinking persistence
+3. Root Cause C: external-agent fallback output and metadata
+4. Root Cause E: script execution regression
+5. Root Cause D: segmentation golden mismatch
+
+Rationale
+- A is the highest fan-out issue and likely resolves the majority of assistant-tool-loop failures.
+- B is small and adjacent to A.
+- C depends on A because external-agent dispatch is currently being bypassed.
+- E is separate and should be easier to isolate once assistant orchestration noise is reduced.
+- D appears lower-risk and may be fixture maintenance rather than runtime logic.
+
+Proposed Test Strategy
+
+After Phase 1 and Phase 2
+- Run targeted worker tests:
+  - backend/tests/worker/test_assistant_tool_loop.py -k "model_not_found or provider_switch or partial_handoff or agent_substep"
+- Expected recovered tests:
+  - test_external_mcp_agent_provider_falls_back_when_model_not_found
+  - test_provider_switch_triggers_compaction_and_reset
+  - test_action_plan_partial_handoff_runs_deterministic_then_model_loop
+  - test_action_plan_agent_substep_resolves_layer_name_then_requires_confirmation
+
+After Phase 3
+- Run targeted fallback tests:
+  - backend/tests/worker/test_assistant_tool_loop.py -k "unknown_server or cmdlet_error or pwsh_frame_only_error or handshake_error or retries_unknown_mcp_server_error"
+- Expected recovered tests:
+  - the four fallback_used metadata tests
+  - the retry response-shape test
+
+After Phase 4
+- Run targeted thinking test:
+  - backend/tests/worker/test_assistant_tool_loop.py -k "persists_selected_thinking_setting"
+
+After Phase 5
+- Run segmentation golden test and adjacent classifier tests:
+  - backend/tests/worker/test_segmentation_classification_golden.py
+  - backend/tests/worker/test_prompt_classifier.py
+  - backend/tests/worker/test_segmentation_classification_invariants.py
+
+After Phase 6
+- Run targeted contract tests:
+  - backend/tests/contract/test_phase6_assistant_api.py -k "write_run_and_describe_script_artifact"
+  - backend/tests/contract/test_phase6_mcp_http.py -k "test_mcp_script_run_and_logs"
+
+Final regression pass
+- Run the 13 original failing tests together.
+- If those pass, consider a broader assistant-focused suite:
+  - backend/tests/worker/test_assistant_tool_loop.py
+  - backend/tests/contract/test_phase6_assistant_api.py
+  - backend/tests/contract/test_phase6_mcp_http.py
+
+Likely Code Touchpoints
+- backend/services/assistant/assistant_service.py
+  - create_turn()
+  - _execute_action_plan_turn()
+  - _execute_action_plan_agent_step()
+  - _run_external_agent_turn()
+  - _run_explicit_tool_sequence_fallback()
+  - possibly helper methods for deciding provider-selection needs
+- backend/services/assistant/provider_registry.py
+  - only if thinking normalization needs a shared helper for request-level persistence
+- backend/services/assistant/prompt_classifier.py
+  - only if classifier contract is actually wrong
+- backend/tests/fixtures/assistant_segmentation_classification/golden_cases.jsonl
+  - only if fixture drift is confirmed
+- backend/services/assistant/tool_registry.py
+  - _run_scenario_python_entry()
+- backend/api/dependencies.py
+  - run_typed_job()
+  - execute_notebook_job()
+- backend/mcp/server.py
+  - only if MCP envelope behavior remains wrong after underlying script tool execution is fixed
+
+Risks
+- Changing provider-selection logic could accidentally force model selection on paths that were intentionally deterministic-only.
+- Fixing the retry/fallback formatting incorrectly could collapse two distinct contracts:
+  - named JSON summary response
+  - raw tool_outputs response
+- Changing segmentation labels without confirming the intended vocabulary could create wider contract churn.
+- Script execution fixes may expose environment-specific assumptions in notebook runner behavior.
+
+Rollback Strategy
+- Keep changes grouped by root cause in small commits.
+- For Root Cause A, isolate provider-selection helper changes so they can be reverted independently.
+- For Root Cause D, prefer fixture-only change if contract review shows implementation is already correct.
+- For Root Cause E, avoid broad refactors in notebook execution. Patch the failing path narrowly and preserve existing job handler contracts.
+
+Definition of Done for this bug batch
+- All 13 failures from docs/current-bugs.txt pass.
+- Deterministic fast paths still avoid unnecessary model use.
+- External-agent fallback metadata is consistent across turn usage and assistant message metadata.
+- Assistant API and MCP script execution both work for the tested scenario script flow.
+- If segmentation label vocabulary changes, all affected tests and fixtures are updated consistently.

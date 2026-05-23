@@ -1,0 +1,42 @@
+title: Tool Routing Hints for Adding Layers
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: tools, layer, import, geotiff, keywords, routing
+
+# Purpose
+Help the agent choose the right tool when the user asks to add or show raster data on the map.
+
+# Keyword Triggers And Tool Choice
+If the prompt includes keywords like:
+- "add layer", "show layer", "put on map", "display raster"
+- "import geotiff", "load tif", "add tiff", "bring in raster"
+- "use this file", "from path", "external geotiff"
+
+Use this tool flow:
+1. `scenario.set_current` (if active scenario is unclear)
+2. `scenario.import_geotiff` (imports and registers product)
+3. `layer.list_visible` (confirm current map layer state)
+4. `layer.update_state` (set visibility/opacity/style as requested)
+
+# Show/Hide Existing Layer By Name
+If the prompt is "show <layer name>" or "hide <layer name>":
+1. `product.list` to find matching product/title candidates in the active scenario.
+2. Resolve the target non-base layer ID for that product.
+3. `layer.update_state` with `visible=true` (show) or `visible=false` (hide).
+4. `layer.list_visible` only for post-change confirmation.
+
+# Inspection Keywords
+If prompt includes:
+- "what products", "list rasters", "what files were imported"
+Use:
+- `product.list`
+- `product.files`
+
+# Notes
+- `scenario.import_geotiff` is the layer-creation entry point for external GeoTIFF files.
+- `layer.update_state` modifies an existing layer state; it does not import new data.
+- Do not treat `layer.list_visible` as a "show layer" action; it is read-only.
+- Disambiguate the base layer title `Hillshade` (`base:moon_trek`) from imported products like `hillshade.tif`.
+- Prefer scenario-relative workflow and report imported product/layer identifiers in responses.

@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "AssistantConfirmationActionType": {
+      "enum": [
+        "launch_job",
+        "import_file",
+        "move_path",
+        "update_layer_state",
+        "delete_artifact",
+        "write_notebook"
+      ],
+      "title": "AssistantConfirmationActionType",
+      "type": "string"
+    },
+    "AssistantConfirmationDecision": {
+      "enum": [
+        "allow_once",
+        "always_allow_action_type",
+        "deny_once"
+      ],
+      "title": "AssistantConfirmationDecision",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "confirmation_id": {
+      "title": "Confirmation Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "turn_id": {
+      "title": "Turn Id",
+      "type": "string"
+    },
+    "action_type": {
+      "$ref": "#/$defs/AssistantConfirmationActionType"
+    },
+    "tool_name": {
+      "title": "Tool Name",
+      "type": "string"
+    },
+    "arguments": {
+      "additionalProperties": true,
+      "title": "Arguments",
+      "type": "object"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "requested_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Requested At Utc",
+      "type": "string"
+    },
+    "resolved_at_utc": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolved At Utc"
+    },
+    "resolution": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssistantConfirmationDecision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "confirmation_id",
+    "session_id",
+    "turn_id",
+    "action_type",
+    "tool_name",
+    "status",
+    "requested_at_utc"
+  ],
+  "title": "AssistantConfirmation",
+  "type": "object"
+}

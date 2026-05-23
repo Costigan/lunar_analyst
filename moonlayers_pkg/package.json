@@ -1,0 +1,21 @@
+{
+  "name": "moonlayers-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "watch": "vite build --watch",
+    "dev": "vite build --watch"
+  },
+  "dependencies": {
+    "geotiff": "^2.0.0",
+    "jspdf": "^2.5.0",
+    "ol": "^9.0.0",
+    "ol-layerswitcher": "^4.1.0",
+    "proj4": "^2.9.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.20"
+  }
+}

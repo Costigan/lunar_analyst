@@ -1,0 +1,67 @@
+FROM ubuntu:22.04
+
+SHELL ["/bin/bash", "-lc"]
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV VIRTUAL_ENV=/opt/lunar-analyst/.venv
+ENV PATH=/opt/lunar-analyst/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+RUN set -euxo pipefail \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gpg \
+        gnupg \
+        apt-transport-https \
+        software-properties-common \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -euxo pipefail \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/keyrings/microsoft.gpg \
+    && chmod go+r /etc/apt/keyrings/microsoft.gpg \
+    && . /etc/os-release \
+    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/ubuntu/${VERSION_ID}/prod ${UBUNTU_CODENAME} main" > /etc/apt/sources.list.d/microsoft-prod.list
+
+RUN set -euxo pipefail \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        python3.11 \
+        python3.11-dev \
+        python3.11-venv \
+        git \
+        dotnet-sdk-9.0 \
+        gdal-bin \
+        libgdal-dev \
+        proj-bin \
+        libproj-dev \
+        libgeos-dev \
+        libspatialite-dev \
+        libsqlite3-mod-spatialite \
+        libglib2.0-0 \
+        libgl1 \
+        libgomp1 \
+        libstdc++6 \
+        libicu70 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN set -euxo pipefail \
+    && python3.11 -m venv "$VIRTUAL_ENV" \
+    && python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && python -m pip install --no-cache-dir \
+        fastapi \
+        pythonnet \
+        rasterio \
+        "GDAL==$(gdal-config --version)"
+
+COPY docker/entrypoints/run-base-probes.sh /usr/local/bin/run-base-probes.sh
+RUN chmod +x /usr/local/bin/run-base-probes.sh
+
+WORKDIR /workspace
+
+CMD ["/usr/local/bin/run-base-probes.sh"]

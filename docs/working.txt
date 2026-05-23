@@ -1,0 +1,36 @@
+We worked on the assistant regression batch from docs/current-bugs.txt, after first using docs/DESIGN.md for context.
+
+Main steps:
+
+- I first undercounted the failures because the bug file output was truncated.
+- Then I re-read the full file, confirmed there were 13 failed tests, and sorted them by severity and likely fix simplicity.
+- After that I traced the failures into shared root causes and wrote a detailed plan in docs/fix-plan.txt.
+
+What I changed:
+
+- In backend/services/assistant/assistant_service.py:
+    - fixed provider-selection routing so deterministic-first turns still select a provider when later execution may need one
+    - restored fast-path thinking metadata persistence
+- In backend/tests/contract/test_phase6_assistant_api.py and backend/tests/contract/test_phase6_mcp_http.py:
+    - cleared inherited LUNAR_ANALYST_WORKSPACE_ROOT in the phase-6 test helpers so they use their temp-configured workspace instead of shell state
+- In backend/tests/fixtures/assistant_segmentation_classification/golden_cases.jsonl:
+    - aligned stale labels with the current classifier vocabulary
+
+Verification I completed:
+
+- targeted assistant-tool-loop regression slice passed
+- segmentation golden test passed
+
+What remains uncertain:
+
+- the two phase-6 contract tests stopped failing from workspace-root misconfiguration, but in this shell they still hung during later setup/execution, so I did not claim those as fully fixed
+
+After that, you asked for release-style follow-up work:
+
+- I checked git diffs for sanity
+- added a new Unreleased entry to CHANGELOG.md
+- gave you the commit message:
+    - Fix assistant provider-selection routing and sync segmentation goldens
+
+You also asked why I was running tests and why background terminals were still visible; I explained that the extra test runs were my verification choice, not required for the changelog task, and confirmed there are no live background test/debug
+processes left now.

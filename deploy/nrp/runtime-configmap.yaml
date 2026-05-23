@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lunar-analyst-runtime-config
+  namespace: lunar-analyst
+data:
+  lunar_analyst.container.toml: |
+    [backend]
+    workspace_root = "/var/lib/lunar-analyst/workspace"
+    log_level = "INFO"
+
+    [backend.web]
+    mount_path = "/lunar_analyst"
+
+    [backend.logging]
+    level = "INFO"
+
+    [backend.marimo]
+    auto_start = false
+    base_url = "http://127.0.0.1:2718"
+
+    [backend.notebook_jobs]
+    search_roots = ["../backend/notebook/jobs"]
+    run_dir_retention_hours = 24
+
+    [backend.scenario_discovery]
+    auto_discover_on_startup = true
+    reconcile_missing_on_startup = true
+
+    [backend.llm]
+    enabled = true
+    default_provider = "openai"
+    default_model = "gpt-5.4"
+    system_prompt_path = "../backend/services/assistant/system_prompt.txt"
+    action_router_spec_path = "../config/assistant_action_router.yaml"
+    require_confirmation_for_mutations = false
+    max_context_tokens = 32768
+    default_max_output_tokens = 8192
+
+    [backend.llm.evals]
+    default_provider = "ollama"
+    default_model = "gemma4:e4b-it-q8_0"
+
+    [backend.llm.ollama]
+    enabled = true
+    base_url = "http://localhost:11434"
+
+    [backend.llm.local_subprocess]
+    enabled = false
+
+    [backend.llm.codex_cli]
+    enabled = false
+
+    [backend.llm.gemini_cli]
+    enabled = false
+
+    [backend.llm.remote.openai]
+    enabled = true
+    api_key_env = "OPENAI_API_KEY"
+    token_caching = true
+    prompt_cache_retention = "24h"
+    model = "gpt-5-mini"
+    models = ["gpt-5-mini", "gpt-5-nano", "gpt-5.4", "gpt-5.3-chat-latest", "gpt-5.2", "gpt-4.1-mini"]
+
+    [backend.llm.remote.anthropic]
+    enabled = false
+    api_key_env = "ANTHROPIC_API_KEY"
+    token_caching = true
+    model = "claude-3-7-sonnet-latest"
+    models = ["claude-3-7-sonnet-latest"]
+
+    [backend.llm.remote.google]
+    enabled = false
+    api_key_env = "GOOGLE_API_KEY"
+    token_caching = true
+    model = "gemini-2.0-flash"
+    models = ["gemini-2.0-flash"]
+
+    [backend.llm.rag]
+    enabled = true
+    apply_to_providers = ["openai"]
+    top_k = 6
+    max_context_chars = 6000
+    routing_enabled = true
+    default_channel = "mixed"
+    max_query_terms = 24
+    fallback_query_mode = "and_then_or"
+    log_references = true
+    channel_budget_procedural = { procedural = 0.8, domain = 0.2 }
+    channel_budget_domain = { procedural = 0.2, domain = 0.8 }
+    channel_budget_mixed = { procedural = 0.5, domain = 0.5 }
+    global_index_relative_path = ".assistant/rag/global_rag.db"
+    corpus_relative_root = "docs/rag_corpus"
+    allowed_extensions = ["md", "txt", "csv", "pdf", "html", "htm", "json"]
+    allow_external_file_sources = true
+    allow_url_fetch = false
+    external_source_allow_roots = ["docs/rag_corpus"]
+    auto_refresh_on_startup = true
+
+    [backend.mcp]
+    enabled = true
+    http_enabled = false
+    stdio_enabled = true
+    sse_enabled = false
+    http_auth_token_env = "LUNAR_ANALYST_MCP_TOKEN"

@@ -1,0 +1,201 @@
+==PROF== Disconnected from process 19400
+[19400] horizon_runner.exe@127.0.0.1
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 15, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.03
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          27.75
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          16,906,816,467
+    l1tex__t_sector_hit_rate.pct                                                           %          98.98
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          85.71
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          85.71
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          65.67
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.86
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.18
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 15, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- ---------------
+    Metric Name                                                                  Metric Unit    Metric Value
+    ---------------------------------------------------------------------------- ----------- ---------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %            0.04
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %           27.33
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          103,517,498,942
+    l1tex__t_sector_hit_rate.pct                                                           %           99.37
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %           85.54
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %           85.54
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %           66.22
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle            0.86
+    smsp__inst_executed_per_warp.avg                                                                 (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %            0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp            3.17
+    ---------------------------------------------------------------------------- ----------- ---------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 14, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.03
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          26.89
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          11,048,964,709
+    l1tex__t_sector_hit_rate.pct                                                           %          98.35
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          83.34
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          83.34
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          64.78
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.85
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.14
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 13, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.05
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          26.80
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          10,608,313,089
+    l1tex__t_sector_hit_rate.pct                                                           %          98.37
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          83.03
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          83.03
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          64.51
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.85
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.14
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 15, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.03
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          26.92
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          11,415,873,320
+    l1tex__t_sector_hit_rate.pct                                                           %          98.34
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          83.48
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          83.48
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          64.93
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.85
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.14
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 14, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.03
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          27.77
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          16,748,713,160
+    l1tex__t_sector_hit_rate.pct                                                           %          98.98
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          85.76
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          85.76
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          65.73
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.86
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.18
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 13, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.04
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          27.76
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          16,820,792,869
+    l1tex__t_sector_hit_rate.pct                                                           %          98.98
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          85.74
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          85.74
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          65.70
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.86
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.18
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 15, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- --------------
+    Metric Name                                                                  Metric Unit   Metric Value
+    ---------------------------------------------------------------------------- ----------- --------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %           0.03
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %          27.79
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          16,690,845,138
+    l1tex__t_sector_hit_rate.pct                                                           %          98.98
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %          85.79
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %          85.79
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %          65.74
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle           0.86
+    smsp__inst_executed_per_warp.avg                                                                (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %           0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp           3.18
+    ---------------------------------------------------------------------------- ----------- --------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 14, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- ---------------
+    Metric Name                                                                  Metric Unit    Metric Value
+    ---------------------------------------------------------------------------- ----------- ---------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %            0.04
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %           27.32
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          103,510,047,316
+    l1tex__t_sector_hit_rate.pct                                                           %           99.37
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %           85.54
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %           85.54
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %           66.23
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle            0.86
+    smsp__inst_executed_per_warp.avg                                                                 (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %            0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp            3.17
+    ---------------------------------------------------------------------------- ----------- ---------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 13, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- ---------------
+    Metric Name                                                                  Metric Unit    Metric Value
+    ---------------------------------------------------------------------------- ----------- ---------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %            0.04
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %           27.32
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          103,513,768,831
+    l1tex__t_sector_hit_rate.pct                                                           %           99.37
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %           85.53
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %           85.53
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %           66.23
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle            0.86
+    smsp__inst_executed_per_warp.avg                                                                 (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %            0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp            3.17
+    ---------------------------------------------------------------------------- ----------- ---------------
+
+  Kernel_QuadTreeSubpatchRayCastKernel (16, 1440, 1)x(1024, 1, 1), Context 1, Stream 15, Device 0, CC 12.0
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------------- ----------- ---------------
+    Metric Name                                                                  Metric Unit    Metric Value
+    ---------------------------------------------------------------------------- ----------- ---------------
+    dram__throughput.avg.pct_of_peak_sustained_elapsed                                     %            0.04
+    gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed                       %           27.33
+    l1tex__t_requests_pipe_lsu_mem_global_op_ld.sum                                          103,506,489,545
+    l1tex__t_sector_hit_rate.pct                                                           %           99.37
+    sm__inst_executed.avg.pct_of_peak_sustained_elapsed                                    %           85.55
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                       %           85.55
+    sm__warps_active.avg.pct_of_peak_sustained_active                                      %           66.23
+    smsp__inst_executed.avg.per_cycle_active                                      inst/cycle            0.86
+    smsp__inst_executed_per_warp.avg                                                                 (!) n/a
+    smsp__sass_branch_targets_threads_divergent.avg.pct_of_peak_sustained_active           %            0.00
+    smsp__warps_eligible.avg.per_cycle_active                                           warp            3.17
+    ---------------------------------------------------------------------------- ----------- ---------------
+
+

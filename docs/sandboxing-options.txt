@@ -1,0 +1,235 @@
+Sandboxing Options for Script/Agent Execution
+=============================================
+
+Purpose
+-------
+This document summarizes practical sandboxing options for user/agent-authored code execution, with explicit focus on:
+- Windows 11
+- Linux (Ubuntu)
+
+It is written for a system like Lunar Analyst where scripts are generated and executed from an assistant/tooling flow.
+
+
+1) Definitions: "Guardrails" vs "Sandbox"
+-----------------------------------------
+Guardrails:
+- Validation at API/tool layer (path checks, schema checks, confirmations, allowlists).
+- Useful and necessary, but do not prevent malicious runtime behavior once code starts.
+
+Sandbox:
+- Runtime isolation enforced below application logic (OS/kernel/process boundary).
+- Prevents or strongly limits filesystem/network/process/device access even if executed code is hostile.
+
+
+2) Threat Model (Practical Baseline)
+------------------------------------
+Assume executed script may:
+- Read/write files outside scenario root.
+- Exfiltrate data over network.
+- Spawn subprocesses.
+- Consume excessive CPU/RAM/disk (DoS).
+- Attempt privilege escalation via local misconfigurations.
+
+Desired controls:
+- Filesystem confinement to scenario-specific working set.
+- Optional network deny-by-default.
+- Process/syscall/resource limits.
+- Deterministic teardown and cleanup.
+- Auditability (what ran, with what permissions).
+
+
+3) Protection Levels
+--------------------
+Level 0: Application-only guardrails
+- Controls: Path normalization, allowlisted tools, confirmation prompts, policy checks.
+- Strength: Low (bypass once arbitrary code executes).
+- Complexity: Low.
+- Current state in many systems today.
+
+Level 1: Process isolation + least privilege user + resource limits
+- Controls: Separate process/user, restricted cwd, low privileges, timeouts, CPU/memory limits.
+- Strength: Low-Medium.
+- Complexity: Low-Medium.
+- Good immediate hardening baseline.
+
+Level 2: OS sandbox primitives (without full VM/container)
+- Controls:
+  - Linux: seccomp, AppArmor/SELinux, namespaces, cgroups.
+  - Windows: AppContainer, restricted token, Job Objects, WDAC/AppLocker rules.
+- Strength: Medium-High (depends on policy quality).
+- Complexity: Medium-High.
+
+Level 3: Container sandbox
+- Controls: Namespaces + cgroups + profile policy + readonly rootfs + mount allowlist + network policy.
+- Strength: High (if hardened; still shared kernel risk).
+- Complexity: Medium-High.
+
+Level 4: MicroVM / full VM isolation
+- Controls: Hardware virtualization boundary + strict host<->guest mediation.
+- Strength: Very High.
+- Complexity: High (ops cost, startup overhead).
+
+
+4) Windows 11 Options
+---------------------
+A. Restricted worker process (quick win)
+- Mechanisms:
+  - Dedicated low-privilege local user for script worker.
+  - Run worker under that identity.
+  - Job Object limits (CPU time, process count, memory, kill-on-job-close).
+  - Tight ACLs on scenario workspace; deny outside paths where possible.
+- Pros: Implementable quickly.
+- Cons: Not airtight; Windows ACL model is easy to misconfigure.
+
+B. AppContainer / LowBox model
+- Mechanisms:
+  - Run worker process in AppContainer with capabilities minimized.
+  - Broker file access via explicit handles to allowed paths only.
+  - Pair with firewall/network restrictions.
+- Pros: Stronger confinement than plain restricted user.
+- Cons: Integration complexity; some Python/native libs may break without careful brokering.
+
+C. WDAG / Windows Sandbox / Hyper-V isolated execution
+- Mechanisms:
+  - Execute untrusted code inside disposable VM-like boundary.
+  - Copy in scenario data; copy out allowed outputs via explicit channel.
+- Pros: Strong boundary; good for high-risk mode.
+- Cons: Higher startup and orchestration overhead; Windows feature dependencies.
+
+D. Windows containers
+- Mechanisms: process/Hyper-V isolated containers.
+- Pros: Familiar container model.
+- Cons: Heavier ecosystem friction for data science/GDAL stacks on Windows; policy maturity varies.
+
+Recommended Windows baseline:
+- Start with (A) + strong guardrails, then move to (B) for default untrusted execution.
+- Offer (C) for "high-assurance mode" jobs.
+
+
+5) Ubuntu (Linux) Options
+-------------------------
+A. Rootless container runtime (Podman/Docker rootless)
+- Mechanisms:
+  - Rootless container per execution.
+  - Readonly rootfs, mount scenario dir rw, everything else ro/none.
+  - Drop capabilities, no-new-privileges, seccomp + AppArmor profile.
+  - cgroups for CPU/memory/pids.
+  - `--network=none` default.
+- Pros: Strong and practical balance; mature tooling.
+- Cons: Some geospatial/native workloads need tuning for mounts/libs.
+
+B. Namespaces + seccomp/AppArmor without full container stack
+- Mechanisms:
+  - `unshare`/`bubblewrap` style sandboxes.
+  - AppArmor profile and seccomp syscall filters.
+- Pros: Lightweight.
+- Cons: Harder to maintain than container policy in many teams.
+
+C. MicroVM (Firecracker/Kata)
+- Mechanisms: per-job microVM with explicit shared dirs.
+- Pros: Stronger than shared-kernel container.
+- Cons: Significant platform engineering effort.
+
+Recommended Ubuntu baseline:
+- Rootless container sandbox with hardened profile + no network by default.
+- Add microVM mode only if threat/certification requires stronger boundary.
+
+
+6) Cross-Platform Architecture Patterns
+---------------------------------------
+Pattern 1: Brokered Execution Service
+- Main app never directly executes untrusted script.
+- It submits job to a sandbox broker.
+- Broker enforces policy and returns result/artifacts.
+
+Pattern 2: Capability Tokens
+- Each run gets explicit scoped capabilities:
+  - allowed input paths
+  - allowed output paths
+  - network policy
+  - max runtime/resources
+
+Pattern 3: Read-only by default
+- Inputs mounted/read-only.
+- Writes only to explicit output dir.
+- No implicit write access elsewhere.
+
+Pattern 4: Network deny by default
+- Most analytical scripts do not need outbound network.
+- Enable per-job exception with explicit approval + logging.
+
+
+7) Security Controls Checklist (Independent of Sandbox Type)
+------------------------------------------------------------
+- Filesystem:
+  - Canonical path resolution before execution.
+  - Mount/ACL only scenario and scratch output paths.
+  - Immutable system/runtime layers where possible.
+- Process:
+  - Disable nested process creation where feasible.
+  - Limit process count and child process behavior.
+- Resource:
+  - CPU, memory, wall-clock timeout, disk quota.
+- Network:
+  - Default deny, explicit allow exceptions.
+- Observability:
+  - Log policy applied, identity, mounts, limits, command hash.
+  - Capture stdout/stderr and exit reason.
+- Supply chain:
+  - Pin runtime image/environment.
+  - Restrict dynamic package installs in sandbox run path.
+
+
+8) Phased Plan (Pragmatic)
+--------------------------
+Phase 0 (Now): Guardrails + explicit risk labeling
+- Keep current path validation/confirmation.
+- Label execution mode as "guard-railed, not fully sandboxed".
+
+Phase 1: Isolation baseline (2-4 weeks)
+- Separate worker identity/process.
+- Enforce resource limits and network policy toggle.
+- Stronger filesystem ACL/mount restrictions.
+
+Phase 2: Default sandbox mode
+- Ubuntu: rootless container hardened profile.
+- Windows: AppContainer/restricted-token worker with brokered file handles.
+- Keep non-sandbox mode only for trusted/internal scenarios.
+
+Phase 3: High-assurance mode
+- Optional microVM/Windows Sandbox path for untrusted/high-risk workloads.
+
+
+9) Recommendation for Lunar Analyst
+-----------------------------------
+Given current architecture (FastAPI control plane + worker subprocess):
+- Short term:
+  - Keep existing scenario-root checks and confirmation policies.
+  - Add execution identity separation and strict resource limits immediately.
+  - Disable network by default for script jobs.
+- Medium term:
+  - Introduce sandbox broker abstraction with pluggable backends:
+    - Windows backend: restricted token/AppContainer path.
+    - Ubuntu backend: rootless container backend.
+  - Route assistant `scenario.run_script`/`scenario.write_run_script` through broker.
+- Long term:
+  - Offer "high-assurance execution" profile using VM isolation for sensitive users.
+
+
+10) Reality Check
+-----------------
+There is no single "perfect" sandbox:
+- Stronger isolation increases complexity and latency.
+- The right design is usually layered:
+  - application guardrails
+  - OS/runtime sandbox
+  - least privilege
+  - observability and policy governance
+
+For most teams, the best ROI is:
+- no-network default
+- strict path/mount confinement
+- low-privilege isolated worker
+- resource limits
+- clear upgrade path to VM isolation for high-risk runs.
+

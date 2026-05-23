@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "PolygonGeometry": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "default": "Polygon",
+          "pattern": "^Polygon$",
+          "title": "Type",
+          "type": "string"
+        },
+        "coordinates": {
+          "items": {
+            "items": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "title": "Coordinates",
+          "type": "array"
+        }
+      },
+      "required": [
+        "coordinates"
+      ],
+      "title": "PolygonGeometry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "scenario_root": {
+      "pattern": "^[a-z0-9][a-z0-9_-]{2,31}$",
+      "title": "Scenario Root",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "owner": {
+      "title": "Owner",
+      "type": "string"
+    },
+    "directory": {
+      "title": "Directory",
+      "type": "string"
+    },
+    "primary_dem_path": {
+      "pattern": "^dem\\.tif$",
+      "title": "Primary Dem Path",
+      "type": "string"
+    },
+    "primary_dem_crs": {
+      "title": "Primary Dem Crs",
+      "type": "string"
+    },
+    "primary_dem_footprint": {
+      "$ref": "#/$defs/PolygonGeometry"
+    },
+    "size_bytes": {
+      "minimum": 0,
+      "title": "Size Bytes",
+      "type": "integer"
+    },
+    "last_touched_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Last Touched Utc",
+      "type": "string"
+    },
+    "created_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Created At Utc",
+      "type": "string"
+    },
+    "updated_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Updated At Utc",
+      "type": "string"
+    }
+  },
+  "required": [
+    "scenario_id",
+    "scenario_root",
+    "name",
+    "owner",
+    "directory",
+    "primary_dem_path",
+    "primary_dem_crs",
+    "primary_dem_footprint",
+    "size_bytes",
+    "last_touched_utc",
+    "created_at_utc",
+    "updated_at_utc"
+  ],
+  "title": "Scenario",
+  "type": "object"
+}

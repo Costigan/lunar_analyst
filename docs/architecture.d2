@@ -1,0 +1,84 @@
+direction: right
+theme: 200
+
+# Layers
+User: {
+  shape: person
+}
+
+Frontend: React + OpenLayers {
+  style: {
+    fill: "#e1f5fe"
+    stroke: "#01579b"
+  }
+  UI: {
+    Workspace: FlexLayout {
+      Map: OpenLayers
+      LayerManager: BlueprintJS
+      Assistant: Chat/Output
+      Tools: JobLaunch
+      MoonTrek: Catalog
+    }
+  }
+}
+
+Backend: FastAPI {
+  style: {
+    fill: "#f1f8e9"
+    stroke: "#33691e"
+  }
+  API: {
+    ScenarioEndpoints
+    JobEndpoints
+    FileServing
+    AssistantService
+    MCPGateway
+  }
+  Services: {
+    ScenarioService
+    ProductService
+    LayerService
+    JobRuntime
+  }
+}
+
+Compute: "Python/Native" {
+  style: {
+    fill: "#fff3e0"
+    stroke: "#e65100"
+  }
+  Worker: "Python" {
+    Rasterio
+    "Xarray/Dask"
+    MapAlgebraDSL
+  }
+  Native: "C# / .NET 9" {
+    MoonLib: Bridge
+    "NewHorizon: GPU (ILGPU/CUDA)"
+  }
+}
+
+Storage: Filesystem {
+  style: {
+    fill: "#fce4ec"
+    stroke: "#880e4f"
+  }
+  ScenarioRoot: {
+    DEM: primary_dem.tif
+    DB: "scenario.db (SQLite)"
+    Products: product_id/
+    Display: warped_rasters/
+  }
+  Global: {
+    RAG: global_rag.db
+    Sessions: assistant_sessions.db
+  }
+}
+
+# Connections
+User -> Frontend.UI: Interacts
+Frontend.UI -> Backend.API: REST / WebSocket
+Backend.Services -> Storage.ScenarioRoot: Reads/Writes
+Backend.Services -> Compute.Worker: Orchestrates
+Compute.Worker -> Compute.Native: P/Invoke Bridge
+Compute.Native -> Storage.ScenarioRoot: High-perf IO

@@ -1,0 +1,23 @@
+Read docs/DESCRIPTION.md for context.
+
+I'm still trying to debug QuadTreeHorizonGenerator.cs.
+Right now, I'm doing this through CompareHorizons project in this solution.
+The @Form2.cs form renders a map and the horizon at a selected point.
+
+I can currently select a point within the primary ElevationMap in the
+map, and the app will plot the precalculated horizon at that point
+loaded from a directory of horizon files.  I can also run the
+reference algorithm at that point and plot that horizon as a
+comparison.
+
+Now, I want to select an azimuth in the horizon plot by dragging a
+vertical line on the plot indicating the azimuth.  (Mouse down, drag,
+up, moves this line.)
+
+When that azimuth is updated, I want you to run the emulation
+algorithms for the quad tree algorithm and the reference algorithm,
+which will return a list of points sampled.  And I want these two
+lists of points rendered on the map too (with light lines between
+them).
+
+Ask questions, if you have any, then implement this.

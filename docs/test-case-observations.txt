@@ -1,0 +1,114 @@
+Assistant Functional Eval Observations (Scenario: mons-mouton)
+Date: 2026-03-13
+
+Context
+- Model is fixed for now. Treat openai/gpt-5.4 as the current practical ceiling.
+- Improvement focus should be app behavior, tool/runtime robustness, prompts/guidance, and eval design.
+
+Compared Runs (high-level)
+- ollama/gpt-oss:20b: 14 failed, 2 passed (functional suite).
+- openai/gpt-5.4: 12 failed, 4 passed (functional suite).
+- gpt-5.4 shows better tool-loop behavior (more multi-tool turns, fewer search-only dead ends), but major failures remain due to runtime/app/test-contract issues.
+
+Observed Failure Patterns
+1) Notebook runner contract failures
+- Errors like:
+  - "Notebook job runner did not produce a result payload ... returncode=0"
+- Seen on script cases (for example slope mask, polygonize).
+- Indicates orchestration/runner-result handshake bug (job exits, but result.json not produced/located/validated).
+
+2) Script runtime/data issues
+- Examples:
+  - nodata value incompatible with uint8
+  - invalid number of arguments
+  - MultiPolygon not iterable
+  - no ridge features extracted
+  - file output path missing directory
+- These are mostly generated-script robustness and environment assumptions.
+
+3) CRS assertion brittleness in tests
+- Tests compare CRS string literal "ESRI:103878".
+- Outputs frequently encode equivalent lunar stereographic CRS as WKT PROJCS strings.
+- Cases fail despite likely semantic CRS equivalence.
+
+4) Layer state setup/lookup fragility
+- Manipulation cases call layer.update_state successfully but tests fail to find expected target layer by file mapping.
+- Reorder intent often not satisfied (model chooses list/update flows instead of reorder).
+
+5) Tool-choice drift in first turn
+- Some turns still begin with tools.search/artifact.describe_geotiff instead of direct execution tool.
+- Follow-up prompts help but do not always converge to required tool or valid script.
+
+6) Output schema mismatch
+- Table outputs semantically close but headers differ from strict expectation (for example percentile,elevation vs p10,p50,p90).
+
+Why gpt-5.4 still fails many cases
+- It is better at planning/tool-loop than gpt-oss:20b, but current app/tool contracts and test assertions expose non-model bottlenecks:
+  - notebook runner payload contract,
+  - strict CRS string checks,
+  - layer registration/state assumptions,
+  - script execution environment assumptions,
+  - brittle output-schema expectations.
+
+Recommendations: App/Tooling Improvements (non-model)
+A) Fix notebook runner result contract (highest priority)
+- Guarantee result payload creation on all code paths (success/failure).
+- Include explicit failure envelope when script crashes before normal completion.
+- Add guardrails: if returncode==0 and result missing, emit deterministic synthetic error payload with diagnostic fields.
+- Add integration tests for "runner exits 0 but missing result".
+
+B) Strengthen script execution defaults
+- Enforce robust output directory creation for script patterns.
+- Add utility wrappers/snippets in guidance and tool templates for:
+  - nodata-safe dtype handling,
+  - geometry iteration safety,
+  - feature-empty checks with fallback behavior,
+  - explicit imports compatible with current environment.
+- Ensure common geospatial libs expected by generated scripts are either installed or guidance explicitly forbids them.
+
+C) Improve tool argument auto-repair
+- On schema validation errors (missing required_path, bad args), retry with deterministic argument patching before giving model another free-form chance.
+- Persist repaired-argument diagnostics in metadata for eval analysis.
+
+D) Improve layer operations reliability
+- Provide deterministic layer resolver by relative_path before model loop for update/reorder intents.
+- If layer missing, auto-create or explicitly fail with actionable machine-readable error.
+- Expose/require layer_id resolution helper tool path for update/reorder flows.
+
+Recommendations: Eval/Test Improvements
+E) CRS semantic equivalence checks
+- Replace strict "crs == ESRI:103878" string equality with equivalence check:
+  - parse via rasterio/pyproj and compare normalized CRS/proj params.
+- Keep a warning if literal authority code is absent, but do not fail on equivalent WKT.
+
+F) Separate failure classes in reports
+- Distinguish:
+  - app/runtime contract failure,
+  - tool argument/schema failure,
+  - model tool-choice failure,
+  - postcondition semantic mismatch.
+- This prevents over-attributing infrastructure defects to model quality.
+
+G) Calibrate strictness for schema expectations
+- For table tests, allow accepted schema variants with mapping rules (for example p10/p50/p90 OR percentile,elevation long format) when semantics are equivalent.
+- Keep strict schema tests in a dedicated conformance subset.
+
+H) Two-turn functional policy
+- Keep first_tool_mismatch as warning (already implemented).
+- For functional cases, pass when required execution tool appears in-turn/session and postconditions succeed.
+- Track first-turn detours separately as efficiency metric, not hard fail.
+
+I) Scenario fixture capability matrix
+- Explicitly encode required fixture assets/capabilities per case.
+- Auto-synthesize minimal required inputs where scientifically acceptable (for example nir/red placeholders), otherwise skip with clear reason.
+
+Suggested Near-Term Plan
+1. Fix notebook runner result payload contract and add regression tests.
+2. Relax CRS checks to semantic equivalence.
+3. Harden layer lookup/update/reorder setup path.
+4. Add deterministic tool-arg repair for common script tool-call schema mistakes.
+5. Re-run gpt-5.4 baseline and compare by failure class, not only pass/fail count.
+
+Success Criterion (pragmatic)
+- With model fixed at gpt-5.4, reduce failures caused by app/test-contract defects first.
+- Target: majority of remaining failures are genuine model reasoning/code-generation limits, not infrastructure or assertion brittleness.

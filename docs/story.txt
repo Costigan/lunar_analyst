@@ -1,0 +1,17 @@
+Here's the user interaction story I want to implement.
+
+1. Open the lunar_analyst web app and see the map and the scenarios.
+2. Pick a scenario.
+3. Click on something which opens a marimo server (or the marimo server) with the scenario top-level directory selected, so I can see notebooks in that directory.
+4. Open a notebook and run it, generating plots (or whatever it does)
+5. Create a new notebook in the scenario directory
+6. Describe the analysis I want done to the language model in marimo's left tab
+7. The language model writes code in the notebook, using the libraries and helper functions provided with lunar_analyst
+8. I run the notebook.  For example, this one produces a geotiff file.
+9. I add a cell at the end of the notebook that adds the geotiff file to the map layers list and zooms the map view to see that geotiff
+10. I switch back to the map view to examine the geotiff
+
+Where should user stories like this be documented?
+
+Can I do this now?
+If not, what needs to change?

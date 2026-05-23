@@ -1,0 +1,57 @@
+The .NET Core solution in the current directory, called new_horizon, is
+the foundation of a tool I'm building, called lunar_analyst, that
+supports searching for and analyzing landing sites for lunar missions.
+
+Currently, new_horizon can take a list of nested digital elevation
+maps (geotiff files) and generate files containing horizons for the
+DEM pixel in the inner DEM.  Each file contains horizons for a patch
+of DEM 128 by 128 pixels in size.
+
+Using these horizons, new_horizon can calculate the illumination on
+the surface at the pixel of the inner DEM at any time between 1970 and
+2050.  new_horizon uses the Spice library developed by JPL's NAIF
+facility to do this.
+
+I want to replicate this C# illumination calculation in Python using
+the numpy, numba and spiceypy libraries.  That is, I want python code
+to read the horizon files and generate a lightmap geotiff file given a
+timestamp.
+
+The code in @moonlib/pipeline/LightmapPipeline.cs does this
+calculation. Use it as a model.
+
+I don't expect you to replicate the threading and multicore use done
+by .NET's task parallel library.  But I do expect the code that is
+generating the lightmaps from the horizons to be jit-compiled with
+numba.
+
+Implement this as a python function that takes these inputs:
+
+1. the path of a digital elevation map (dem)
+2. a directory path containing horizon files.
+3. the path of an output geotiff file.
+
+The function reads the directory finding all horizon files there.
+(Look at the C# code to see how they're named.)  Then create an output
+byte array large enough to contain all of the 128 by 128 pixel patches
+represented by the horizon files.  Then iterate through the list of
+files, reading them and calculating illumination values for each pixel
+using the corresponding horizon and the timestamp.  (SPICE is slow and
+single-threaded, so you probably want to cache the sun vector in moon
+mean earth frame, although you'll have to rotate it into the
+gravity-normal frame for each pixel before calculating the sun's
+azimuth and elevation.  Then you use that and the horizon to calculate
+the illumination.
+
+When this function has finished calculating illumnation for all of the
+patches, write the byte array to a geotiff file.  Copy the
+georeferencing from the dem input to the output geotiff.
+
+There is a C Python interpreter in
+d:/projects/env_gdal/Scripts/python.exe that has the numpy, numba and
+spiceypy libraries installed.  I will use that to run your code.  You
+can run it for testing.
+
+Create a python/ directory and put python source files there.
+
+If you have questions about the instructions, ask them first.

@@ -1,0 +1,8 @@
+Here is some additional information to integrate into the plan:
+
+- When Tauri is used and deployed, python will be a sidecar.
+- When debugging, I need to be able to run the python server in within vscode so that I can debug
+- Consider converting geotiffs to Cloud Optimized GeoTIFFs when they are imported
+- Strongly consider using OpenLayers WebGL: Use the WebGLTile layer to render raster data, allowing use of custom fragment shaders.  This could be a way to implement color maps, contour lines and many other features
+
+Then, proceed to the next step, Phase 0 - Freeze Stage 1 schemas.

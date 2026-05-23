@@ -1,0 +1,8 @@
+Write a test script that calls lightmap_from_horizons.
+
+The DEM is here: d:/datasets/viper_v71_2024_medium/other/dem.tif
+The directory of horizon files is here: d:/projects/new_horizon/output_horizons/
+Put the output geotiff here: d:/projects/new_horizon/python_test_image.tif
+
+I'm not sure what the format of the timestamp should be, but I want this time, UTC: 2012-12-02T10:51:27
+

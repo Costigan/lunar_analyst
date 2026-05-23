@@ -1,0 +1,95 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "scenario_id": {
+      "title": "Scenario Id",
+      "type": "string"
+    },
+    "scenario_root_dir": {
+      "title": "Scenario Root Dir",
+      "type": "string"
+    },
+    "dem_path": {
+      "title": "Dem Path",
+      "type": "string"
+    },
+    "horizons_dir": {
+      "title": "Horizons Dir",
+      "type": "string"
+    },
+    "output_path": {
+      "title": "Output Path",
+      "type": "string"
+    },
+    "time_start_utc": {
+      "title": "Time Start Utc",
+      "type": "string"
+    },
+    "time_stop_utc": {
+      "title": "Time Stop Utc",
+      "type": "string"
+    },
+    "time_step_hours": {
+      "title": "Time Step Hours",
+      "type": "number"
+    },
+    "reducer_kind": {
+      "title": "Reducer Kind",
+      "type": "string"
+    },
+    "tiles_written": {
+      "title": "Tiles Written",
+      "type": "integer"
+    },
+    "value_min": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value Min"
+    },
+    "value_max": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Value Max"
+    },
+    "artifact_db_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Artifact Db Path"
+    }
+  },
+  "required": [
+    "scenario_id",
+    "scenario_root_dir",
+    "dem_path",
+    "horizons_dir",
+    "output_path",
+    "time_start_utc",
+    "time_stop_utc",
+    "time_step_hours",
+    "reducer_kind",
+    "tiles_written"
+  ],
+  "title": "GenerateLightmapReductionRasterResult",
+  "type": "object"
+}

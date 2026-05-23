@@ -1,0 +1,156 @@
+{
+  "$defs": {
+    "AssistantOutput": {
+      "additionalProperties": false,
+      "properties": {
+        "output_id": {
+          "title": "Output Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "table",
+            "plot",
+            "artifact_card",
+            "map_view"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "mime_type": {
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "storage": {
+          "enum": [
+            "inline",
+            "file"
+          ],
+          "title": "Storage",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "file_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "File Id"
+        },
+        "data": {
+          "additionalProperties": true,
+          "title": "Data",
+          "type": "object"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "output_id",
+        "kind",
+        "mime_type",
+        "storage"
+      ],
+      "title": "AssistantOutput",
+      "type": "object"
+    },
+    "AssistantRole": {
+      "enum": [
+        "system",
+        "user",
+        "assistant",
+        "tool"
+      ],
+      "title": "AssistantRole",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "message_id": {
+      "title": "Message Id",
+      "type": "string"
+    },
+    "session_id": {
+      "title": "Session Id",
+      "type": "string"
+    },
+    "role": {
+      "$ref": "#/$defs/AssistantRole"
+    },
+    "content": {
+      "title": "Content",
+      "type": "string"
+    },
+    "created_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Created At Utc",
+      "type": "string"
+    },
+    "turn_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Turn Id"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "outputs": {
+      "items": {
+        "$ref": "#/$defs/AssistantOutput"
+      },
+      "title": "Outputs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "message_id",
+    "session_id",
+    "role",
+    "content",
+    "created_at_utc"
+  ],
+  "title": "AssistantMessage",
+  "type": "object"
+}

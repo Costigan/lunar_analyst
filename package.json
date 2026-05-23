@@ -1,0 +1,12 @@
+{
+  "name": "lunar-analyst-workspace",
+  "private": true,
+  "scripts": {
+    "build": "npm run build:frontends",
+    "test": "npm --prefix backend/web/lunar_analyst run test",
+    "test:map": "npm --prefix backend/web/lunar_analyst run test",
+    "build:map": "npm --prefix backend/web/lunar_analyst run build",
+    "build:moonlayers": "npm --prefix moonlayers_pkg run build",
+    "build:frontends": "npm run build:map && npm run build:moonlayers"
+  }
+}

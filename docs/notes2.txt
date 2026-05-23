@@ -1,0 +1,22 @@
+dem
+hillshade_raster
+slope_raster
+aspect_raster
+threshold_mask
+combined_mask
+selection_mask
+label_regions(mask) output
+region_sizes(mask) output
+find_borders(mask) output
+illumination_raster
+earth_visibility_duration_raster
+combined_sun_earth_max_contiguous_duration_raster
+psr_raster
+lighting_raster / sun_fraction
+sun_above_horizon / sun_over_horizon_deg
+earth_above_horizon / earth_over_horizon_deg
+station_over_horizon_deg
+display/{product_id}/.../*.cog.tif
+tri_raster
+tpi_raster
+roughness_raster

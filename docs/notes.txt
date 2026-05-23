@@ -1,0 +1,242 @@
+I agree in with your conclusions in general.  Here is some specific feedback.
+
+  - product_generating is too broad. In
+    docs/ADR.0042.non_deterministic_classification_and_product_graph.md:147
+    it includes import, transformation, and publication. Importing a
+    file, publishing a layer, or “add this as a layer” are not
+    dependency-graph problems; they are governed tool actions and
+    reference-resolution problems already covered by the existing tool
+    model and working-set design in docs/DESIGN.md:258 and
+    docs/ADR.0035.typed_entity_memory_and_reference_resolution_v1.md:88. This
+    overlap will create routing ambiguity.
+
+<MY COMMENT>
+    I agree.  importing a file or adding a layer are not
+    really product_generating.  Perhaps this category should be
+    'product_handling', leaving 'product_generating' to refer to
+    actually generating a product via tool use.
+
+    Note that I am confused about where the ability of the LLM to
+    write arbitrary python scripts, which allows the production of a
+    near infinite list of product types, doesn't into this scheme yet.
+</MY COMMENT>
+
+  - The pipeline in
+    docs/ADR.0042.non_deterministic_classification_and_product_graph.md:91
+    conflicts with the current fixed assistant pipeline in
+    docs/DESIGN.md:279 and the planner-as- canonical-handoff contract
+    in docs/ADR.0028.turn_planner_json_contract.md:24. It adds a
+    second classifier after deterministic execution instead of
+    extending the planner inputs before execution. That will make
+    replay, telemetry, and merge semantics harder, not easier.
+
+<MY COMMENT>
+    If we remove 'product_handling' operations from the 'product_generating' categorization, does that solve this problem?
+</MY COMMENT>
+
+  - Phase 1 says “startup loading” and “fail fast” for the product library in docs/ADR.0042.non_deterministic_classification_and_product_graph.md:783 and docs/
+    ADR.0042.non_deterministic_classification_and_product_graph.md:792, but assistant initialization is explicitly supposed to be lazy and failure-tolerant in docs/DESIGN.md:205. As written,
+    this risks turning an assistant-only config error into a backend readiness failure.
+
+<MY COMMENT>
+    I agree that assistant initialization should be lazy.  In the case of
+    the library of product types and rules described here, they shouldn't
+    change quickly or in response to user interaction, so it's ok for the
+    system to halt of the library is inconsistent.  That is similar to a
+    programming bug.
+</MY COMMENT>
+
+  - The ADR says executable authority stays with governed tools and JobHandlers in docs/ADR.0042.non_deterministic_classification_and_product_graph.md:377, but the proposed recipe schema in
+    docs/ADR.0042.non_deterministic_classification_and_product_graph.md:295 and docs/ADR.0042.non_deterministic_classification_and_product_graph.md:319 still duplicates argument contracts,
+    postconditions, and execution metadata. That creates exactly the shadow-contract drift the ADR claims to avoid. Product classification already lives in scenario.db metadata per docs/
+    ADR.0002.scenario_filesystem_and_catalog.md:48, and canonical execution ids are already defined in docs/DESIGN.md:213.
+
+<MY COMMENT>
+I don't understand this.
+</MY COMMENT>
+
+  - Constraint state is underspecified and potentially unsafe. The ADR
+    says constraints become persisted structured state in docs/
+    ADR.0042.non_deterministic_classification_and_product_graph.md:171,
+    but the acceptance target only guarantees persistence “across
+    segments in a turn” in docs/
+    ADR.0042.non_deterministic_classification_and_product_graph.md:830. That
+    leaves unclear whether constraints are per-segment, per-turn,
+    per-session, or scenario-scoped. The repo already has a
+    per-session working-set direction in docs/DESIGN.md:303 and
+    docs/ADR.0035.typed_entity_memory_and_reference_resolution_v1.md:53;
+    this ADR should plug into that instead of inventing a parallel
+    hidden state model.
+
+  - The classifier split does not solve the hardest case: inline
+    constraints inside product requests. “Generate a slope <= 5 degree
+    mask” in docs/
+    ADR.0042.non_deterministic_classification_and_product_graph.md:151
+    is both a product request and a constraint payload. Real user
+    requests will look like that. A new subtype label alone will not
+    extract the goal spec the planner actually needs.
+
+<MY COMMENT>
+    “Generate a slope <= 5 degree mask” is not an example of a
+    'constraint_adding' segment.  The terminology is confusing.  That
+    is a product_generating segment with a specified value (5 degrees)
+    on a boolean filter operation applied to a slope raster.
+
+    An example of a 'constraint_adding' operation is the statement
+    'The mission has to last at least 10 days.'  There is no specific
+    product being requested yet.  The assistant has to keep this in
+    mind and recognize, when a product is requested later, that this
+    statement may be relevant and constrain an argument to some
+    operation.
+
+    Let's make this idea phase C and hold on further designing or
+    implementing it for now.
+</MY COMMENT>
+
+  - The cost model in docs/ADR.0042.non_deterministic_classification_and_product_graph.md:454 is too weak for scientific workflows. “Lowest runtime cost” is only safe after scientific
+    equivalence is proven. Otherwise the planner may reuse a cheaper-but-wrong product with mismatched resolution, temporal window, parameters, or lineage. The ADR gestures at reuse policy,
+    but not strongly enough to make runtime-cost ranking safe.
+
+<MY COMMENT>
+    You're saying this as if we're developing scientific products.
+    We're not.  We're generating products for planning mission
+    operations.  'Scientific equivalence' isn't a relevant concept.  I
+    agree that generating a wrong product quickly isn't helpful.  But
+    the rule set is the rule set.  We generate the products defined by
+    the rules.  Map algebra is a relatively limited universe of
+    operations.
+
+    That said, we do have the ability to generate arbitrary products
+    via python script.
+
+</MY COMMENT>
+    
+  - Phase B Z3Py in docs/ADR.0042.non_deterministic_classification_and_product_graph.md:511 is premature. Most of the immediate problems here are vocabulary control, provenance, exact reuse
+    matching, and bounded goal extraction. Adding a solver this early will add a lot of complexity before the simpler plan has been validated on real prompts.
+
+<MY COMMENT>
+I'm not sure whether I agree yet.  Note that we don't have users yet.
+We can insert a phase that focuses on repeating and extending the assistant evaluations before adding a constraint solver.
+I definitely agree with that.  But I don't agree that we need to wait for users before deciding whether to add a solver.
+</MY COMMENT>
+
+  - The implementation plan is too broad and skips the normal
+    shadow-rollout pattern used by the surrounding assistant
+    ADRs. docs/
+    ADR.0042.non_deterministic_classification_and_product_graph.md:745
+    jumps from taxonomy to ontology to compiler to solver, but does
+    not define a feature-flagged shadow mode like docs/
+    ADR.0027.intent_classification_contract.md:173. For a
+    routing/planning change, that is a significant omission.
+    
+<MY COMMENT>
+Once again, we have no users yet.  'Roll out' is really just organizing our implementation steps.
+</MY COMMENT>
+
+  - The Dask/external scheduler discussion in
+    docs/ADR.0042.non_deterministic_classification_and_product_graph.md:538
+    is noise at this stage. It is off the current execution
+    architecture and distracts from the actual problem: deterministic
+    goal expansion over existing governed tools/jobs.
+
+<MY COMMENT>
+I agree.  A one sentence statement suggesting dask use as a possible extension is sufficient. I don't want to lose the suggestion, but we don't have to invest in it.
+</MY COMMENT>
+
+  - Make this an extension of the existing planner contract, not a
+    second planner. Add fields like llm_subtype, goal_spec, and
+    constraint_payload to the current segment/planner model instead of
+    inserting a new stage after execution.
+
+<MY COMMENT>
+I agree fully.
+</MY COMMENT>
+
+  - Make the product graph thin. It should own only dependency
+    semantics and canonical goal names. Execution schemas,
+    confirmation rules, and postconditions should come from the
+    existing unified tool/job contracts keyed by implementation_name
+    or job_id, not be re-described in YAML.
+
+<MY COMMENT>
+I don't understand where the existing unified tool/job contracts are.
+They should be in a single, clearly-defined and human-readable place.
+YAML has that advantage, although I'm not sure YAML is sufficiently expressive.
+I agree that we definitely don't want duplication of existing descriptions.
+Think this through.
+</MY COMMENT>
+
+  - Narrow the scope to derived analysis products only. Keep import,
+    publish, and layer/UI follow-up as ordinary deterministic actions
+    that can run before or after a product plan.
+    
+<MY COMMENT>
+I agree fully.
+</MY COMMENT>
+    
+  - Define constraint scope explicitly: turn, session, and scenario
+    should be distinct. Constraints should be visible, removable, and
+    cleared or revalidated on scenario switch.
+
+<MY COMMENT>
+I agree.  See my previous comments on what constraints are in this context.
+Maybe we need a new name.
+</MY COMMENT>
+
+  - Add a goal extraction stage for product_generating segments. That
+    stage should parse inline thresholds, weights, temporal windows,
+    and output intent from the same segment instead of hoping
+    segmentation isolates them.
+
+<MY COMMENT>
+I think I agree, although it's unclear to me whether the information
+will be in a single segment.  It's possible the information may
+require the full prompt and the previous context.
+
+This triggers the thought that what I mean by 'constraints' or
+'problem constraints' is an extraction of the relevant information
+from the prompt and the previous conversation that is needed to select
+the inline thresholds, weights, temporal windows, and output intent
+from a segment so that the model doesn't have to pick it out from the
+whole previous conversation.
+</MY COMMENT>
+
+  - Replace “runtime-cost optimization” with “eligibility first, cost
+    last.” First require exact scenario/CRS/lineage/parameter
+    compatibility. Only then let cost break ties among equivalent
+    plans.
+
+<MY COMMENT>
+I agree in general, although we don't have a precise definition of
+'eligibility'.  For now, we should defer that and focus on cost.
+Capture that we are doing this (ignoring 'eligibility') for now.
+</MY COMMENT>
+
+  - Cut v1 down to a vertical slice: hillshade, slope_raster,
+    threshold_mask, combined_mask, and optional layer.create
+    publish. Prove those with gold prompts and evals before
+    generalizing the ontology.
+
+<MY COMMENT>
+I'm ok with a simplified ontology, but this is too simple.  Also, it
+doesn't reduce the implementation work.  The ontology is separate and
+will be extended in the future in any case.  The v1 ontology needs to
+include DEMs, all raster products generated by GDAL from DEMs,
+horizons and lighting-related products.  We will add more later.
+</MY COMMENT>
+
+  - Move Z3Py and alternate execution substrates out of this ADR. If
+    they are ever needed, they should come after telemetry shows that
+    the thin planner fails on concrete, recurring cases.
+
+<MY COMMENT>
+No.  Don't move it out.  However, you can characterize the phase that
+implements it as an optional extension that we are not implementing at
+this time.
+</MY COMMENT>
+
+If you want, I can turn this into a proposed rewrite of the ADR.
+
+<MY COMMENT>
+Proceed, based on your comments and my comments here.
+</MY COMMENT>

@@ -1,0 +1,106 @@
+Phase B Test Plan
+
+  1. Build both images from the repo root:
+
+  ./scripts/docker-build.sh
+
+  2. Validate the compose file:
+
+  cd docker
+  docker compose -f compose.dev.yml config
+  cd ..
+
+  3. Start the dev container and open a shell:
+
+  ./scripts/docker-run-dev.sh
+
+  4. Inside the container, confirm the path contract:
+
+  pwd
+  echo "$LUNAR_ANALYST_CONFIG_TOML"
+  echo "$LUNAR_ANALYST_WORKSPACE_ROOT"
+  ls /workspace/lunar_analyst
+  ls /var/lib/lunar-analyst/workspace
+
+  Expected:
+
+  - repo at /workspace/lunar_analyst
+  - workspace at /var/lib/lunar-analyst/workspace
+  - config at /workspace/lunar_analyst/config/lunar_analyst.devcontainer.toml
+
+  5. Run the built-in smoke script:
+
+  /usr/local/bin/docker-smoke.sh
+
+  Expected:
+
+  - Python version prints
+  - worker pytest slice passes
+  - service container prints a workspace root under /var/lib/lunar-analyst/workspace
+
+  6. Start the backend from the bind-mounted checkout:
+
+  python -m uvicorn backend.api.app:app --host 0.0.0.0 --port 8000 --reload
+
+  Then on the host:
+
+  curl http://127.0.0.1:8000/openapi.json > /tmp/lunar_openapi.json
+
+  Expected:
+
+  - backend starts cleanly
+  - the API responds on port 8000
+
+  7. In another shell inside the dev container, run the targeted pytest slice:
+
+  python -m pytest backend/tests/worker/test_workspace_path_contract.py backend/tests/worker/test_raster_transform_runtime.py -q
+
+  8. Verify workspace persistence survives container lifecycle:
+
+  - create a temp file from inside the container:
+
+  echo phase-b-test > /var/lib/lunar-analyst/workspace/phase_b_probe.txt
+
+  - stop/remove the container:
+
+  cd docker
+  docker compose -f compose.dev.yml down
+  cd ..
+
+  - start it again:
+
+  ./scripts/docker-run-dev.sh
+
+  - confirm the file still exists:
+
+  cat /var/lib/lunar-analyst/workspace/phase_b_probe.txt
+
+  9. Verify host/container workflow parity:
+
+  - edit a repo file on the host
+  - inside the container, confirm the edit is visible immediately:
+
+  git status --short
+
+  - create a scenario artifact inside the container under /var/lib/lunar-analyst/workspace
+  - confirm it exists on the host workspace path too
+
+  If your host workspace root is not /e/lunar_analyst_scenarios
+
+  Export it before compose commands:
+
+  export LUNAR_ANALYST_HOST_WORKSPACE_ROOT=/path/to/your/workspace
+
+  Phase B Exit Criteria Check
+
+  You can consider Phase B verified if all of these are true:
+
+  - ./scripts/docker-build.sh succeeds
+  - docker compose -f docker/compose.dev.yml config succeeds
+  - docker-smoke.sh succeeds in the container
+  - backend starts from the bind-mounted checkout
+  - tests run inside the dev container
+  - scenario/workspace data persists across container recreation
+  - host-native development still works unchanged
+
+  If you want, I can also draft the exact CHANGELOG.md entry and commit message for Phase B.

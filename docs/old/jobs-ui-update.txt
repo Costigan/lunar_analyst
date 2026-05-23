@@ -1,0 +1,450 @@
+Lunar Analyst Jobs Manager UX Update
+Detailed UI Specification + Implementation Plan
+Date: 2026-03-03
+Owner: Frontend (React + Blueprint JS 6)
+
+==================================================
+1) Purpose
+==================================================
+Replace JSON-first job UX with a run-centric UX that prioritizes:
+1. Percent completion
+2. Final completion status
+3. Human-readable status messages
+
+This combines:
+- Option 2: clear current-run focus with structured parameters
+- Option 3: recent runs + selected run details/history
+
+==================================================
+2) Scope
+==================================================
+In scope:
+- Jobs Manager pane UX in main window
+- Parameter entry UX (table-first; JSON hidden behind advanced toggle)
+- Current run progress/status UX
+- Recent runs list (within current app session, with optional persistence follow-up)
+- Selected run detail panel with message timeline
+
+Out of scope (initial phases):
+- New compute job contracts
+- Changes to JobHandlers signatures/routes
+- DB schema migrations
+- Packaging/deployment changes
+
+==================================================
+3) Architecture and Contract Constraints
+==================================================
+- Preserve current job launch/cancel routes.
+- Use current websocket events from /api/v1/events:
+  - job_started
+  - job_progress (includes percent/message when available)
+  - job_completed
+  - job_failed
+  - job_cancelled
+- Respect scenario scoping (ignore events for other scenarios).
+- Keep launch payload compatibility for system and notebook jobs.
+- Keep backend as authoritative status source where available.
+
+==================================================
+4) UX Information Architecture
+==================================================
+Jobs Manager pane sections (top to bottom):
+1. Job Selection + Actions
+2. Current Run Card (always visible)
+3. Recent Runs List
+4. Selected Run Details (collapsible)
+
+Default emphasis:
+- Current run card is primary visual focus.
+- Details/log content is secondary and collapsed by default for non-running runs.
+
+==================================================
+5) Detailed UI Specification
+==================================================
+
+5.1 Job Selection + Actions
+- Keep existing task filter and definition list.
+- Action row:
+  - Primary: Launch
+  - Secondary: Cancel Active (enabled only for active running/queued run)
+  - Secondary: Configure Parameters (opens modal)
+
+Copy:
+- Replace "Params (JSON)" label with "Parameters".
+- No raw JSON shown in-pane by default.
+
+5.2 Configure Parameters Modal
+- Trigger: "Configure Parameters" button.
+- Modal title: "Configure Job Parameters".
+- Subtitle: selected job title and job_definition_id.
+
+Layout:
+- Table with columns:
+  - Parameter
+  - Value
+  - Type
+  - Required
+  - Notes (optional: default/source)
+
+Input controls:
+- bool -> switch/checkbox
+- int/float -> numeric input
+- string/path -> text input
+- null-capable values -> "Set null" checkbox when default/null allowed
+- notebook params object -> nested key/value rows in same table section
+
+Modal actions:
+- Reset to Defaults
+- Cancel
+- Apply
+
+Advanced section:
+- Collapsible "Advanced JSON (for debugging)".
+- Shows JSON editor bound to the same parameter model.
+- Validation errors shown inline and block Apply.
+
+Validation:
+- Required fields must be present/non-empty unless nullable.
+- Basic type coercion with explicit error message if invalid.
+- Preserve exact keys expected by launch payload builder.
+
+5.3 Current Run Card
+- Always visible, even with no run.
+- States:
+  - Idle: "No active run"
+  - Queued
+  - Running
+  - Completed
+  - Failed
+  - Cancelled
+
+Fields:
+- Job title and run id
+- Large progress bar (0-100)
+- Numeric percent text (e.g., 67%)
+- Status chip (queued/running/completed/failed/cancelled)
+- Last message line
+- Start time and elapsed duration (if started)
+- End time (for terminal states)
+
+Behavior:
+- Progress bar updates on job_progress events.
+- If no percent is supplied, keep last known percent and show indeterminate animation.
+- Terminal event locks final status and percent (completed forces 100% if needed).
+- Failed/cancelled states use warning/danger styling.
+
+5.4 Recent Runs List
+- Shows latest 10-20 runs (configurable, default 15).
+- Row fields:
+  - Job title
+  - Run id (truncated with tooltip/full on selection)
+  - Final/current status chip
+  - Percent
+  - Started time
+  - Duration
+
+Behavior:
+- New launch inserts at top.
+- Active run row updates live.
+- Selecting row opens/refreshes Selected Run Details.
+- Failed rows visually emphasized.
+
+Initial persistence model:
+- Maintain list in client memory for current session.
+- On app refresh, list resets (Phase 1).
+- Optional Phase 3 enhancement: hydrate from backend list jobs endpoint.
+
+5.5 Selected Run Details (Collapsible)
+- Header: "Run Details"
+- Collapsed by default except:
+  - auto-expand on failed run
+  - auto-expand when user selects a run
+
+Tabs/sections:
+1. Summary
+  - Final status
+  - Final percent
+  - Requested/start/finish timestamps
+  - Duration
+  - Final result summary if present
+2. Parameter Snapshot (read-only table)
+  - Exact payload used at launch
+3. Messages
+  - Human-readable timeline entries
+  - Event type badges (progress/info/warn/error/system)
+  - Expand row to show raw JSON payload (debug only)
+
+5.6 Message Rendering Rules
+- Convert event payloads to readable text:
+  - job_started -> "Run started."
+  - job_progress with message -> message
+  - job_progress without message -> "Progress updated."
+  - job_completed -> "Run completed."
+  - job_failed -> "Run failed: <error>"
+  - job_cancelled -> "Run cancelled."
+- Keep raw payload available under row expansion.
+- Retain cap of visible messages per run (default 150).
+
+5.7 Accessibility and Keyboard
+- All actions keyboard focusable.
+- Modal focus trap; Esc closes.
+- Status changes announced with aria-live polite region.
+- Progressbar includes aria-valuenow and aria-valuetext.
+- Sufficient contrast for status chips across themes.
+
+5.8 Responsive Behavior
+- Narrow width:
+  - Recent Runs condenses to status + job title + percent.
+  - Details section remains single-column.
+- Wide width:
+  - Keep current vertical stack (no complex split view required in pane).
+
+==================================================
+6) Frontend State Model (Target)
+==================================================
+Introduce explicit UI state types (suggested):
+
+RunStatus:
+- "idle" | "queued" | "running" | "completed" | "failed" | "cancelled"
+
+RunRecord:
+- runId: string
+- scenarioId: string
+- definitionId: string
+- title: string
+- status: RunStatus
+- percent: number | null
+- latestMessage: string
+- requestedAt: string | null
+- startedAt: string | null
+- finishedAt: string | null
+- durationMs: number | null
+- paramsSnapshot: Record<string, unknown>
+- messages: Array<{ ts: string; event: string; text: string; raw: Record<string, unknown> }>
+- resultSummary: string | null
+
+Pane state:
+- selectedDefinitionId
+- draftParams (structured model)
+- showParamsModal
+- showAdvancedJson
+- activeRunId
+- recentRuns: RunRecord[]
+- selectedRunId
+
+==================================================
+7) Data/Contract Mapping
+==================================================
+Current backend APIs used:
+- GET /api/v1/job-definitions
+- POST job definition route_path (launch)
+- POST /api/v1/jobs/{job_id}/cancel
+- WS /api/v1/events
+
+Optional API improvement (Phase 3, additive):
+- GET /api/v1/jobs?scenario_id=<id>&limit=<n> for run history hydration
+  - Not required for initial hybrid UX
+  - Add only if persistent history across reload is required
+
+==================================================
+8) Implementation Plan (Phased)
+==================================================
+
+Phase 0: Prep and utility extraction (small)
+Goal:
+- Isolate formatting/normalization logic before UI rewrite.
+
+Tasks:
+- Add helpers in frontend utils for:
+  - status normalization
+  - percent normalization/clamping
+  - event -> display text mapping
+  - duration formatting
+- Add unit tests for these helpers.
+
+Files:
+- backend/web/lunar_analyst/src/utils/jobsManager.ts
+- backend/web/lunar_analyst/src/__tests__/jobsManager.test.ts
+
+Acceptance:
+- All helper tests pass.
+
+Rollback:
+- Revert helper additions only.
+
+---
+
+Phase 1: Current Run Card + de-emphasize logs (MVP)
+Goal:
+- Replace raw active text with progress/status-first card.
+
+Tasks:
+- Replace `activeJobText` with structured active run state.
+- Add progress bar + status chip + latest message.
+- Keep existing log list but move under "Details" disclosure.
+- Keep existing JSON params textarea temporarily hidden behind a button (interim).
+
+Files:
+- backend/web/lunar_analyst/src/components/jobs/JobsManagerPane.tsx
+- backend/web/lunar_analyst/src/styles/app.css
+
+Tests:
+- Component tests for:
+  - progress event updates percent
+  - completed/failed/cancelled terminal state rendering
+  - cancel button enable/disable state
+
+Acceptance:
+- Normal workflow no longer requires reading JSON logs.
+
+Rollback:
+- Feature flag or revert pane component only.
+
+---
+
+Phase 2: Parameter modal + table editor (core UX change)
+Goal:
+- Remove JSON as default parameter editing experience.
+
+Tasks:
+- Add "Configure Parameters" modal.
+- Render parameter table with typed editors.
+- Maintain compatibility with buildLaunchPayload.
+- Add advanced JSON toggle in modal for power users.
+- Persist last edited params per selected definition in-memory during session.
+
+Files:
+- backend/web/lunar_analyst/src/components/jobs/JobsManagerPane.tsx
+- backend/web/lunar_analyst/src/styles/app.css
+- (optional) new component: backend/web/lunar_analyst/src/components/jobs/JobParamsModal.tsx
+- (optional) new types/utils module in jobs utils
+
+Tests:
+- Unit tests for param table <-> payload serialization.
+- Component tests for:
+  - required validation
+  - reset defaults
+  - apply updates reflected at launch
+
+Acceptance:
+- Params hidden from main pane.
+- Default editing path is table UI.
+
+Rollback:
+- Keep old textarea code path behind fallback toggle until phase validated.
+
+---
+
+Phase 3: Recent Runs + Selected Run Details (hybrid completion)
+Goal:
+- Deliver full option-2+3 combined run-centric UX.
+
+Tasks:
+- Add recent runs state list (session-local).
+- Add selectable run rows.
+- Add details panel with summary, parameter snapshot, messages timeline.
+- Add per-message raw JSON expander.
+- Auto-expand details on failed run.
+
+Files:
+- backend/web/lunar_analyst/src/components/jobs/JobsManagerPane.tsx
+- backend/web/lunar_analyst/src/styles/app.css
+- (optional) split components:
+  - JobCurrentRunCard.tsx
+  - JobRecentRunsList.tsx
+  - JobRunDetails.tsx
+
+Tests:
+- Component tests for:
+  - run list insertion/update ordering
+  - selection persistence across updates
+  - failed run auto-expand behavior
+  - details parameter snapshot accuracy
+
+Acceptance:
+- User can monitor current run quickly and inspect prior runs without JSON.
+
+Rollback:
+- Keep single-run mode fallback until run list behavior is stable.
+
+---
+
+Phase 4 (Optional): Persistent run history hydration
+Goal:
+- Preserve run history across page reload.
+
+Tasks:
+- Add backend list jobs endpoint (additive) OR client localStorage cache by scenario.
+- Hydrate recent runs on pane mount.
+- Reconcile hydrated rows with live websocket updates.
+
+Files:
+- Backend router/service if API endpoint chosen
+- Frontend service + pane hydration logic
+- Contract tests if backend route added
+
+Acceptance:
+- Recent runs visible after reload.
+
+Rollback:
+- Disable hydration, continue session-local history.
+
+==================================================
+9) Test Plan Summary
+==================================================
+Unit:
+- jobsManager utils (status/percent/event text/param serialization)
+
+Frontend component/integration:
+- JobsManagerPane behavior for launch/progress/completion/failure/cancel
+- Modal parameter editing and validation
+- Recent runs selection/details behavior
+
+Contract/regression:
+- Ensure launch payload format unchanged for:
+  - system jobs
+  - notebook jobs
+  - single-param unwrap behavior
+
+Manual verification checklist:
+1. Launch notebook and system jobs; confirm progress bar updates.
+2. Confirm completed jobs show terminal status and 100%.
+3. Confirm failed jobs show error-forward copy and details auto-open.
+4. Confirm parameters can be edited without touching JSON.
+5. Confirm raw JSON remains reachable for debugging.
+
+==================================================
+10) Risks and Mitigations
+==================================================
+Risk: Event payload variability (missing percent/message)
+Mitigation:
+- Robust normalization + fallback messages + indeterminate progress mode
+
+Risk: Payload mismatch when replacing JSON editor
+Mitigation:
+- Preserve current buildLaunchPayload path and add serialization tests
+
+Risk: UI complexity in single component
+Mitigation:
+- Split into focused subcomponents in Phase 3
+
+Risk: History expectations across reload
+Mitigation:
+- Explicitly label Phase 1-3 as session history; implement Phase 4 if needed
+
+==================================================
+11) Rollout Strategy
+==================================================
+- Implement in phases with each phase independently shippable.
+- Gate with small feature flag if needed (e.g., VITE_JOBS_UX_V2=true) for easy rollback.
+- Keep old JSON editor code path during transition until Phase 2 passes tests/manual validation.
+
+==================================================
+12) Definition of Done for This UX Update
+==================================================
+- Main pane prioritizes percent completion and final status.
+- Parameters are hidden by default and edited via table UI.
+- Output view is human-readable first; raw JSON is secondary.
+- Recent runs and run details are available in the Jobs Manager.
+- Tests cover core launch/progress/status/parameter flows.
+

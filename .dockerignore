@@ -1,0 +1,16 @@
+.git
+.assistant
+.pytest_cache
+.mypy_cache
+.venv
+node_modules
+backend/web/lunar_analyst/node_modules
+moonlayers_pkg/node_modules
+backend/evals/assistant/leaderboard_runs
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.sqlite
+*.db

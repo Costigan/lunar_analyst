@@ -1,0 +1,41 @@
+I want to understand current best-practices for using frontier models
+in programming.
+
+Here is the process I'm using.  I'm writing in C# using .net core.
+
+1. I have written a simplied, brute-force implementation of an algorithm.
+   This is implemented on the CPU and uses double-precision heavily.
+
+2. I've provided several ideas for a more efficient implementation that I'm asking frontier models, codex and gemini-cli specifically, to implement.
+
+The more efficient implementation is partially on the CPU and partially on a GPU.  I'm using a consumer GPU whose double-precision performance is much worse than single-precision, so I'm using multiple approximations.
+
+I've asked the models to write a CPU-based emulation of the core part of the GPU side of the algorithm so that it can be instrumented extensively. The reference algorithm is also instrumented. This produces csv files that the models analyze by writing python code.
+
+The models also examine some of the of the approximations by writing python code and evaluating the differences.
+
+How does this approach stack up?
+How could I improve my process?
+What am I missing?
+Are there papers or blogs that give clear and up-to-date advice on using frontier models for programming?
+
+Ask me any questions you have before starting your research.
+
+
+
+
+Question: Are you using the frontier models (like GPT-4, Codex, Gemini) via an API in your C# pipeline, or are you prompting them manually?
+
+Answer: I'm using commandline versions on windows 11.  These programs are called codex and gemini respectively.
+I'm also using github copilot.
+
+Question: Are you specifically looking for best practices in how to:
+Write prompts for better code generation?
+Integrate frontier models into a semi-automated programming loop?
+Use models for performance analysis and approximation validation?
+
+Answer: All of these.
+My latest process is to talk with codex about the current state of debugging, and then let it run until it decides to stop and describe its status.
+
+Question: Would you like sources (blogs, papers, examples) that focus more on scientific computing, hybrid CPU/GPU programming, or frontier model-assisted development?
+Answer: I'm interested in all three, but advice on general usage patterns are probably much more available than on the others.  I'm also interested in web programming, although it's a lower priority.

@@ -1,0 +1,67 @@
+# Plan: Finish Colormap Persistence
+
+Layer state (including `style.colormap`) is already written to per-scenario `scenario.db` on `create_layer`/`update_layer`. The remaining issue is restart hydration. The important dependency order is:
+
+1. Restore scenario model.
+2. Restore `products` + `product_files` (stable `file_id` mapping).
+3. Restore `layer_state` (which references `source_file_id`).
+
+Hydrating layers before file registrations will produce broken references.
+
+## 1. Add Scenario DB Hydration for Products and Files
+Implement scenario-local hydration from `scenario.db` into in-memory stores.
+
+- **Where**: `backend/api/dependencies.py`
+- **Scope**:
+  - Load `products` rows into `self._stores.products`.
+  - Load `product_files` rows into `self._stores.product_files` using scenario root from loaded scenario.
+  - Use idempotent upsert behavior in memory (safe across repeated reconcile/discovery calls).
+- **Ordering rule**: Execute this before any layer hydration for the same scenario.
+
+## 2. Add Layer Hydration in `StubLayerService`
+Add hydration logic to read `layer_state` and map rows back into `LayerState`.
+
+- **Where**: `backend/api/dependencies.py`
+- **Query**: `SELECT ... FROM layer_state WHERE scenario_id = ?`
+- **Validation**:
+  - Reject hydrated rows whose `source_file_id` is not present in `self._stores.product_files`.
+  - Reject hydrated rows where the resolved source path is missing on disk.
+- **Cleanup**:
+  - Delete rejected stale rows from `layer_state`.
+  - Hydrate only valid rows into `self._stores.layers`.
+
+## 3. Wire Hydration via Service Bootstrap (Not Private Cross-Service Calls)
+Integrate hydration orchestration in `build_service_container()` (or a small bootstrap helper) rather than calling private methods across services.
+
+- **Why**: Avoid `StubScenarioService -> StubLayerService` private coupling.
+- **Flow**:
+  - Build base services.
+  - For each loaded/discovered scenario, hydrate products/files, then hydrate layers.
+  - Reconcile filesystem as needed after hydration to register truly new files and prune stale registrations.
+- **Constraint**: Must be safe if reconcile runs multiple times.
+
+## 4. Extend Contract Tests
+Update `backend/tests/contract/test_phase3_1_scenario_workspace.py`.
+
+Add test: colormap survives restart.
+1. Create scenario and import source raster.
+2. Create layer with `style.colormap = "viridis"` (plus brightness/contrast defaults).
+3. Rebuild service container against same workspace root.
+4. Assert `GET /api/v1/scenarios/{id}/layers` returns same layer style values.
+
+Add test: stale layer row removed when source file is gone.
+1. Create scenario + layer.
+2. Delete source file from scenario directory.
+3. Rebuild service container.
+4. Assert layer no longer returned and stale DB row is removed.
+
+## 5. Frontend Follow-Up (Separate Slice)
+Keep frontend loading-state/flicker work separate from backend persistence hydration.
+
+- **Backend contract check**: Ensure `/api/v1/lunar-analyst/colormaps` merge behavior remains unchanged (built-in + app + scenario overrides).
+- **Frontend task (separate PR/task)**: prevent transient fallback to grayscale while scenario layers are loading.
+
+## Out of Scope
+- Any schema migration.
+- Changes to colormap catalog format.
+- Large layer-style redesign beyond restoring existing persisted values.

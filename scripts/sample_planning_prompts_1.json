@@ -1,0 +1,72 @@
+[
+  {
+    "prompt": "Create a slope map from the DEM.",
+    "required_files_before": [
+      "dem.tif"
+    ],
+    "delete_files_before": [
+      "slope.tif"
+    ],
+    "required_files_after": [
+      "slope.tif"
+    ]
+  },
+  {
+    "prompt": "Create an aspect raster for terrain orientation analysis.",
+    "required_files_before": [
+      "dem.tif"
+    ],
+    "delete_files_before": [
+      "aspect.tif"
+    ],
+    "required_files_after": [
+      "aspect.tif"
+    ]
+  },
+  {
+    "prompt": "Create a hillshade raster for visualization.",
+    "required_files_before": [
+      "dem.tif"
+    ],
+    "delete_files_before": [
+      "hillshade.tif"
+    ],
+    "required_files_after": [
+      "hillshade.tif"
+    ]
+  },
+  {
+    "prompt": "Create a slope raster and report if it was produced.",
+    "required_files_before": [
+      "dem.tif"
+    ],
+    "delete_files_before": [
+      "../outside_should_not_delete.txt",
+      "/etc/passwd"
+    ],
+    "required_files_after": [
+      "slope.tif"
+    ]
+  },
+  {
+    "prompt": "Create a slope raster (this one is expected to skip if precondition file is missing).",
+    "required_files_before": [
+      "dem.tif",
+      "inputs/not_present_required.tif"
+    ],
+    "delete_files_before": [],
+    "required_files_after": [
+      "slope.tif"
+    ]
+  },
+  {
+    "prompt": "Switch to Shackleton scenario and explain the tradeoffs.",
+    "required_files_before": [
+      "dem.tif"
+    ],
+    "delete_files_before": [],
+    "required_files_after": [
+      "analysis/nonexistent_expected_output.txt"
+    ]
+  }
+]

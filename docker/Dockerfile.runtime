@@ -1,0 +1,66 @@
+ARG DEV_IMAGE=lunar-analyst-dev
+ARG BASE_IMAGE=lunar-analyst-base
+
+FROM ${DEV_IMAGE} AS frontend-builder
+
+SHELL ["/bin/bash", "-lc"]
+
+ENV LUNAR_ANALYST_CONFIG_TOML=/opt/lunar-analyst/config/lunar_analyst.container.toml
+
+WORKDIR /opt/lunar-analyst
+
+COPY config config
+COPY backend/web/lunar_analyst/package.json backend/web/lunar_analyst/package-lock.json backend/web/lunar_analyst/
+RUN npm --prefix backend/web/lunar_analyst ci --no-fund --no-audit
+
+COPY backend/web/lunar_analyst backend/web/lunar_analyst
+RUN npm --prefix backend/web/lunar_analyst run build
+
+FROM ${BASE_IMAGE}
+
+SHELL ["/bin/bash", "-lc"]
+
+ENV HOME=/tmp/lunar-analyst-home
+ENV LUNAR_ANALYST_CONFIG_TOML=/opt/lunar-analyst/config/lunar_analyst.container.toml
+ENV LUNAR_ANALYST_WORKSPACE_ROOT=/var/lib/lunar-analyst/workspace
+ENV PYTHONPATH=/opt/lunar-analyst:/opt/lunar-analyst/moonlayers_pkg
+
+WORKDIR /opt/lunar-analyst
+
+COPY . /opt/lunar-analyst
+COPY --from=frontend-builder /opt/lunar-analyst/backend/web/lunar_analyst/dist /opt/lunar-analyst/backend/web/lunar_analyst/dist
+
+RUN set -euxo pipefail \
+    && python -m pip install --no-cache-dir \
+        uvicorn \
+        jsonschema \
+        numpy \
+        pyproj \
+        pyyaml \
+        requests \
+        msgspec \
+        marimo \
+        anywidget \
+        matplotlib \
+        pandas \
+        scipy \
+        scikit-image \
+        shapely \
+        fiona \
+        pyogrio \
+        pillow \
+        openpyxl \
+        watchdog \
+        tomlkit \
+        spacy \
+    && python -m spacy download en_core_web_sm \
+    && python -m pip install --no-cache-dir /opt/lunar-analyst/moonlayers_pkg \
+    && mkdir -p "$HOME" "$LUNAR_ANALYST_WORKSPACE_ROOT"
+
+COPY docker/entrypoints/run-backend.sh /usr/local/bin/run-backend.sh
+RUN chmod +x /usr/local/bin/run-backend.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/usr/local/bin/run-backend.sh"]
+CMD []

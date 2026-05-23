@@ -1,0 +1,87 @@
+title: Python Script Authoring Guidance for Lunar Analyst
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: python, scripts, scenario, geotiff, marimo, jobs, safety
+
+# Purpose
+Use this guidance when creating Python scripts for Lunar Analyst scenarios.
+Scripts should be reliable, reproducible, and easy to inspect after execution.
+
+# Runtime And Environment
+- Target Python 3.11.
+- Assume the project-managed virtual environment is used (`.venv` under the repo root).
+- Do not rely on globally installed packages or machine-specific paths.
+- Keep imports explicit and minimal; avoid optional dependencies unless required.
+
+# Scenario-Relative Paths (Required)
+- Treat the active scenario root as the working directory.
+- Use relative paths for inputs and outputs whenever possible.
+- Do not hardcode user-specific absolute paths.
+- Write new outputs to the scenario top-level directory unless the user requests a subfolder.
+
+# GeoTIFF And Raster Workflow
+- Validate input file existence before processing.
+- Preserve CRS metadata; do not silently reproject.
+- If reprojection is required, make it explicit in parameters and script comments.
+- Prefer deterministic output names that indicate operation and source.
+- For large rasters, process in windows/tiles when feasible to reduce memory pressure.
+- Prefer in-memory intermediate datasets for temporary GDAL outputs when practical (for example `format="MEM"`), then write only final artifacts to disk.
+- If temporary on-disk rasters are required, ensure all GDAL handles are released before rename/delete.
+
+# GDAL Handle Cleanup
+- Always close GDAL objects before filesystem cleanup:
+  - set bands, datasets, and DEMProcessing return objects to `None` in reverse-use order.
+  - flush output bands/datasets before closing (`FlushCache()` where appropriate).
+- Do not call `Path.unlink()`/`os.remove()` on temporary rasters until all related GDAL objects are closed.
+- Prefer `try/finally` for cleanup so handle release runs on both success and failure.
+- When deletion still fails due to lock timing, prefer retry with short backoff rather than silent ignore.
+
+# Data Safety And File Hygiene
+- Never write outside scenario root.
+- Normalize and validate paths before read/write operations.
+- Avoid destructive overwrites unless explicitly requested.
+- If overwrite is intended, log it clearly in script output.
+- Never embed secrets, tokens, or credentials.
+
+# Script Structure
+- Use a small `main()` and clear helper functions.
+- Validate all user-configurable parameters early and fail fast with actionable errors.
+- Emit concise progress messages for long operations.
+- Raise exceptions with clear context (input path, step name, parameter values).
+- Keep side effects localized and obvious.
+
+# Logging And Diagnostics
+- Print key checkpoints: inputs, selected options, output paths, completion summary.
+- For generated artifacts, print exact relative output paths.
+- Include basic shape/type summaries for major intermediate results when useful.
+- Do not print huge arrays or full raster payloads.
+
+# Preferred Assistant Tooling Behavior
+- If both writing and running are requested, prefer `scenario.write_run_script`.
+- Use `scenario.write_script` only when the user wants to inspect/edit before execution.
+- After execution, inspect outputs with artifact tools instead of inferring success from assumptions.
+- Prefer `artifact.describe_geotiff`, `artifact.preview_geotiff`, and `artifact.stats_geotiff` for raster validation.
+
+# Robustness Checklist
+Before finishing, ensure the script:
+1. Uses scenario-relative paths.
+2. Validates all inputs and parameters.
+3. Produces deterministic output filenames.
+4. Preserves or explicitly handles CRS.
+5. Emits readable progress and completion messages.
+6. Leaves artifacts that can be inspected with built-in tools.
+
+# Example Output Naming Patterns
+- `slope_deg_from_dem.tif`
+- `hillshade_315az_45el.tif`
+- `sun_fraction_2026q1.tif`
+- `temperature_stats_table.csv`
+
+# Anti-Patterns To Avoid
+- Hardcoded machine-specific absolute paths.
+- Silent reprojection or implicit unit conversion.
+- Monolithic scripts with no validation boundary.
+- Writing outputs without reporting where they were saved.
+- Declaring success without artifact inspection.

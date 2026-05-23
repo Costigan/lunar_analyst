@@ -1,0 +1,31 @@
+title: Plot Generation Tool Guidance
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: plot, image, matplotlib, script, artifact.describe_plot, routing
+
+# Purpose
+Guide the agent to generate plots via scripts and surface the resulting image in the assistant response UI.
+
+# Current Plot Workflow
+Use this sequence:
+1. `scenario.set_current` (if active scenario is unclear)
+2. `scenario.write_run_script` (preferred) or `scenario.run_script` (if script already exists)
+3. Script saves plot image file (for example `.png`) at a scenario-relative path
+4. `artifact.describe_plot` using `scenario_id` + `relative_path` to load render reference for the response
+
+# Keyword Triggers
+If user prompt includes keywords like:
+- "plot", "chart", "graph", "figure", "histogram", "scatter", "line plot"
+- "save image", "export png", "visualize results"
+Route to the plot workflow above.
+
+# Script Expectations
+- Use deterministic output names (for example `outputs/temperature_profile_plot.png`).
+- Print or otherwise report the output relative path clearly.
+- Keep output inside scenario root.
+
+# Notes
+- There is no direct "create plot" tool; plotting is script-driven.
+- `artifact.describe_plot` is the tool that makes the generated plot available to the assistant response window.

@@ -1,0 +1,475 @@
+Below is a **structured taxonomy of GeoTIFF raster types** tailored specifically for:
+
+* **Raster algebra (map algebra pipelines)**
+* **Raster → vector extraction**
+* **Lunar landing site and traverse planning**
+
+This is not just a GIS taxonomy—it is **organized by analytical role in your pipeline**, which is what matters for your application.
+
+---
+
+# 0. Foundational Classification Axes
+
+Before listing types, all rasters have attributes:
+
+### A. Type at each pixel (disjoint)
+
+* **Continuous** (e.g., elevation, illumination fraction)
+* **Discrete/categorical** (e.g., hazard class, terrain type)
+* **Binary** (e.g., safe/unsafe)
+
+### B. Origin (disjoint)
+
+* **Primary (measured or modeled input)**
+* **Derived (computed via raster algebra)**
+
+### C. Functional role (non-disjoint)
+
+* **Measurement**
+* **Constraint**
+* **Cost**
+* **Objective**
+* **Mask**
+* **Feature**
+
+### C. Mathematical behavior
+
+* Scalar fields (most rasters)
+* Vector fields (encoded as multi-band rasters)
+* Probability fields
+* Cost fields
+
+### D. Data structure
+
+* Single-band vs multi-band (e.g., slope + aspect packed, or vector components) ([Lizardtech][1])
+
+---
+
+# 1. Primary Physical / Environmental Rasters (Input Layers)
+
+These are **raw or modeled planetary fields**.
+
+## 1.1 Topography & Shape
+
+### 1.1.1 Elevation Models
+
+* **DEM (Digital Elevation Model)** – height of surface ([Wikipedia][2])
+* **DTM (bare ground)** (less relevant on Moon unless regolith removal modeled)
+* **DSM (includes rocks/boulders if derived from imagery)**
+
+**Role:**
+
+* Base input for almost all derived layers
+
+---
+
+### 1.1.2 Surface Geometry (Direct Measurements)
+
+* Surface normals (Nx, Ny, Nz) (multi-band)
+* Roughness (if measured)
+* Local slope estimates (from instrument)
+
+---
+
+## 1.2 Reflectance / Optical
+
+* Albedo maps
+* Photometrically corrected reflectance
+* Multi-band spectral rasters (if available)
+
+**Role:**
+
+* Hazard inference (boulders, regolith type)
+* Illumination validation
+
+---
+
+## 1.3 Thermal / Physical Properties
+
+* Surface temperature maps (modeled or measured)
+* Thermal inertia
+* Volatile probability (e.g., water ice proxies)
+
+---
+
+## 1.4 Ephemeris-dependent Fields (Time-indexed rasters)
+
+* Illumination fraction
+* Sun incidence angle
+* Shadow masks (binary or fractional)
+* Earth visibility (for comms)
+
+**Important:** These are often **time-indexed raster stacks**
+
+---
+
+# 2. First-Order Terrain Derivatives (Local Differential Operators)
+
+Computed directly from DEM via local kernels.
+
+## 2.1 Gradient-Based
+
+### 2.1.1 Slope
+
+* Magnitude of gradient (degrees or %)
+* Critical for mobility and hazard ([vector.geospatial.science][3])
+
+### 2.1.2 Aspect
+
+* Direction of slope (0–360°) ([vector.geospatial.science][3])
+
+### 2.1.3 Surface Normal (vector raster)
+
+* Preferred over slope/aspect for physics
+
+---
+
+## 2.2 Curvature-Based
+
+* Profile curvature (along slope)
+* پلان curvature (perpendicular)
+* Mean curvature
+* Gaussian curvature
+
+**Role:**
+
+* Detect ridges, craters, basins
+
+---
+
+## 2.3 Roughness Metrics
+
+* RMS height variation
+* Local variance / standard deviation
+* Fractal roughness
+
+---
+
+## 2.4 Hillshade (Visualization / proxy)
+
+* Not analytically ideal, but useful for:
+
+  * Feature detection
+  * Edge extraction
+
+---
+
+# 3. Second-Order / Neighborhood (Focal) Rasters
+
+Derived using larger spatial context.
+
+## 3.1 Statistical Neighborhood Fields
+
+* Local mean elevation
+* Local variance
+* Entropy
+
+## 3.2 Morphological Features
+
+* Ridge/valley classification
+* Crater detection masks
+* Peak prominence
+
+## 3.3 Scale-Space Representations
+
+* Multi-resolution DEM pyramids
+* Gaussian-blurred terrain
+* Laplacian-of-Gaussian feature maps
+
+---
+
+# 4. Illumination & Energy Rasters (Mission-Critical for Lunar Poles)
+
+## 4.1 Instantaneous Illumination
+
+* Binary sunlit/shadow
+* Fractional illumination
+
+## 4.2 Temporal Aggregates
+
+* % time illuminated
+* Longest continuous illumination
+* Longest darkness duration
+
+## 4.3 Solar Geometry
+
+* Incidence angle
+* Horizon angle (azimuth-indexed raster)
+
+---
+
+## 4.4 Shadow Modeling
+
+* Ray-traced shadow rasters
+* Soft shadow / partial visibility
+
+---
+
+## 4.5 Energy Availability
+
+* Integrated solar flux
+* Power generation potential
+
+---
+
+# 5. Visibility & Line-of-Sight Rasters
+
+## 5.1 Viewshed (Binary / count)
+
+* Visible / not visible from observer
+* Accumulated visibility (multi-source)
+
+## 5.2 Connectivity-Constrained Visibility
+
+* LOS-constrained reachable regions
+* Useful for:
+
+  * Relay constraints
+  * Rover → lander connectivity
+
+---
+
+## 5.3 Horizon Maps
+
+* Max elevation angle vs azimuth
+* Critical for polar lighting
+
+---
+
+# 6. Traversability & Hazard Rasters
+
+## 6.1 Mobility Constraints
+
+* Slope threshold mask
+* Roughness threshold mask
+* Combined mobility classification
+
+## 6.2 Hazard Layers
+
+* Boulder probability
+* Crater density
+* Slip risk
+
+## 6.3 Composite Traversability Index
+
+* Weighted combination:
+
+  * slope
+  * roughness
+  * illumination
+
+---
+
+# 7. Cost & Distance Fields (Core for Path Planning)
+
+These are **key map algebra outputs**.
+
+## 7.1 Cost Surfaces
+
+* Cost per meter (time, energy, risk)
+* Direction-dependent cost (anisotropic)
+
+## 7.2 Distance Transforms
+
+* Euclidean distance
+* Geodesic distance (on DEM)
+* Cost distance (least-cost accumulation)
+
+## 7.3 Travel Time Fields
+
+* Derived from cost / speed model
+
+---
+
+## 7.4 Potential Fields
+
+* Attraction (science targets)
+* Repulsion (hazards)
+
+---
+
+# 8. Probabilistic & Statistical Rasters
+
+## 8.1 Kriging Outputs (relevant to your work)
+
+* Mean estimate field
+* **Kriging variance field** (key for exploration)
+
+## 8.2 Uncertainty Fields
+
+* Measurement uncertainty
+* Model uncertainty
+
+## 8.3 Probability Maps
+
+* Ice presence probability
+* Hazard likelihood
+
+---
+
+# 9. Decision / Classification Rasters
+
+## 9.1 Binary Masks
+
+* Safe landing zones
+* Traversable regions
+* Illumination constraints
+
+## 9.2 Multi-Class Rasters
+
+* Terrain class (flat, cratered, ridge)
+* Risk categories
+
+## 9.3 Suitability Maps
+
+* Weighted multi-criteria outputs
+* Landing site scores
+
+---
+
+# 10. Multi-Band / Vector-Valued Rasters
+
+## 10.1 Vector Fields
+
+* Surface normal (Nx, Ny, Nz)
+* Gradient (dx, dy)
+
+## 10.2 Packed Feature Sets
+
+* [slope, aspect, roughness]
+* [illumination, visibility, temperature]
+
+---
+
+# 11. Temporal Raster Structures
+
+## 11.1 Time Series Stacks
+
+* Illumination vs time
+* Temperature vs time
+
+## 11.2 Derived Temporal Metrics
+
+* Max/min over time
+* Duty cycle
+* Persistence
+
+---
+
+# 12. Raster-to-Vector Extraction Targets
+
+These raster types are specifically useful for **vectorization**:
+
+## 12.1 Contours
+
+* From DEM (iso-height lines)
+
+## 12.2 Isolines
+
+* Equal illumination
+* Equal cost
+
+## 12.3 Regions (Polygons)
+
+* Connected safe zones
+* Landing ellipses
+* Visibility regions
+
+## 12.4 Skeletons / Paths
+
+* Least-cost paths
+* Ridge lines
+
+---
+
+# 13. Meta-Rasters (Pipeline / System-Level)
+
+## 13.1 Masks
+
+* NoData masks
+* Region-of-interest masks
+
+## 13.2 Weight Layers
+
+* Used in weighted algebra
+
+## 13.3 Provenance / Lineage Layers (advanced)
+
+* Encoded source or derivation
+* Confidence propagation
+
+---
+
+# 14. How This Maps to Map Algebra
+
+Map algebra operates on raster fields where each cell stores a value and operations are applied cell-by-cell or across neighborhoods ([Wikipedia][4]).
+
+Key categories of operations:
+
+* **Local**: slope, arithmetic combinations
+* **Focal**: roughness, curvature
+* **Zonal**: region summaries
+* **Global**: distance transforms, cost propagation
+
+---
+
+# 15. Minimal Core Set for Your Application
+
+If you compress this taxonomy to the **essential working set**, you get:
+
+### Core Inputs
+
+* DEM
+* Illumination (time series)
+* Reflectance / hazard proxy
+
+### Core Derived
+
+* Slope / normals
+* Roughness
+* Shadow / illumination metrics
+* Visibility
+
+### Core Planning
+
+* Traversability mask
+* Cost field
+* Distance / time field
+* Kriging variance
+
+### Core Outputs
+
+* Landing suitability raster
+* Optimal path raster
+* Vectorized paths + regions
+
+---
+
+# 16. Key Insight for Your Architecture
+
+The most useful abstraction is:
+
+> **All rasters are scalar or vector fields over a common grid, and differ only in semantics and operators.**
+
+A clean system design should treat:
+
+* DEM, slope, illumination, cost, kriging variance
+  as **first-class typed fields with metadata (units, provenance, uncertainty)**
+
+This aligns directly with your earlier requirement for:
+
+* units
+* provenance
+* “why generated”
+
+---
+
+If needed, the next step would be:
+
+* mapping this taxonomy into a **C# type system + plugin architecture**
+* or defining a **formal ontology / schema for raster products and operations**.
+
+[1]: https://www.lizardtech.com/post/what-is-a-raster-image?utm_source=chatgpt.com "What is a raster image?"
+[2]: https://en.wikipedia.org/wiki/Digital_elevation_model?utm_source=chatgpt.com "Digital elevation model"
+[3]: https://vector.geospatial.science/textbook/chapter-three/raster-data?utm_source=chatgpt.com "Section Three - Raster Data | Vector Based GIS"
+[4]: https://en.wikipedia.org/wiki/Map_algebra?utm_source=chatgpt.com "Map algebra"

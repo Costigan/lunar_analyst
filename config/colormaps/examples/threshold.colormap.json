@@ -1,0 +1,20 @@
+{
+  "id": "psr_threshold_blue",
+  "name": "PSR Threshold (Blue)",
+  "mode": "threshold",
+  "parameters": [
+    {
+      "id": "threshold",
+      "type": "number",
+      "default": 0.78,
+      "min": 0.0,
+      "max": 1.0
+    }
+  ],
+  "stops": [
+    { "value": 0.0, "color": [70, 130, 180, 0] },
+    { "value": 0.78, "color": [70, 130, 180, 0] },
+    { "value": 0.7801, "color": [70, 130, 180, 1] },
+    { "value": 1.0, "color": [70, 130, 180, 1] }
+  ]
+}

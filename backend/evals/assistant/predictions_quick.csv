@@ -1,0 +1,4 @@
+id,prompt,mode,primary_tool,repair_applied,first_try_success,overall_success,answer_generated,unsafe_blocked,turn_status,response_text,duration_ms,error,tool_call_count,tool_calls_json
+route_script_001,Write and run a Python script that computes slope <= 5 degrees and saves landing_sites.tif.,respond,,False,False,False,False,False,failed,,14639,,0,[]
+route_script_002,Create a script to threshold roughness at 0.15 and execute it now.,respond,,False,False,False,False,False,failed,,13718,,0,[]
+route_script_003,Author and immediately run code that outputs safe_zones.tif from primary_dem.tif.,clarify,,False,False,True,True,False,completed,Need clarification before running `scenario.write_run_script`: Missing required argument(s): scenario_id. Please restate with correctly shaped tool arguments.,14909,,0,[]

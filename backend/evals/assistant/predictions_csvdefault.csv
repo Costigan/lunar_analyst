@@ -1,0 +1,3 @@
+id,prompt,scenario_id_used,mode,primary_tool,repair_applied,first_try_success,overall_success,answer_generated,unsafe_blocked,turn_status,response_text,duration_ms,error,tool_call_count,tool_calls_json
+route_script_001,Write and run a Python script that computes slope <= 5 degrees and saves landing_sites.tif.,scn_mons-malapert,clarify,,False,False,False,False,False,,,0,,0,[]
+route_script_002,Create a script to threshold roughness at 0.15 and execute it now.,scn_mons-malapert,clarify,,False,False,False,False,False,,,0,,0,[]

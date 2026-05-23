@@ -1,0 +1,49 @@
+name: ADR0049 Verification (Optional)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'docs/contracts/generated/**'
+      - 'scripts/**'
+      - '.github/workflows/adr0049-verification.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install Python deps
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -r requirements.txt
+
+      - name: Contract drift fast-fail
+        run: scripts/check_contract_drift.sh
+
+      - name: Targeted reliability slices
+        run: |
+          .venv/bin/python -m pytest backend/tests/worker/test_mcp_tool_registry.py -q
+          .venv/bin/python -m pytest backend/tests/worker/test_tool_registry_artifact_paths.py -q
+          .venv/bin/python -m pytest backend/tests/worker/test_runtime_leak_checks.py -q
+          .venv/bin/python -m pytest backend/tests/integration/test_boot_order_invariants.py -q

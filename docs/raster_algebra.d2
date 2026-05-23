@@ -1,0 +1,53 @@
+direction: right
+theme: 200
+
+# Entities
+Input: {
+  Static: {
+    DEM: active_scenario_dem
+    Ancillary: nir.tif / slope.tif
+  }
+  Temporal: {
+    Horizon: sun_over_horizon_deg
+    Lighting: sun_fraction
+    Earth: earth_over_horizon_deg
+  }
+}
+
+DSL: Map Algebra DSL {
+  Parser: AST-Validated {
+    Arith: +, -, *, /
+    Logic: where, and, or
+    Focal: slope, aspect, hillshade
+    Zonal: min, max, avg, std
+  }
+}
+
+Engine: Calculation Engine {
+  style: {
+    fill: "#e0f2f1"
+    stroke: "#00695c"
+  }
+  MapAlgebra: Local/Zonal (Python)
+  RasterTransform: Tiled Script (Python)
+  MoonLib: Native Focal (C#)
+}
+
+Planner: Execution Planner {
+  Grid: Align to Scenario DEM
+  Memory: Working-Set Limits
+  Mode: Full Extent / Tiled Temporal
+}
+
+Output: GeoTIFF Product {
+  Files: product_id/output.tif
+  Registry: scenario.db
+  Display: Warped Map Layer (ESRI:103878)
+}
+
+# Flow
+Input -> Planner: Metadata / Bounds
+DSL -> Planner: Operator Tree
+Planner -> Engine: Plan + Iterators
+Engine -> Output: Stream Result
+Output -> Engine: Feedback (Success/Progress)

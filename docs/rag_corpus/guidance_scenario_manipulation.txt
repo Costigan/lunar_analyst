@@ -1,0 +1,90 @@
+title: Scenario Manipulation Guidance
+channel: procedural
+index: true
+source_kind: inline
+chunking: single
+tags: scenario, tools, workflow, scripts, notebooks, paths
+
+# Purpose
+Guide the agent in selecting the correct tools for scenario setup, inspection, and maintenance.
+
+# Core Scenario Workflow
+When a scenario-related request arrives, follow this baseline sequence:
+1. Confirm available scenarios with `scenario.list` when context is unclear.
+2. Set the target with `scenario.set_current`.
+3. Validate details with `scenario.get` before making changes.
+
+# Keyword Routing: Scenario Selection
+If the prompt includes:
+- "switch scenario", "set current", "use scenario", "open scenario"
+Use:
+- `scenario.set_current`
+
+If the prompt includes:
+- "list scenarios", "what scenarios exist", "available scenarios"
+Use:
+- `scenario.list`
+
+If the prompt includes:
+- "show scenario details", "where is this scenario", "current scenario info"
+Use:
+- `scenario.get`
+
+# Keyword Routing: Scenario Files And Paths
+If the prompt includes:
+- "rename file", "move file", "move folder", "reorganize scenario"
+Use:
+- `scenario.move_path`
+
+Rules:
+- Paths must be scenario-relative.
+- Do not move files outside scenario root.
+
+# Keyword Routing: Script And Notebook Workflows
+If the prompt includes:
+- "write script", "create python script", "save script"
+Use:
+- `scenario.write_script`
+
+If the prompt includes:
+- "write and run script", "generate and execute script"
+Use:
+- `scenario.write_run_script`
+
+If the prompt includes:
+- "run script", "execute script"
+Use:
+- `scenario.run_script`
+
+If the prompt includes:
+- "list notebooks", "show marimo notebooks"
+Use:
+- `scenario.list_notebooks`
+
+If the prompt includes:
+- "run notebook", "execute marimo notebook"
+Use:
+- `scenario.run_marimo_notebook`
+
+# Keyword Routing: Data And RAG Ingestion
+If the prompt includes:
+- "import geotiff", "add raster", "load tif"
+Use:
+- `scenario.import_geotiff`
+
+If the prompt includes:
+- "ingest rag", "update rag docs", "reindex rag"
+Use:
+- `scenario.rag_ingest`
+
+# Safety And Confirmation Behavior
+- Prefer reading/inspection tools before mutation tools when user intent is ambiguous.
+- For confirmation-required tools, summarize the planned action before execution.
+- Keep operations scenario-scoped and report affected relative paths.
+
+# Response Checklist
+Before ending a scenario manipulation turn, report:
+1. Target scenario ID/name used.
+2. Tool(s) executed.
+3. Paths or artifacts created/changed.
+4. Any required follow-up (for example layer visibility update after import).
