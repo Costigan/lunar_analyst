@@ -33,6 +33,8 @@ backend/evals/assistant/leaderboard_runs/ui/*
 # C extensions
 *.so
 
+!native/third_party/cspice/linux-x64/libcspice.so
+
 # Distribution / packaging
 bin/
 obj/
