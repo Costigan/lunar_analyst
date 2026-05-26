@@ -234,10 +234,8 @@ namespace moonlib.mapops
             // In a library, we might assume the app has configured GDAL.
             var geotiff_driver = Gdal.GetDriverByName("GTiff") ?? throw new Exception("GDAL GTiff driver not found.");
 
-            Debug.Assert(context.DEM_path != null, "DEM_path must be loaded in context for PSR generation.");
-            Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
             ThrowIfCancelled();
-            
+
             var dem = new ElevationMap(context.DEM_path);
             var center_mat = dem.GetMoonMEToENU(dem.Height / 2, dem.Width / 2);
 
@@ -246,12 +244,12 @@ namespace moonlib.mapops
 
             var times = ViperDate.GetTimes(start_time, stop_time, TimeSpan.FromHours(time_step_hours));
             var sunvecs_me = times.Select(t => SpiceManager.SunPosition_meters(t)).ToList();
-	        var earthvecs_me = times.Select(t => SpiceManager.EarthPosition_meters(t)).ToList();
+            var earthvecs_me = times.Select(t => SpiceManager.EarthPosition_meters(t)).ToList();
 
             ThrowIfCancelled();
 
             var earth_elevations = GetEarthElevations(earthvecs_me, dem, center_mat);
-	        var min_earth_indices = GetMinElevationIndices(earth_elevations);
+            var min_earth_indices = GetMinElevationIndices(earth_elevations);
             var earth_below_threshold_regions = GetRegionsWhereEarthIsBelowThreshold(earth_elevations, min_earth_indices, earth_threshold_deg);
             Debug.Assert(min_earth_indices.Count == earth_below_threshold_regions.Count, "Expected the number of Earth elevation minima to match the number of regions where Earth is below the threshold.");
 
@@ -298,7 +296,7 @@ namespace moonlib.mapops
                 ThrowIfCancelled();
                 await pipeline.ProcessAsync(horizon_filenames.Select(f => new HorizonProcessingToken { filename = f }));
 
-                datasets.ForEach(ds => { ds.Dispose(); } );
+                datasets.ForEach(ds => { ds.Dispose(); });
             }
 
             unsafe Task<HorizonProcessingToken> GenerateSafeHavens(HorizonProcessingToken token)
@@ -398,7 +396,7 @@ namespace moonlib.mapops
                         // Write light curve for this location
                         var y = line % 128;
                         var x = sample % 128;
-                        int buffer_index = y * width + x;                            
+                        int buffer_index = y * width + x;
                         var horizon_base = buffer_index * HorizonSamples;  // in units of horizons
                         var mat = dem.GetMoonMEToENU(line, sample);
                         var light_curve_path = Path.Combine(output_directory, $"light_curve_{line}_{sample}.csv");
@@ -489,6 +487,158 @@ namespace moonlib.mapops
 
                 return regions;
             }
-        }  
+        }
+
+        public static async Task GenerateLightingFunction(
+            AnalysisContext context,
+            List<string> filenames,
+            List<List<DateTime>> times,
+            Func<Span<float>, float> reduce_lightcurve,
+            IProgress<float>? progress = null,
+            Func<bool>? isCancellationRequested = null)
+        {
+            ThrowIfCancelled(isCancellationRequested);
+            ArgumentNullException.ThrowIfNull(context.DEM_path);
+            ArgumentNullException.ThrowIfNull(context.HorizonDirectory);
+            ArgumentNullException.ThrowIfNull(filenames);
+            ArgumentNullException.ThrowIfNull(times);
+            ArgumentNullException.ThrowIfNull(reduce_lightcurve);
+
+            progress ??= new Progress<float>(percent => Log.Information($"Progress: {100 * percent}%"));
+
+            if (filenames.Count < 1)
+                throw new Exception($"filenames.Count ({filenames.Count}) must be at least 1");
+            if (filenames.Count != times.Count)
+                throw new Exception($"filenames.Count ({filenames.Count}) must equal times.Count ({times.Count})");
+
+            // Initialize GDAL if not already (assuming calling app does, but safe to check)
+            // In a library, we might assume the app has configured GDAL.
+            var geotiff_driver = Gdal.GetDriverByName("GTiff") ?? throw new Exception("GDAL GTiff driver not found.");
+
+            var dem = new ElevationMap(context.DEM_path);
+
+            var horizon_filenames = Directory.EnumerateFiles(context.HorizonDirectory, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+            var totalCount = horizon_filenames.Count;
+            int processedCount = 0;
+
+            Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");
+
+            // Build the sun vectors in MOON_ME frame
+            var all_vectors = times
+            .Select(list_of_times => list_of_times.Select(SpiceManager.SunPosition_meters).ToList())
+            .ToList();
+
+            var sun_fraction_buffer_size = times.Max(list_of_times => list_of_times.Count);
+
+            var datasets = new List<Dataset>(filenames.Count);
+
+            try
+            {
+                foreach (var filename in filenames)
+                    datasets.Add(LightmapPipeline.OpenDataset(geotiff_driver, filename, DataType.GDT_Float32, -1, dem.Width, dem.Height, dem.Projection, dem.GeoTransform));
+
+                var pipeline = new Pipeline<HorizonProcessingToken>();
+                pipeline.AddStep(LightmapPipeline.ReadHorizons, maxDegreeOfParallelism: 6, boundedCapacity: 12);
+                pipeline.AddStep(Internal, maxDegreeOfParallelism: 24, boundedCapacity: 24);
+
+                pipeline.AddTerminalStep(async token =>
+                {
+                    ThrowIfCancelled(isCancellationRequested);
+                    if (progress != null)
+                    {
+                        int current = Interlocked.Increment(ref processedCount);
+                        progress.Report((float)current / totalCount);
+                    }
+                }, maxDegreeOfParallelism: 4, boundedCapacity: 40);
+
+                await pipeline.ProcessAsync(horizon_filenames.Select(f => new HorizonProcessingToken { filename = f }));
+            }
+            finally
+            {
+                foreach (var dataset in datasets)
+                    dataset.Close();
+            }
+
+            async Task<HorizonProcessingToken> Internal(HorizonProcessingToken token)
+            {
+                ThrowIfCancelled(isCancellationRequested);
+                var col = token.col;
+                var row = token.row;
+                int width = 128;
+                int height = 128;
+                int numPixels = width * height;
+
+                var horizons_for_patch = token.horizons ?? throw new Exception("Horizons in patch are null.");
+
+                var sun_fraction_buffer = new float[sun_fraction_buffer_size];
+                var val_buffer = new float[height * width];
+
+                for (var dataset_id = 0; dataset_id < datasets.Count; dataset_id++)
+                {
+                    var (dataset, sunvecs_me) = (datasets[dataset_id], all_vectors[dataset_id]);
+                    for (int y = 0; y < height; y++)
+                    {
+                        for (int x = 0; x < width; x++)
+                        {
+                            int val_buffer_index = y * width + x;
+                            var (line, sample) = (row + y, col + x);
+                            var horizon_base = val_buffer_index * HorizonSamples;  // in units of horizons
+                            var mat = dem.GetMoonMEToENU(line, sample);
+
+                            for (var i = 0; i < sunvecs_me.Count; i++)
+                            {
+                                var (az_rad, el_rad) = dem.GetAzEl(sunvecs_me[i], mat);
+                                float az_deg = az_rad * 57.2957795f;
+                                float el_deg = el_rad * 57.2957795f;
+                                var frac = LightmapGenerator.BuilderSunFraction(horizons_for_patch, horizon_base, az_deg, el_deg);
+                                sun_fraction_buffer[i] = frac;
+                            }
+
+                            var span = sun_fraction_buffer.AsSpan()[0..sunvecs_me.Count];
+                            var val = reduce_lightcurve(span);
+                            val_buffer[val_buffer_index] = val;
+                        }
+                    }
+
+                    lock (dataset)
+                    {
+                        dataset.GetRasterBand(1).WriteRaster(token.col, token.row, width, height, val_buffer, width, height, 0, 0);
+                    }
+
+                    ThrowIfCancelled(isCancellationRequested);
+                }
+
+                return token;
+            }
+        }
+
+        static void ThrowIfCancelled(Func<bool>? isCancellationRequested)
+        {
+            if (isCancellationRequested != null && isCancellationRequested())
+                throw new OperationCanceledException("Permanent shadow map generation was cancelled.");
+        }
+
+        public static Func<Span<float>, float> MaxHoursOverThreshold(float threshold, float time_step_hours)
+        {
+            return span =>
+            {
+                int count = 0;
+                int max_count = 0;
+                for (int i = 0; i < span.Length; i++)
+                {
+                    if (span[i] >= threshold)
+                        count++;
+                    else
+                    {
+                        if (count > max_count)
+                            max_count = count;
+                        count = 0;
+                    }
+                }
+                max_count = Math.Max(max_count, count); // In case the longest sequence ends at the end of the array
+                return max_count * time_step_hours;
+            };
+        }
+
     }
 }

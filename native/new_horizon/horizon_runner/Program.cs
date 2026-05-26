@@ -42,7 +42,7 @@ var dem_paths = new List<string>
     "/d/viper/maps/lola/LDEM_80S_20M-2017-06-15-processed.tif"
 };
 
-int runMode = 5;
+int runMode = 11;
 if (args.Length > 0 && int.TryParse(args[0], out var parsedMode))
 {
     runMode = parsedMode;
@@ -158,8 +158,8 @@ switch (runMode)
             var horizon_dir = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/";
             var haven_dir = @"/e/lunar_analyst_scenarios/haworth/lighting/safe_havens/";
             Directory.CreateDirectory(haven_dir);
-            var start_time = ViperDate.New(2027,9,1);
-            var stop_time = ViperDate.New(2028,3,1);
+            var start_time = ViperDate.New(2027, 9, 1);
+            var stop_time = ViperDate.New(2028, 3, 1);
 
             var context = new AnalysisContext { DEM_path = dem_path, HorizonDirectory = horizon_dir };
             MapOperations.GenerateSafeHavenDurations(context, haven_dir, start_time, stop_time).Wait();
@@ -175,8 +175,8 @@ switch (runMode)
             Directory.CreateDirectory(sun_dir);
             Directory.CreateDirectory(camera_dir);
 
-            var start_time = ViperDate.New(2027,9,1);
-            var stop_time = ViperDate.New(2028,3,1);
+            var start_time = ViperDate.New(2027, 9, 1);
+            var stop_time = ViperDate.New(2028, 3, 1);
             var timestamps = ViperDate.GetTimes(start_time, stop_time, TimeSpan.FromHours(2));
             var dem = new ElevationMap(dem_path);
 
@@ -186,7 +186,7 @@ switch (runMode)
         break;
     case 10:
         {
-                        // Pipeline test: Generate horizons for all patches (or filtered subset)
+            // Pipeline test: Generate horizons for all patches (or filtered subset)
             Console.WriteLine("Pipeline Mode: Generating horizons for patches");
 
             bool enableNearFieldMerge = false;
@@ -229,6 +229,20 @@ switch (runMode)
             }
 
             Console.WriteLine($"Horizon files written to: {Path.GetFullPath(outputDir)}");
+        }
+        break;
+    case 11:
+        {
+            var context = new AnalysisContext
+            {
+                DEM_path = @"/e/lunar_analyst_scenarios/haworth/dem.tif",
+                HorizonDirectory = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/"
+            };
+            var filenames = new List<string> { @"/e/lunar_analyst_scenarios/haworth/landed_mission_durations.tif" };
+            var time_step_hrs = 2f;
+            var times = new List<List<DateTime>> { ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2028, 3, 1), TimeSpan.FromHours(time_step_hrs)).ToList() };
+            var reduce_lightcurve = MapOperations.MaxHoursOverThreshold(0.25f, time_step_hrs);
+            MapOperations.GenerateLightingFunction(context, filenames, times, reduce_lightcurve).Wait();
         }
         break;
     default:
