@@ -13,6 +13,7 @@ using moonlib.pipeline;
 internal static class Program
 {
     private const int DefaultGpuConcurrency = QuadTreeHorizonGenerator.DefaultMaxConcurrentGpuOps;
+    private const int DefaultSegmentQueueSize = QuadTreeHorizonGenerator.DefaultSegmentQueueSize;
 
     private sealed record MakeOptions(
         string HorizonsDirectory,
@@ -20,6 +21,7 @@ internal static class Program
         int PatchStride,
         IReadOnlyList<string> DemPaths,
         int GpuConcurrency,
+        int SegmentQueue,
         float ObserverElevationMeters);
 
     private sealed record PsrOptions(
@@ -91,17 +93,18 @@ internal static class Program
             options.HorizonsDirectory,
             options.ObserverElevationMeters);
 
-	if (selectedPatches.Count < 1)
-	{
-	    Log.Information("There are no patches that need to be processed", selectedPatches.Count);
-	    return 0;
-	}
+        if (selectedPatches.Count < 1)
+        {
+            Log.Information("There are no patches that need to be processed", selectedPatches.Count);
+            return 0;
+        }
 
         Log.Information("Processing {PatchCount} patches", selectedPatches.Count);
 
         using (var generator = new QuadTreeHorizonGenerator(
             disableHierarchy: false,
-            maxConcurrentGpuOps: options.GpuConcurrency))
+            maxConcurrentGpuOps: options.GpuConcurrency,
+            maxSegmentQueueSize: options.SegmentQueue))
         {
             await generator.GenerateHorizonsForPatches(
                 options.HorizonsDirectory,
@@ -188,6 +191,7 @@ internal static class Program
 
         var demPaths = new List<string>();
         var gpuConcurrency = DefaultGpuConcurrency;
+        var segmentQueueSize = DefaultSegmentQueueSize;
         for (int i = 4; i < args.Length; i++)
         {
             var arg = args[i];
@@ -205,11 +209,34 @@ internal static class Program
                 continue;
             }
 
+            if (arg == "--segment-queue")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    Log.Error("--segment-queue requires an integer value.");
+                    return null;
+                }
+
+                i++;
+                if (!TryParseSegmentQueue(args[i], out segmentQueueSize))
+                    return null;
+                continue;
+            }
+
             const string gpuConcurrencyPrefix = "--gpu-concurrency=";
             if (arg.StartsWith(gpuConcurrencyPrefix, StringComparison.Ordinal))
             {
                 var value = arg[gpuConcurrencyPrefix.Length..];
                 if (!TryParseGpuConcurrency(value, out gpuConcurrency))
+                    return null;
+                continue;
+            }
+
+            const string segmentQueuePrefix = "--segment-queue=";
+            if (arg.StartsWith(segmentQueuePrefix, StringComparison.Ordinal))
+            {
+                var value = arg[segmentQueuePrefix.Length..];
+                if (!TryParseSegmentQueue(value, out segmentQueueSize))
                     return null;
                 continue;
             }
@@ -241,6 +268,7 @@ internal static class Program
             patchStride,
             demPaths,
             gpuConcurrency,
+            segmentQueueSize,
             observerElevationMeters);
     }
 
@@ -255,6 +283,23 @@ internal static class Program
         if (gpuConcurrency <= 0)
         {
             Log.Error("GPU concurrency must be > 0: {Value}", gpuConcurrency);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryParseSegmentQueue(string value, out int result)
+    {
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result))
+        {
+            Log.Error("segment-queue size must be an integer: {Value}", value);
+            return false;
+        }
+
+        if (result <= 0)
+        {
+            Log.Error("segment-queue size must be > 0: {Value}", result);
             return false;
         }
 
@@ -297,11 +342,11 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  horizon make <horizons_directory> <offset> <stride> [--gpu-concurrency <count>] <dem_filenames ...>");
+        Console.WriteLine("  horizon make <horizons_directory> <offset> <stride> [--gpu-concurrency <count>] [--segment-queue <size>] <dem_filenames ...>");
         Console.WriteLine("  horizon psr <horizons_directory> <dem_filename> <output_tiff>");
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  horizon make /workspace/scenario/horizons 0 16 --gpu-concurrency 4 /workspace/scenario/dems/primary.tif");
+        Console.WriteLine("  horizon make /workspace/scenario/horizons 0 16 --gpu-concurrency 4 --segment-queue 6 /workspace/scenario/dems/primary.tif");
         Console.WriteLine("  horizon psr /workspace/scenario/horizons /workspace/scenario/dems/primary.tif /workspace/scenario/lighting/psr.tif");
     }
 

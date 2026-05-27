@@ -42,7 +42,7 @@ var dem_paths = new List<string>
     "/d/viper/maps/lola/LDEM_80S_20M-2017-06-15-processed.tif"
 };
 
-int runMode = 11;
+int runMode = 5;
 if (args.Length > 0 && int.TryParse(args[0], out var parsedMode))
 {
     runMode = parsedMode;

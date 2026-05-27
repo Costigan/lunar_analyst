@@ -302,10 +302,12 @@ namespace moonlib.horizon
     public class QuadTreeHorizonGenerator : IDisposable
     {
         public const int DefaultMaxConcurrentGpuOps = 4; // Default concurrent GPU operations used for stream pool sizing and pipeline worker count.
+        public const int DefaultSegmentQueueSize = 6;
         private static readonly bool UseDemElevationChordCorrection = false;
         private readonly Context _context;
         private readonly Accelerator _accelerator;
         private readonly int _maxConcurrentGpuOps;
+        private readonly int _maxSegmentQueueSize;
 
         // Set to true to disable hierarchical filtering (always use Level 0)
         private readonly bool _disableHierarchy;
@@ -430,7 +432,8 @@ namespace moonlib.horizon
             bool enableNearFieldReferenceMerge = false,
             float nearFieldClampMeters = 250f,
             HorizonDiagnosticsCallback? diagnosticsCallback = null,
-            int maxConcurrentGpuOps = DefaultMaxConcurrentGpuOps)
+            int maxConcurrentGpuOps = DefaultMaxConcurrentGpuOps,
+            int maxSegmentQueueSize = DefaultSegmentQueueSize)
         {
             _disableHierarchy = disableHierarchy;
             _enableNearFieldReferenceMerge = enableNearFieldReferenceMerge;
@@ -438,6 +441,9 @@ namespace moonlib.horizon
             if (maxConcurrentGpuOps <= 0)
                 throw new ArgumentOutOfRangeException(nameof(maxConcurrentGpuOps), maxConcurrentGpuOps, "GPU concurrency must be greater than zero.");
             _maxConcurrentGpuOps = maxConcurrentGpuOps;
+            if (maxSegmentQueueSize <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxSegmentQueueSize), maxSegmentQueueSize, "The segment queue size must be greater than zero.");
+            _maxSegmentQueueSize = maxSegmentQueueSize;
             DiagnosticsCallback = diagnosticsCallback;
             var dbgEnv = Environment.GetEnvironmentVariable("QUADTREE_FORCE_FIXED_STEPS");
             _forceFixedStepDebug = dbgEnv == "1" || dbgEnv?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
@@ -1092,7 +1098,7 @@ namespace moonlib.horizon
             var pipelineStopwatch = Stopwatch.StartNew();
 
             // Create channels for 2-stage pipeline (back to patch-level processing)
-            var channelOptions = new BoundedChannelOptions(32)
+            var channelOptions = new BoundedChannelOptions(_maxSegmentQueueSize)
             {
                 FullMode = BoundedChannelFullMode.Wait, // Block producer if queue is full
                 SingleReader = false,  // Multiple GPU workers can read
@@ -1233,11 +1239,11 @@ namespace moonlib.horizon
                                     }
                                 }
                                 else
-				{
+                                {
                                     Utilities.WriteBinaryArray(filePath, result.HorizonData.Degrees);
-				    Console.WriteLine($"Wrote horizon file: {filePath}");
-				    Log.Debug($"Wrote horizon file: {filePath}");
-				}
+                                    Console.WriteLine($"Wrote horizon file: {filePath}");
+                                    Log.Debug($"Wrote horizon file: {filePath}");
+                                }
                                 long writeElapsed = Stopwatch.GetTimestamp() - writeStart;
                                 RecordPipelineStage(PipelineStageNames.CompressAndWrite, writeElapsed);
                                 LogPatchProfiling(

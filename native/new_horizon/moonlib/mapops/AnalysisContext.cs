@@ -36,7 +36,7 @@ namespace moonlib.mapops
             {
                 if (_surroundingDEMs != null)
                     return _surroundingDEMs;
-                if (_surroundingDEMs != null)
+                if (SurroundingDEM_paths != null)
                     return _surroundingDEMs = SurroundingDEM_paths.Select(p => new ElevationMap(p)).ToList();
                 else
                     return null;
