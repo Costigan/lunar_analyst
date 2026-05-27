@@ -35,13 +35,19 @@ bash native/new_horizon/horizon/scripts/build-image.sh lunar-horizon:dev
 
 ### Generate Horizons (`make`)
 
+`make` shards patch processing by zero-based patch-list index:
+
+```text
+patch_index % stride == offset
+```
+
 ```bash
 bash native/new_horizon/horizon/scripts/run-local.sh \
   /e/lunar_analyst_docker_test/haworth \
   make \
   horizons \
   0 \
-  1000 \
+  16 \
   dems/haworth.tif \
   dems/LDEM_80S_20M-2017-06-15-processed.tif
 ```
@@ -49,7 +55,7 @@ bash native/new_horizon/horizon/scripts/run-local.sh \
 Equivalent in-container args:
 
 ```text
-horizon make /workspace/horizons 0 1000 /workspace/dems/haworth.tif /workspace/dems/LDEM_80S_20M-2017-06-15-processed.tif
+horizon make /workspace/horizons 0 16 /workspace/dems/haworth.tif /workspace/dems/LDEM_80S_20M-2017-06-15-processed.tif
 ```
 
 ### Generate PSR (`psr`)

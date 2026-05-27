@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-IMAGE_TAG="${IMAGE_TAG:-lunar-horizon:local}"
+#IMAGE_TAG="${IMAGE_TAG:-lunar-horizon:local}"
+IMAGE_TAG="lunar-horizon:local"
+#IMAGE_TAG="gitlab-registry.nrp-nautilus.io/costigan/lunar_analyst:latest"
 CONTAINER_ROOT="/workspace"
 
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") <host_data_root> make <horizons_rel_path> <first> <count> <dem_rel_path...>
+  $(basename "$0") <host_data_root> make <horizons_rel_path> <offset> <stride> <dem_rel_path...>
   $(basename "$0") <host_data_root> psr  <horizons_rel_path> <dem_rel_path> <output_rel_path>
 
 Arguments:
@@ -15,8 +17,8 @@ Arguments:
 
 Verb: make
   horizons_rel_path  Relative path to existing horizons output directory under host_data_root.
-  first              First horizon index (int).
-  count              Number of horizons to process (int > 0).
+  offset             Patch shard offset (int >= 0 and < stride).
+  stride             Patch shard stride (int > 0).
   dem_rel_path...    One or more DEM paths relative to host_data_root.
 
 Verb: psr
@@ -28,7 +30,7 @@ Environment:
   IMAGE_TAG          Docker image tag (default: lunar-horizon:local)
 
 Examples:
-  $(basename "$0") /e/lunar_analyst_docker_test make scenario/horizons 0 1000 scenario/dems/haworth.tif scenario/dems/LDEM_80S_20M-2017-06-15-processed.tif
+  $(basename "$0") /e/lunar_analyst_docker_test make scenario/horizons 0 16 scenario/dems/haworth.tif scenario/dems/LDEM_80S_20M-2017-06-15-processed.tif
   $(basename "$0") /e/lunar_analyst_docker_test psr scenario/horizons scenario/dems/haworth.tif scenario/lighting/psr.tif
 USAGE
 }
@@ -75,20 +77,25 @@ case "${VERB}" in
     fi
 
     HORIZONS_REL="$1"
-    FIRST="$2"
-    COUNT="$3"
+    OFFSET="$2"
+    STRIDE="$3"
     shift 3
     DEM_RELS=("$@")
 
     require_relative_path "${HORIZONS_REL}" "horizons_rel_path"
 
-    if [[ ! "${FIRST}" =~ ^-?[0-9]+$ ]]; then
-      echo "first must be an integer: ${FIRST}" >&2
+    if [[ ! "${OFFSET}" =~ ^-?[0-9]+$ ]] || [[ "${OFFSET}" -lt 0 ]]; then
+      echo "offset must be an integer >= 0: ${OFFSET}" >&2
       exit 1
     fi
 
-    if [[ ! "${COUNT}" =~ ^[0-9]+$ ]] || [[ "${COUNT}" -le 0 ]]; then
-      echo "count must be an integer > 0: ${COUNT}" >&2
+    if [[ ! "${STRIDE}" =~ ^[0-9]+$ ]] || [[ "${STRIDE}" -le 0 ]]; then
+      echo "stride must be an integer > 0: ${STRIDE}" >&2
+      exit 1
+    fi
+
+    if [[ "${OFFSET}" -ge "${STRIDE}" ]]; then
+      echo "offset must be less than stride: offset=${OFFSET}, stride=${STRIDE}" >&2
       exit 1
     fi
 
@@ -113,8 +120,8 @@ case "${VERB}" in
       "${IMAGE_TAG}" \
       make \
       "${CONTAINER_ROOT}/${HORIZONS_REL}" \
-      "${FIRST}" \
-      "${COUNT}" \
+      "${OFFSET}" \
+      "${STRIDE}" \
       "${CONTAINER_DEMS[@]}"
     ;;
 

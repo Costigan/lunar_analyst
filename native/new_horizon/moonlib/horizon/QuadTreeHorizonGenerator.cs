@@ -1069,12 +1069,15 @@ namespace moonlib.horizon
             float maxDist = 1000000.0f; // 1000 km
             int numPixels = PATCH_SIZE * PATCH_SIZE;
             var pyramidList = pyramids.ToList();
-            var sharedSegmentCache = new SubpatchSegmentCache(
-                pyramidList,
-                numAzimuths,
-                maxDist,
-                observerElevation,
-                _pipelineSubpatchSize);
+            const bool EnableSharedSegmentCache = false;
+            SubpatchSegmentCache? sharedSegmentCache = EnableSharedSegmentCache
+                ? new SubpatchSegmentCache(
+                    pyramidList,
+                    numAzimuths,
+                    maxDist,
+                    observerElevation,
+                    _pipelineSubpatchSize)
+                : null;
             
             // Since Full Mode is disabled (always use Compact Mode), we only need: numAzimuths * dems.Count
             int maxSegments = numAzimuths * dems.Count;  // Compact Mode only

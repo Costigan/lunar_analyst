@@ -14,8 +14,8 @@ internal static class Program
 {
     private sealed record MakeOptions(
         string HorizonsDirectory,
-        int FirstHorizonIndex,
-        int HorizonCount,
+        int PatchOffset,
+        int PatchStride,
         IReadOnlyList<string> DemPaths,
         float ObserverElevationMeters);
 
@@ -80,8 +80,7 @@ internal static class Program
 
         var allPatches = QuadTreeHorizonGenerator.GeneratePatchList(dems[0]);
         var selectedPatches = allPatches
-            .Skip(options.FirstHorizonIndex)
-            .Take(options.HorizonCount)
+            .Where((_, index) => index % options.PatchStride == options.PatchOffset)
             .ToList();
 
         selectedPatches = QuadTreeHorizonGenerator.RemoveCompletedPatches(
@@ -152,27 +151,33 @@ internal static class Program
             return null;
         }
 
-        if (!int.TryParse(args[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var firstHorizonIndex))
+        if (!int.TryParse(args[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out var patchOffset))
         {
-            Log.Error("Horizon first index must be an integer: {Value}", args[2]);
+            Log.Error("Patch offset must be an integer: {Value}", args[2]);
             return null;
         }
 
-        if (!int.TryParse(args[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var horizonCount))
+        if (!int.TryParse(args[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var patchStride))
         {
-            Log.Error("Horizon count must be an integer: {Value}", args[3]);
+            Log.Error("Patch stride must be an integer: {Value}", args[3]);
             return null;
         }
 
-        if (firstHorizonIndex < 0)
+        if (patchOffset < 0)
         {
-            Log.Error("Horizon first index must be >= 0: {Value}", firstHorizonIndex);
+            Log.Error("Patch offset must be >= 0: {Value}", patchOffset);
             return null;
         }
 
-        if (horizonCount <= 0)
+        if (patchStride <= 0)
         {
-            Log.Error("Horizon count must be > 0: {Value}", horizonCount);
+            Log.Error("Patch stride must be > 0: {Value}", patchStride);
+            return null;
+        }
+
+        if (patchOffset >= patchStride)
+        {
+            Log.Error("Patch offset must be less than patch stride: offset={PatchOffset}, stride={PatchStride}", patchOffset, patchStride);
             return null;
         }
 
@@ -197,8 +202,8 @@ internal static class Program
         const float observerElevationMeters = 0f;
         return new MakeOptions(
             horizonsDirectory,
-            firstHorizonIndex,
-            horizonCount,
+            patchOffset,
+            patchStride,
             demPaths,
             observerElevationMeters);
     }
@@ -239,11 +244,11 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  horizon make <horizons_directory> <first> <count> <dem_filenames ...>");
+        Console.WriteLine("  horizon make <horizons_directory> <offset> <stride> <dem_filenames ...>");
         Console.WriteLine("  horizon psr <horizons_directory> <dem_filename> <output_tiff>");
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  horizon make /workspace/scenario/horizons 0 100 /workspace/scenario/dems/primary.tif");
+        Console.WriteLine("  horizon make /workspace/scenario/horizons 0 16 /workspace/scenario/dems/primary.tif");
         Console.WriteLine("  horizon psr /workspace/scenario/horizons /workspace/scenario/dems/primary.tif /workspace/scenario/lighting/psr.tif");
     }
 
