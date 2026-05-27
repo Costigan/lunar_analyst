@@ -301,10 +301,11 @@ namespace moonlib.horizon
 
     public class QuadTreeHorizonGenerator : IDisposable
     {
-        public const int MAX_CONCURRENT_GPU_OPS = 16; // Maximum number of concurrent GPU operations (kernel launches or data transfers) to allow, used for stream pool sizing and pipeline concurrency management.
+        public const int DefaultMaxConcurrentGpuOps = 4; // Default concurrent GPU operations used for stream pool sizing and pipeline worker count.
         private static readonly bool UseDemElevationChordCorrection = false;
         private readonly Context _context;
         private readonly Accelerator _accelerator;
+        private readonly int _maxConcurrentGpuOps;
 
         // Set to true to disable hierarchical filtering (always use Level 0)
         private readonly bool _disableHierarchy;
@@ -428,11 +429,15 @@ namespace moonlib.horizon
             bool disableHierarchy = true,
             bool enableNearFieldReferenceMerge = false,
             float nearFieldClampMeters = 250f,
-            HorizonDiagnosticsCallback? diagnosticsCallback = null)
+            HorizonDiagnosticsCallback? diagnosticsCallback = null,
+            int maxConcurrentGpuOps = DefaultMaxConcurrentGpuOps)
         {
             _disableHierarchy = disableHierarchy;
             _enableNearFieldReferenceMerge = enableNearFieldReferenceMerge;
             _nearFieldClampMeters = Math.Max(0f, nearFieldClampMeters);
+            if (maxConcurrentGpuOps <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maxConcurrentGpuOps), maxConcurrentGpuOps, "GPU concurrency must be greater than zero.");
+            _maxConcurrentGpuOps = maxConcurrentGpuOps;
             DiagnosticsCallback = diagnosticsCallback;
             var dbgEnv = Environment.GetEnvironmentVariable("QUADTREE_FORCE_FIXED_STEPS");
             _forceFixedStepDebug = dbgEnv == "1" || dbgEnv?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
@@ -475,14 +480,14 @@ namespace moonlib.horizon
             //var kernelInfo = _subpatchKernel.GetKernelInfo();
             //kernelInfo?.DumpToConsole();
 
-            // Initialize stream pool with MAX_CONCURRENT_GPU_OPS streams
+            // Initialize stream pool with one stream per GPU worker.
             _streamPool = new ConcurrentStack<AcceleratorStream>();
-            for (int i = 0; i < MAX_CONCURRENT_GPU_OPS; i++)
+            for (int i = 0; i < _maxConcurrentGpuOps; i++)
             {
                 _streamPool.Push(_accelerator.CreateStream());
             }
             
-            Log.Debug("Initialized {StreamCount} GPU streams and pre-compiled kernel", MAX_CONCURRENT_GPU_OPS);
+            Log.Debug("Initialized {StreamCount} GPU streams and pre-compiled kernel", _maxConcurrentGpuOps);
         }
 
         public void Dispose()
@@ -1148,8 +1153,8 @@ namespace moonlib.horizon
             });
 
             // Stage 2: GPU Workers - Process complete patches (all DEMs together)
-            var gpuWorkerTasks = new Task[MAX_CONCURRENT_GPU_OPS];
-            for (int workerId = 0; workerId < MAX_CONCURRENT_GPU_OPS; workerId++)
+            var gpuWorkerTasks = new Task[_maxConcurrentGpuOps];
+            for (int workerId = 0; workerId < _maxConcurrentGpuOps; workerId++)
             {
                 int capturedWorkerId = workerId;
                 gpuWorkerTasks[workerId] = Task.Run(async () =>

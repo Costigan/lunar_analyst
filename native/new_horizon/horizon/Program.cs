@@ -12,11 +12,14 @@ using moonlib.pipeline;
 
 internal static class Program
 {
+    private const int DefaultGpuConcurrency = QuadTreeHorizonGenerator.DefaultMaxConcurrentGpuOps;
+
     private sealed record MakeOptions(
         string HorizonsDirectory,
         int PatchOffset,
         int PatchStride,
         IReadOnlyList<string> DemPaths,
+        int GpuConcurrency,
         float ObserverElevationMeters);
 
     private sealed record PsrOptions(
@@ -96,7 +99,9 @@ internal static class Program
 
         Log.Information("Processing {PatchCount} patches", selectedPatches.Count);
 
-        using (var generator = new QuadTreeHorizonGenerator(disableHierarchy: false))
+        using (var generator = new QuadTreeHorizonGenerator(
+            disableHierarchy: false,
+            maxConcurrentGpuOps: options.GpuConcurrency))
         {
             await generator.GenerateHorizonsForPatches(
                 options.HorizonsDirectory,
@@ -181,7 +186,37 @@ internal static class Program
             return null;
         }
 
-        var demPaths = args.Skip(4).ToList();
+        var demPaths = new List<string>();
+        var gpuConcurrency = DefaultGpuConcurrency;
+        for (int i = 4; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (arg == "--gpu-concurrency")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    Log.Error("--gpu-concurrency requires an integer value.");
+                    return null;
+                }
+
+                i++;
+                if (!TryParseGpuConcurrency(args[i], out gpuConcurrency))
+                    return null;
+                continue;
+            }
+
+            const string gpuConcurrencyPrefix = "--gpu-concurrency=";
+            if (arg.StartsWith(gpuConcurrencyPrefix, StringComparison.Ordinal))
+            {
+                var value = arg[gpuConcurrencyPrefix.Length..];
+                if (!TryParseGpuConcurrency(value, out gpuConcurrency))
+                    return null;
+                continue;
+            }
+
+            demPaths.Add(arg);
+        }
+
         if (demPaths.Count == 0)
         {
             Log.Error("At least one DEM file path is required for 'make'.");
@@ -205,7 +240,25 @@ internal static class Program
             patchOffset,
             patchStride,
             demPaths,
+            gpuConcurrency,
             observerElevationMeters);
+    }
+
+    private static bool TryParseGpuConcurrency(string value, out int gpuConcurrency)
+    {
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out gpuConcurrency))
+        {
+            Log.Error("GPU concurrency must be an integer: {Value}", value);
+            return false;
+        }
+
+        if (gpuConcurrency <= 0)
+        {
+            Log.Error("GPU concurrency must be > 0: {Value}", gpuConcurrency);
+            return false;
+        }
+
+        return true;
     }
 
     private static PsrOptions? ParsePsrArgs(string[] args)
@@ -244,11 +297,11 @@ internal static class Program
     private static void PrintUsage()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  horizon make <horizons_directory> <offset> <stride> <dem_filenames ...>");
+        Console.WriteLine("  horizon make <horizons_directory> <offset> <stride> [--gpu-concurrency <count>] <dem_filenames ...>");
         Console.WriteLine("  horizon psr <horizons_directory> <dem_filename> <output_tiff>");
         Console.WriteLine();
         Console.WriteLine("Examples:");
-        Console.WriteLine("  horizon make /workspace/scenario/horizons 0 16 /workspace/scenario/dems/primary.tif");
+        Console.WriteLine("  horizon make /workspace/scenario/horizons 0 16 --gpu-concurrency 4 /workspace/scenario/dems/primary.tif");
         Console.WriteLine("  horizon psr /workspace/scenario/horizons /workspace/scenario/dems/primary.tif /workspace/scenario/lighting/psr.tif");
     }
 

@@ -48,6 +48,7 @@ bash native/new_horizon/horizon/scripts/run-local.sh \
   horizons \
   0 \
   16 \
+  --gpu-concurrency 4 \
   dems/haworth.tif \
   dems/LDEM_80S_20M-2017-06-15-processed.tif
 ```
@@ -55,7 +56,7 @@ bash native/new_horizon/horizon/scripts/run-local.sh \
 Equivalent in-container args:
 
 ```text
-horizon make /workspace/horizons 0 16 /workspace/dems/haworth.tif /workspace/dems/LDEM_80S_20M-2017-06-15-processed.tif
+horizon make /workspace/horizons 0 16 --gpu-concurrency 4 /workspace/dems/haworth.tif /workspace/dems/LDEM_80S_20M-2017-06-15-processed.tif
 ```
 
 ### Generate PSR (`psr`)

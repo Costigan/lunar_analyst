@@ -9,7 +9,7 @@ CONTAINER_ROOT="/workspace"
 usage() {
   cat <<USAGE
 Usage:
-  $(basename "$0") <host_data_root> make <horizons_rel_path> <offset> <stride> <dem_rel_path...>
+  $(basename "$0") <host_data_root> make <horizons_rel_path> <offset> <stride> [--gpu-concurrency <count>] <dem_rel_path...>
   $(basename "$0") <host_data_root> psr  <horizons_rel_path> <dem_rel_path> <output_rel_path>
 
 Arguments:
@@ -19,6 +19,7 @@ Verb: make
   horizons_rel_path  Relative path to existing horizons output directory under host_data_root.
   offset             Patch shard offset (int >= 0 and < stride).
   stride             Patch shard stride (int > 0).
+  --gpu-concurrency  Optional GPU worker/stream count (int > 0, default: 4).
   dem_rel_path...    One or more DEM paths relative to host_data_root.
 
 Verb: psr
@@ -30,7 +31,7 @@ Environment:
   IMAGE_TAG          Docker image tag (default: lunar-horizon:local)
 
 Examples:
-  $(basename "$0") /e/lunar_analyst_docker_test make scenario/horizons 0 16 scenario/dems/haworth.tif scenario/dems/LDEM_80S_20M-2017-06-15-processed.tif
+  $(basename "$0") /e/lunar_analyst_docker_test make scenario/horizons 0 16 --gpu-concurrency 4 scenario/dems/haworth.tif scenario/dems/LDEM_80S_20M-2017-06-15-processed.tif
   $(basename "$0") /e/lunar_analyst_docker_test psr scenario/horizons scenario/dems/haworth.tif scenario/lighting/psr.tif
 USAGE
 }
@@ -80,7 +81,13 @@ case "${VERB}" in
     OFFSET="$2"
     STRIDE="$3"
     shift 3
-    DEM_RELS=("$@")
+    DEM_RELS=()
+    CONTAINER_MAKE_ARGS=(
+      make
+      "${CONTAINER_ROOT}/${HORIZONS_REL}"
+      "${OFFSET}"
+      "${STRIDE}"
+    )
 
     require_relative_path "${HORIZONS_REL}" "horizons_rel_path"
 
@@ -104,25 +111,59 @@ case "${VERB}" in
       exit 1
     fi
 
-    CONTAINER_DEMS=()
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --gpu-concurrency)
+          if [[ $# -lt 2 ]]; then
+            echo "--gpu-concurrency requires an integer value" >&2
+            exit 1
+          fi
+          if [[ ! "$2" =~ ^[0-9]+$ ]] || [[ "$2" -le 0 ]]; then
+            echo "gpu concurrency must be an integer > 0: $2" >&2
+            exit 1
+          fi
+          CONTAINER_MAKE_ARGS+=("--gpu-concurrency" "$2")
+          shift 2
+          ;;
+        --gpu-concurrency=*)
+          GPU_CONCURRENCY="${1#--gpu-concurrency=}"
+          if [[ ! "${GPU_CONCURRENCY}" =~ ^[0-9]+$ ]] || [[ "${GPU_CONCURRENCY}" -le 0 ]]; then
+            echo "gpu concurrency must be an integer > 0: ${GPU_CONCURRENCY}" >&2
+            exit 1
+          fi
+          CONTAINER_MAKE_ARGS+=("$1")
+          shift
+          ;;
+        --*)
+          echo "Unknown make option: $1" >&2
+          exit 1
+          ;;
+        *)
+          DEM_RELS+=("$1")
+          shift
+          ;;
+      esac
+    done
+
+    if [[ "${#DEM_RELS[@]}" -eq 0 ]]; then
+      echo "At least one DEM path is required for make" >&2
+      exit 1
+    fi
+
     for dem_rel in "${DEM_RELS[@]}"; do
       require_relative_path "${dem_rel}" "dem_rel_path"
       if [[ ! -f "${HOST_DATA_ROOT}/${dem_rel}" ]]; then
         echo "DEM file does not exist: ${HOST_DATA_ROOT}/${dem_rel}" >&2
         exit 1
       fi
-      CONTAINER_DEMS+=("${CONTAINER_ROOT}/${dem_rel}")
+      CONTAINER_MAKE_ARGS+=("${CONTAINER_ROOT}/${dem_rel}")
     done
 
     docker run --rm \
       --gpus all \
       -v "${HOST_DATA_ROOT}:${CONTAINER_ROOT}" \
       "${IMAGE_TAG}" \
-      make \
-      "${CONTAINER_ROOT}/${HORIZONS_REL}" \
-      "${OFFSET}" \
-      "${STRIDE}" \
-      "${CONTAINER_DEMS[@]}"
+      "${CONTAINER_MAKE_ARGS[@]}"
     ;;
 
   psr)
