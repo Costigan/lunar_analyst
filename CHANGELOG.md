@@ -2,6 +2,18 @@
 
 This file summarizes functional behavior changes across all commits in this repository (128 commits), from `b38cd7c` to `Unreleased`.
 
+- `64fe9f8` (2026-05-28): Partitioned horizon tile storage for large CephFS-backed horizon directories.
+  - New Horizon / horizon tile storage:
+    - Added `HorizonTileStore` as the central C# service for horizon filename parsing, path construction, read/write resolution, tile enumeration, and flat-to-partitioned migration.
+    - Changed new horizon writes to use a partitioned-by-Y layout by default, e.g. `horizons/21504/horizon_21504_20480_000.cbin`, while preserving the existing `horizon_<Y>_<X>_<elevation>.[bin|cbin]` filename contract.
+    - Kept read compatibility with legacy flat horizon directories and made existing-file resolution prefer `.cbin` over `.bin`.
+    - Updated horizon generation resume/skip logic, `MoonlibBridge`, lightmap/PSR map operations, streaming lightmap readers, and `HorizonFileIndex` to use the store instead of top-level horizon globs.
+    - Added `horizon partition-horizons <horizons_directory>` to convert top-level flat horizon files into Y subdirectories with conflict reporting.
+  - Documentation and tests:
+    - Added `docs/ADR.0058.partitioned_horizon_tile_store.md`.
+    - Added `HorizonTileStoreTests` for path construction, parsing, compressed preference, flat fallback, enumeration, and migration behavior.
+    - Updated path-sensitive horizon tests for partitioned output and fixed async pipeline tests to await `GenerateHorizonsForAllPatches`.
+
 - `08dfad3` (2026-05-20): Horizon-generation correctness fixes, chord-correction toggle, and algorithm documentation refresh.
   - New Horizon / QuadTree horizon generation:
     - Fixed a ray-fit unit mismatch in `native/new_horizon/moonlib/horizon/QuadTreeHorizonGenerator.cs` where segment polynomials were being fit/scaled in meters while the GPU kernel evaluated them in kilometers. This bug produced broadly incorrect horizons and incorrect downstream `psr.tif` output.

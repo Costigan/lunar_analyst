@@ -258,17 +258,15 @@ namespace moonlib
 
             if (!overwriteHorizons)
             {
-                var filenames = Directory.GetFiles(horizonsDir).Select(Path.GetFileName).ToHashSet();
-                if (filenames.Count > 0)
+                var horizonStore = new HorizonTileStore(horizonsDir);
+                if (horizonStore.EnumerateTiles().Any())
                 {
                     var needed_patches = new List<QuadTreeHorizonGenerator.PatchDescriptor>();
                     for (var i = 0; i < allPatches.Count; i++)
                     {
                         var patch = allPatches[i];
-                        var patchFilename = QuadTreeHorizonGenerator.BuildHorizonFilename(patch.TileX, patch.TileY, observerElevationMeters);
-                        var compressedPatchFilename = Path.ChangeExtension(patchFilename, ".cbin");
                         // Treat either uncompressed or compressed patch file as existing.
-                        if (!filenames.Contains(patchFilename) && !filenames.Contains(compressedPatchFilename))
+                        if (horizonStore.FindExistingPath(patch.TileY, patch.TileX, observerElevationMeters) == null)
                             needed_patches.Add(patch);
                     }
                     allPatches = needed_patches;

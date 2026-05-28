@@ -111,8 +111,7 @@ namespace moonlib.tests
             qtGen.GenerateHorizons(qtOutDir, dems, PointX, PointY, 1, 1, PointZ);
             
             // Load QT Result
-            var observer_dec = (int)Math.Round(PointZ * 10);
-            var qtFile = Path.Combine(qtOutDir, $"horizon_{PointX:D5}_{PointY:D5}_{observer_dec:D3}.bin");
+            var qtFile = new HorizonTileStore(qtOutDir).BuildPath(PointY, PointX, PointZ, compress: false);
             Assert.IsTrue(File.Exists(qtFile), "QuadTree output file was not created.");
             
             var qtAnglesDeg = Utilities.LoadBinaryArray<float>(qtFile);
@@ -243,8 +242,7 @@ namespace moonlib.tests
             Directory.CreateDirectory(qtOutDir);
             qtGen.GenerateHorizons(qtOutDir, dems, edgePointX, edgePointY, 1, 1, edgePointZ);
 
-            var observer_dec = (int)Math.Round(edgePointZ * 10);
-            var qtFile = Path.Combine(qtOutDir, $"horizon_{edgePointX:D5}_{edgePointY:D5}_{observer_dec:D3}.bin");
+            var qtFile = new HorizonTileStore(qtOutDir).BuildPath(edgePointY, edgePointX, edgePointZ, compress: false);
             Assert.IsTrue(File.Exists(qtFile), "QuadTree output file was not created.");
 
             var qtAnglesDeg = Utilities.LoadBinaryArray<float>(qtFile);

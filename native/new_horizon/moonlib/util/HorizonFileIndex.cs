@@ -25,17 +25,10 @@ namespace moonlib.util
         public void Scan(string dir, float targetElevation)
         {
             _index.Clear();
-            var all_files = Directory.GetFiles(dir, "horizon_*.bin");
-            foreach (var f in all_files)
+            var store = new HorizonTileStore(dir);
+            foreach (var tile in store.EnumerateTiles(targetElevation))
             {
-                var m = QuadTreeHorizonGenerator.ParseHorizonFilename(f);
-                if (float.IsNaN(m.observerElevation))
-                    continue;
-                // Simple float comparison with epsilon
-                if (Math.Abs(m.observerElevation - targetElevation) < 0.05f)
-                {
-                    _index[(m.col, m.row)] = f;
-                }
+                _index[(tile.Key.TileX, tile.Key.TileY)] = tile.Path;
             }
             Console.WriteLine($"Index Scanned: {_index.Count} matching tiles found for elevation {targetElevation}m.");
         }
@@ -62,14 +55,22 @@ namespace moonlib.util
                 _lastAccessedFile = f;
             }
 
-            using var fs = File.OpenRead(f);
             int row_in_tile = y % PatchSize, col_in_tile = x % PatchSize;
-            var base_of_horizon_in_file = (row_in_tile * PatchSize + col_in_tile) * 1440L * 4L;
-            fs.Seek(base_of_horizon_in_file, SeekOrigin.Begin);
-            var b = new BinaryReader(fs);
             var h = new float[1440];
-            for (int i = 0; i < 1440; i++)
-                h[i] = b.ReadSingle();
+            if (Path.GetExtension(f).Equals(".cbin", StringComparison.OrdinalIgnoreCase))
+            {
+                var tile = HorizonFile.ReadCompressedHorizonFile(f);
+                Array.Copy(tile, (row_in_tile * PatchSize + col_in_tile) * 1440, h, 0, 1440);
+            }
+            else
+            {
+                using var fs = File.OpenRead(f);
+                var base_of_horizon_in_file = (row_in_tile * PatchSize + col_in_tile) * 1440L * 4L;
+                fs.Seek(base_of_horizon_in_file, SeekOrigin.Begin);
+                var b = new BinaryReader(fs);
+                for (int i = 0; i < 1440; i++)
+                    h[i] = b.ReadSingle();
+            }
 
             Console.WriteLine($"Horizon Loaded for Pixel ({x}, {y}) from Tile ({c}, {r}) offsets ({col_in_tile}, {row_in_tile})");
             (cached_horizon, cached_observer_x, cached_observer_y) = (h, x, y);

@@ -894,8 +894,19 @@ namespace moonlib.horizon
                 ? BuildHorizonFilename(tileX, tileY, observerElevation)
                 : fileName!;
 
-            var path = Path.Combine(outputDirectory, resolvedName);
-            Utilities.WriteBinaryArray(path, horizonData.Degrees);
+            string path;
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                var store = new HorizonTileStore(outputDirectory, HorizonTileLayout.PartitionedByY);
+                path = store.BuildPath(tileY, tileX, observerElevation, compress: false);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                Utilities.WriteBinaryArray(path, horizonData.Degrees);
+            }
+            else
+            {
+                path = Path.Combine(outputDirectory, resolvedName);
+                Utilities.WriteBinaryArray(path, horizonData.Degrees);
+            }
             Log.Error($"Written horizons (deg) to {path}");
         }
 
@@ -972,11 +983,9 @@ namespace moonlib.horizon
         {
             if (!Directory.Exists(directory))
                 return patches; // If directory doesn't exist, no patches are completed, return full list
-            var existingPatterns = Directory.GetFiles(directory, "horizon_*")
-                .Select(f => ParseHorizonFilename(f))
-                .ToHashSet();
+            var store = new HorizonTileStore(directory);
             var filteredPatches = patches
-                .Where(p => !existingPatterns.Contains((p.TileX, p.TileY, observerElevation_meters)))
+                .Where(p => store.FindExistingPath(p.TileY, p.TileX, observerElevation_meters) == null)
                 .ToList();
             return filteredPatches;
         }
@@ -1044,6 +1053,7 @@ namespace moonlib.horizon
             var primaryDem = dems[0];
             
             Directory.CreateDirectory(outputDirectory);
+            var horizonStore = new HorizonTileStore(outputDirectory, HorizonTileLayout.PartitionedByY);
 
             int patchCount = patches.Count;
             ThrowIfCancelled();
@@ -1204,43 +1214,62 @@ namespace moonlib.horizon
                                 Log.Information("GPU processed rays                        sec={Duration:F3}", StopwatchTicksToSeconds(workerElapsed));
 
                                 // Write to file immediately (no merging needed)
-                                string fallbackFileName = BuildHorizonFilename(patchWorkItem.Patch.TileX, patchWorkItem.Patch.TileY, observerElevation);
-                                string fileName = fallbackFileName;
-                                if (compressHorizons)
-                                    fileName = Path.ChangeExtension(fileName, ".cbin");
-                                var filePath = Path.Combine(outputDirectory, fileName);
+                                string fileName = horizonStore.BuildFileName(
+                                    patchWorkItem.Patch.TileY,
+                                    patchWorkItem.Patch.TileX,
+                                    observerElevation,
+                                    compressHorizons);
+                                var filePath = horizonStore.BuildPath(
+                                    patchWorkItem.Patch.TileY,
+                                    patchWorkItem.Patch.TileX,
+                                    observerElevation,
+                                    compressHorizons);
                                 long writeStart = Stopwatch.GetTimestamp();
                                 if (compressHorizons)
                                 {
-                                    // Write compressed tiles atomically so failed writes do not
-                                    // leave behind zero-byte/corrupt outputs.
-                                    string tempFileName = $"{Path.GetFileNameWithoutExtension(fileName)}.tmp.cbin";
-                                    string tempFilePath = Path.Combine(outputDirectory, tempFileName);
                                     try
                                     {
-                                        if (File.Exists(tempFilePath))
-                                            File.Delete(tempFilePath);
-                                        HorizonFile.WriteCompressedHorizonFile(tempFilePath, result.HorizonData.Degrees);
-                                        if (File.Exists(filePath))
-                                            File.Delete(filePath);
-                                        File.Move(tempFilePath, filePath);
+                                        horizonStore.Write(
+                                            patchWorkItem.Patch.TileY,
+                                            patchWorkItem.Patch.TileX,
+                                            observerElevation,
+                                            result.HorizonData.Degrees,
+                                            compress: true);
                                     }
                                     catch (Exception ex)
                                     {
-                                        if (File.Exists(tempFilePath))
-                                            File.Delete(tempFilePath);
-                                        var fallbackPath = Path.Combine(outputDirectory, fallbackFileName);
+                                        var fallbackPath = horizonStore.BuildPath(
+                                            patchWorkItem.Patch.TileY,
+                                            patchWorkItem.Patch.TileX,
+                                            observerElevation,
+                                            compress: false);
                                         Log.Error(
                                             ex,
                                             "Compressed horizon write failed for {CompressedFile}; falling back to uncompressed {FallbackFile}.",
                                             filePath,
                                             fallbackPath);
-                                        Utilities.WriteBinaryArray(fallbackPath, result.HorizonData.Degrees);
+                                        horizonStore.Write(
+                                            patchWorkItem.Patch.TileY,
+                                            patchWorkItem.Patch.TileX,
+                                            observerElevation,
+                                            result.HorizonData.Degrees,
+                                            compress: false);
+                                        fileName = horizonStore.BuildFileName(
+                                            patchWorkItem.Patch.TileY,
+                                            patchWorkItem.Patch.TileX,
+                                            observerElevation,
+                                            compress: false);
+                                        filePath = fallbackPath;
                                     }
                                 }
                                 else
                                 {
-                                    Utilities.WriteBinaryArray(filePath, result.HorizonData.Degrees);
+                                    horizonStore.Write(
+                                        patchWorkItem.Patch.TileY,
+                                        patchWorkItem.Patch.TileX,
+                                        observerElevation,
+                                        result.HorizonData.Degrees,
+                                        compress: false);
                                     Console.WriteLine($"Wrote horizon file: {filePath}");
                                     Log.Debug($"Wrote horizon file: {filePath}");
                                 }
@@ -2362,28 +2391,15 @@ namespace moonlib.horizon
 
         public static string BuildHorizonFilename(int tileCol, int tileRow, float observerElevation)
         {
-            return $"horizon_{tileRow:D5}_{tileCol:D5}_{((int)(observerElevation * 10)):D3}.bin";
+            return new HorizonTileStore(".", HorizonTileLayout.Flat)
+                .BuildFileName(tileRow, tileCol, observerElevation, compress: false);
         }
 
         public static (int col, int row, float observerElevation) ParseHorizonFilename(string filePath)
         {
-            try
-            {
-                var fileName = Path.GetFileNameWithoutExtension(filePath);
-                var parts = fileName.Split('_');
-                if (parts.Length == 4 && parts[0] == "horizon")
-                {
-                    int row = int.Parse(parts[1]);
-                    int col = int.Parse(parts[2]);
-                    float elevation = int.Parse(parts[3]) / 10f;
-                    return (col, row, elevation);
-                }
-                return (-1, -1, float.NaN);
-            }
-            catch
-            {
-                return (-1, -1, float.NaN);
-            }
+            return HorizonTileStore.TryParseFileName(filePath, out var key)
+                ? (key.TileX, key.TileY, key.ObserverElevationMeters)
+                : (-1, -1, float.NaN);
         }
 
 

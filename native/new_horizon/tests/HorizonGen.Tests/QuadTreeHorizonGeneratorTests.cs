@@ -1,4 +1,5 @@
 using horizongen;
+using moonlib.horizon;
 
 namespace HorizonGen.Tests
 {
@@ -69,7 +70,8 @@ namespace HorizonGen.Tests
             // The horizon should be consistent and negative due to the curvature of the Moon
             // Horizon data is stored as raw float values representing the elevation angle in radians.
             // A negative angle means the horizon is below the geometric horizontal plane.
-            var horizonFilePath = Path.Combine(outputDir, $"horizon_{observerCol:D5}_{observerRow:D5}_000.bin");
+            var horizonFilePath = new HorizonTileStore(outputDir)
+                .BuildPath(observerRow, observerCol, 0f, compress: false);
             Assert.IsTrue(File.Exists(horizonFilePath), $"Horizon file was not created at {horizonFilePath}.");
 
             float[] horizons = Utilities.LoadBinaryArray<float>(horizonFilePath);
@@ -141,7 +143,8 @@ namespace HorizonGen.Tests
             generator.GenerateHorizons(outputDir, dems, observerCol, observerRow, tileWidth, tileHeight, 2.0f);
 
             // Assert
-            var horizonFilePath = Path.Combine(outputDir, $"horizon_{observerCol:D5}_{observerRow:D5}_020.bin");
+            var horizonFilePath = new HorizonTileStore(outputDir)
+                .BuildPath(observerRow, observerCol, 2.0f, compress: false);
             Assert.IsTrue(File.Exists(horizonFilePath), $"Horizon file was not created at {horizonFilePath}.");
 
             float[] horizons = Utilities.LoadBinaryArray<float>(horizonFilePath);

@@ -87,7 +87,9 @@ namespace moonlib.pipeline
                 }
             }, maxDegreeOfParallelism: 20);
 
-            horizon_filenames = Directory.EnumerateFiles(horizonDir, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+            horizon_filenames = new HorizonTileStore(horizonDir)
+                .EnumerateFiles(observerElevationMeters: 0f)
+                .ToList();
             totalCount = horizon_filenames.Count;
 
             Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");

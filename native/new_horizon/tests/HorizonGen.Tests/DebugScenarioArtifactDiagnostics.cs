@@ -309,10 +309,8 @@ namespace moonlib.tests
 
             foreach (var (tileCol, tileRow) in EnumerateTiles())
             {
-                string cbinName = Path.ChangeExtension(
-                    QuadTreeHorizonGenerator.BuildHorizonFilename(tileCol, tileRow, observerElevation: 0f),
-                    ".cbin");
-                string cbinPath = Path.Combine(horizonOutDir, cbinName);
+                string cbinPath = new HorizonTileStore(horizonOutDir)
+                    .BuildPath(tileRow, tileCol, observerElevationMeters: 0f, compress: true);
                 var horizons = HorizonFile.ReadHorizonFile(cbinPath);
                 CopyTileHorizons(horizons, allHorizons, tileCol, tileRow);
             }

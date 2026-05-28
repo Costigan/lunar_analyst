@@ -127,7 +127,9 @@ namespace moonlib.mapops
                 }, maxDegreeOfParallelism: 4, boundedCapacity: 40);
 
                 Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
-                var horizon_filenames = Directory.EnumerateFiles(context.HorizonDirectory, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+                var horizon_filenames = new HorizonTileStore(context.HorizonDirectory!)
+                    .EnumerateFiles(observerElevationMeters: 0f)
+                    .ToList();
                 totalCount = horizon_filenames.Count;
 
                 Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");
@@ -288,7 +290,9 @@ namespace moonlib.mapops
                 }, maxDegreeOfParallelism: 4, boundedCapacity: 40);
 
                 Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
-                var horizon_filenames = Directory.EnumerateFiles(context.HorizonDirectory, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+                var horizon_filenames = new HorizonTileStore(context.HorizonDirectory!)
+                    .EnumerateFiles(observerElevationMeters: 0f)
+                    .ToList();
                 totalCount = horizon_filenames.Count;
 
                 Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");
@@ -517,7 +521,9 @@ namespace moonlib.mapops
 
             var dem = new ElevationMap(context.DEM_path);
 
-            var horizon_filenames = Directory.EnumerateFiles(context.HorizonDirectory, "horizon_*_000.*bin", SearchOption.TopDirectoryOnly).ToList();
+            var horizon_filenames = new HorizonTileStore(context.HorizonDirectory!)
+                .EnumerateFiles(observerElevationMeters: 0f)
+                .ToList();
             var totalCount = horizon_filenames.Count;
             int processedCount = 0;
 

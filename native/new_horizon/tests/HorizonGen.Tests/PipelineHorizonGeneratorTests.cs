@@ -81,15 +81,16 @@ namespace moonlib.tests
             stopwatch.Stop();
 
             // Verify results
-            var files = Directory.GetFiles(outputDir, "horizon_*.bin");
+            var store = new HorizonTileStore(outputDir);
+            var files = store.EnumerateFiles(observerElevationMeters: observerElevation).ToArray();
             Console.WriteLine($"Generated {files.Length} horizon files in {stopwatch.Elapsed.TotalSeconds:F2} seconds");
             Console.WriteLine($"Average time per patch: {stopwatch.Elapsed.TotalSeconds / N:F2} seconds");
             
             Assert.AreEqual(N, files.Length, "Should generate exactly N horizon files");
 
             // Verify first file exists and has correct size
-            string firstFileName = QuadTreeHorizonGenerator.BuildHorizonFilename(0, 0, observerElevation);
-            string firstFilePath = Path.Combine(outputDir, firstFileName);
+            string firstFileName = store.BuildFileName(0, 0, observerElevation, compress: false);
+            string firstFilePath = store.BuildPath(0, 0, observerElevation, compress: false);
             Assert.IsTrue(File.Exists(firstFilePath), $"First horizon file should exist: {firstFileName}");
 
             // Verify file size
@@ -110,7 +111,7 @@ namespace moonlib.tests
         [TestMethod]
         [TestCategory("Integration")]
         [TestCategory("Pipeline")]
-        public void GenerateHorizonsForAllPatches_ValidatesDimensions()
+        public async Task GenerateHorizonsForAllPatches_ValidatesDimensions()
         {
             // Create a DEM with invalid dimensions (not a multiple of 128)
             const int INVALID_SIZE = 1000; // Not divisible by 128
@@ -135,9 +136,9 @@ namespace moonlib.tests
             using var generator = new QuadTreeHorizonGenerator();
             
             // Should throw ArgumentException for invalid dimensions
-            var exception = Assert.ThrowsException<ArgumentException>(() =>
+            var exception = await Assert.ThrowsExceptionAsync<ArgumentException>(async () =>
             {
-                generator.GenerateHorizonsForAllPatches(outputDir, dems, 2.0f);
+                await generator.GenerateHorizonsForAllPatches(outputDir, dems, 2.0f);
             });
             
             Assert.IsTrue(exception.Message.Contains("multiple of 128"), 
@@ -149,7 +150,7 @@ namespace moonlib.tests
         [TestMethod]
         [TestCategory("Fast")]
         [TestCategory("Pipeline")]
-        public void GenerateHorizonsForAllPatches_ValidDimensions_SmallDEM()
+        public async Task GenerateHorizonsForAllPatches_ValidDimensions_SmallDEM()
         {
             // Create a small DEM with valid dimensions (multiple of 128)
             const int DEM_SIZE = 256; // 2x2 patches (256 / 128 = 2)
@@ -185,10 +186,11 @@ namespace moonlib.tests
             }
             
             using var generator = new QuadTreeHorizonGenerator();
-            generator.GenerateHorizonsForAllPatches(outputDir, dems, 2.0f);
+            await generator.GenerateHorizonsForAllPatches(outputDir, dems, 2.0f);
             
             // Verify 4 files created (2x2 patches)
-            var files = Directory.GetFiles(outputDir, "horizon_*.bin");
+            var store = new HorizonTileStore(outputDir);
+            var files = store.EnumerateFiles(observerElevationMeters: 2.0f).ToArray();
             Assert.AreEqual(4, files.Length, "Should generate 4 horizon files for 256x256 DEM");
             
             // Verify expected filenames exist
@@ -202,7 +204,8 @@ namespace moonlib.tests
             
             foreach (var expectedFile in expectedFiles)
             {
-                var filePath = Path.Combine(outputDir, expectedFile);
+                Assert.IsTrue(HorizonTileStore.TryParseFileName(expectedFile, out var key));
+                var filePath = store.BuildPath(key.TileY, key.TileX, key.ObserverElevationMeters, compress: false);
                 Assert.IsTrue(File.Exists(filePath), $"Expected file should exist: {expectedFile}");
             }
             

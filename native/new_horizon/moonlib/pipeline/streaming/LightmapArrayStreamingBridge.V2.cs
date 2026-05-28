@@ -768,10 +768,8 @@ namespace moonlib.pipeline.streaming
 
             private static IEnumerable<string> EnumerateHorizonFiles(string horizonDir)
             {
-                return Directory
-                    .EnumerateFiles(horizonDir, "horizon_*.bin", SearchOption.TopDirectoryOnly)
-                    .Concat(Directory.EnumerateFiles(horizonDir, "horizon_*.cbin", SearchOption.TopDirectoryOnly))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                return new HorizonTileStore(horizonDir)
+                    .EnumerateFiles()
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase);
             }
 

@@ -29,6 +29,9 @@ internal static class Program
         string DemPath,
         string OutputPath);
 
+    private sealed record PartitionOptions(
+        string HorizonsDirectory);
+
     private static async Task<int> Main(string[] args)
     {
         ConfigureLogging();
@@ -43,15 +46,12 @@ internal static class Program
                 return 1;
             }
 
-            MoonlibBridge.EnsureGdalInitialized();
-            Gdal.AllRegister();
-            _ = SpiceManager.Singleton;
-
             var verb = args[0].Trim().ToLowerInvariant();
             return verb switch
             {
-                "make" => await RunMakeAsync(args),
-                "psr" => await RunPsrAsync(args),
+                "make" => await RunWithNativeRuntimeAsync(() => RunMakeAsync(args)),
+                "psr" => await RunWithNativeRuntimeAsync(() => RunPsrAsync(args)),
+                "partition-horizons" => RunPartitionHorizons(args),
                 _ => UnknownVerb(verb),
             };
         }
@@ -64,6 +64,14 @@ internal static class Program
         {
             Log.CloseAndFlush();
         }
+    }
+
+    private static async Task<int> RunWithNativeRuntimeAsync(Func<Task<int>> action)
+    {
+        MoonlibBridge.EnsureGdalInitialized();
+        Gdal.AllRegister();
+        _ = SpiceManager.Singleton;
+        return await action();
     }
 
     private static int UnknownVerb(string verb)
@@ -140,6 +148,36 @@ internal static class Program
 
         await MapOperations.GeneratePermanentShadowMap(context, options.OutputPath);
         Log.Information("PSR file written to: {OutputPath}", Path.GetFullPath(options.OutputPath));
+        return 0;
+    }
+
+    private static int RunPartitionHorizons(string[] args)
+    {
+        var options = ParsePartitionArgs(args);
+        if (options is null)
+        {
+            return 1;
+        }
+
+        var sw = Stopwatch.StartNew();
+        var result = HorizonTileStore.PartitionFlatDirectory(options.HorizonsDirectory);
+        sw.Stop();
+
+        Log.Information(
+            "Partitioned horizon directory {HorizonsDirectory}: moved={Moved}, skipped={Skipped}, invalid={Invalid}, conflicted={Conflicted}, elapsed_sec={Elapsed:F3}",
+            Path.GetFullPath(options.HorizonsDirectory),
+            result.Moved,
+            result.Skipped,
+            result.Invalid,
+            result.Conflicted,
+            sw.Elapsed.TotalSeconds);
+
+        if (result.Conflicted > 0)
+        {
+            Log.Error("Horizon partitioning completed with {ConflictCount} conflict(s). Conflicting source files were left in place.", result.Conflicted);
+            return 2;
+        }
+
         return 0;
     }
 
@@ -339,15 +377,36 @@ internal static class Program
         return new PsrOptions(horizonsDirectory, demPath, outputPath);
     }
 
+    private static PartitionOptions? ParsePartitionArgs(string[] args)
+    {
+        if (args.Length != 2)
+        {
+            Log.Error("Expected exactly 2 arguments for 'partition-horizons'.");
+            PrintUsage();
+            return null;
+        }
+
+        var horizonsDirectory = args[1];
+        if (!Directory.Exists(horizonsDirectory))
+        {
+            Log.Error("Horizon directory must already exist: {HorizonsDirectory}", horizonsDirectory);
+            return null;
+        }
+
+        return new PartitionOptions(horizonsDirectory);
+    }
+
     private static void PrintUsage()
     {
         Console.WriteLine("Usage:");
         Console.WriteLine("  horizon make <horizons_directory> <offset> <stride> [--gpu-concurrency <count>] [--segment-queue <size>] <dem_filenames ...>");
         Console.WriteLine("  horizon psr <horizons_directory> <dem_filename> <output_tiff>");
+        Console.WriteLine("  horizon partition-horizons <horizons_directory>");
         Console.WriteLine();
         Console.WriteLine("Examples:");
         Console.WriteLine("  horizon make /workspace/scenario/horizons 0 16 --gpu-concurrency 4 --segment-queue 6 /workspace/scenario/dems/primary.tif");
         Console.WriteLine("  horizon psr /workspace/scenario/horizons /workspace/scenario/dems/primary.tif /workspace/scenario/lighting/psr.tif");
+        Console.WriteLine("  horizon partition-horizons /workspace/scenario/horizons");
     }
 
     private static void ConfigureLogging()
