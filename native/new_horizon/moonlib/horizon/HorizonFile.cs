@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Diagnostics;
 using System.IO;
@@ -199,20 +200,34 @@ namespace moonlib.horizon
                     nameof(data));
             }
 
-            Span<byte> lengthBuf = stackalloc byte[LengthPrefixBytes];
-            Span<byte> encoded = stackalloc byte[MaxCompressedBytes];
+            int maxFileBytes = checked(HorizonCount * (LengthPrefixBytes + MaxCompressedBytes));
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(maxFileBytes);
 
-            using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
-            for (int horizonIdx = 0; horizonIdx < HorizonCount; horizonIdx++)
+            try
             {
-                int srcOffset = horizonIdx * HorizonSamples;
-                int written = HorizonCompressor.Encode(
-                    data.Slice(srcOffset, HorizonSamples),
-                    encoded);
+                int offset = 0;
+                for (int horizonIdx = 0; horizonIdx < HorizonCount; horizonIdx++)
+                {
+                    int srcOffset = horizonIdx * HorizonSamples;
+                    int lengthOffset = offset;
+                    offset += LengthPrefixBytes;
 
-                BinaryPrimitives.WriteUInt16LittleEndian(lengthBuf, (ushort)written);
-                fs.Write(lengthBuf);
-                fs.Write(encoded.Slice(0, written));
+                    int written = HorizonCompressor.Encode(
+                        data.Slice(srcOffset, HorizonSamples),
+                        buffer.AsSpan(offset, MaxCompressedBytes));
+
+                    BinaryPrimitives.WriteUInt16LittleEndian(
+                        buffer.AsSpan(lengthOffset, LengthPrefixBytes),
+                        (ushort)written);
+                    offset += written;
+                }
+
+                using var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
+                fs.Write(buffer.AsSpan(0, offset));
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
         }
 

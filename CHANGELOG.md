@@ -2,6 +2,13 @@
 
 This file summarizes functional behavior changes across all commits in this repository (128 commits), from `b38cd7c` to `Unreleased`.
 
+- `3c6125e` (2026-05-29): Buffered compressed horizon file writes for CephFS-backed batch generation.
+  - New Horizon / horizon file output:
+    - Changed compressed `.cbin` horizon writes to assemble each file in a rented in-memory byte buffer and emit one large `FileStream.Write` instead of thousands of small block writes.
+    - Preserved the existing `HorizonFile` and `HorizonTileStore` APIs, temp-file write path, final rename behavior, and compressed file format.
+  - Verification:
+    - `dotnet test native/new_horizon/tests/HorizonGen.Tests/HorizonGen.Tests.csproj --filter FullyQualifiedName~HorizonFileTests -v minimal` passes with `5` tests.
+
 - `d4b4cbb` (2026-05-29): Split native horizon development tests from default regressions and expanded synthetic regression coverage.
   - New Horizon / test organization:
     - Added `HorizonGen.Development.Tests` for algorithm-development, diagnostic, external-data, benchmark, and artifact-generating tests that should not run during ordinary solution-level regression runs.
