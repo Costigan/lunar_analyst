@@ -11,6 +11,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\HorizonGen.Tests\TestInitializer.cs" Link="TestInitializer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="FluentAssertions" Version="8.8.0" />
     <PackageReference Include="MaxRev.Gdal.Core" Version="3.11.3.339" />
     <PackageReference Include="MaxRev.Gdal.LinuxRuntime.Minimal" Version="3.11.3.339" />

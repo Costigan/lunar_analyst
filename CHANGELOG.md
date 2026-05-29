@@ -2,6 +2,21 @@
 
 This file summarizes functional behavior changes across all commits in this repository (128 commits), from `b38cd7c` to `Unreleased`.
 
+- `d4b4cbb` (2026-05-29): Split native horizon development tests from default regressions and expanded synthetic regression coverage.
+  - New Horizon / test organization:
+    - Added `HorizonGen.Development.Tests` for algorithm-development, diagnostic, external-data, benchmark, and artifact-generating tests that should not run during ordinary solution-level regression runs.
+    - Moved development-oriented C# tests out of `HorizonGen.Tests` while keeping `HorizonGen.Development.Tests` buildable and explicit.
+    - Kept `HorizonGen.Development.Tests` out of `native/new_horizon/new_horizon.sln` so `dotnet test native/new_horizon/new_horizon.sln -v minimal` runs only the default regression suite.
+  - New Horizon / regression coverage:
+    - Added portable synthetic reference-level regression tests for flat DEM behavior, known-obstacle azimuth behavior, and multi-DEM accumulation.
+    - Added direct `QuadTreeHorizonGenerator` production-path regression tests for complete finite output, known-obstacle directional response, tile-boundary output validity, and synthetic multi-DEM relative behavior.
+    - Split the full VIPER external-data pipeline test into the development project while preserving small deterministic pipeline validation tests in the default suite.
+  - Documentation:
+    - Added `docs/ADR.0060.native_horizon_regression_scenario_matrix.md` to define the native horizon regression matrix, phased production QuadTree coverage, and reference-oracle policy.
+    - Added `ADDING_TEST_COVERAGE.md` with Coverlet and ReportGenerator commands for default native C# regression coverage reports.
+  - Verification:
+    - `dotnet test native/new_horizon/new_horizon.sln -v minimal` passes with `131` default regression tests.
+
 - `64fe9f8` (2026-05-28): Partitioned horizon tile storage for large CephFS-backed horizon directories.
   - New Horizon / horizon tile storage:
     - Added `HorizonTileStore` as the central C# service for horizon filename parsing, path construction, read/write resolution, tile enumeration, and flat-to-partitioned migration.

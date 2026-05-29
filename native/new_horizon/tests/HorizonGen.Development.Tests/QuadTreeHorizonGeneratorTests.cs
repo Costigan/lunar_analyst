@@ -1,4 +1,4 @@
-using horizongen;
+using moonlib;
 using moonlib.horizon;
 
 namespace HorizonGen.Tests
