@@ -57,7 +57,7 @@ internal static class Program
                 "make" => await RunWithNativeRuntimeAsync(() => RunMakeAsync(args)),
                 "psr" => await RunWithNativeRuntimeAsync(() => RunPsrAsync(args)),
                 "partition-horizons" => RunPartitionHorizons(args),
-                "lightmap" => RunLightmapAsync(args).GetAwaiter().GetResult(),
+                "lightmap" => await RunWithNativeRuntimeAsync(() => RunLightmapAsync(args)),
                 _ => UnknownVerb(verb),
             };
         }
@@ -75,7 +75,6 @@ internal static class Program
     private static async Task<int> RunWithNativeRuntimeAsync(Func<Task<int>> action)
     {
         MoonlibBridge.EnsureGdalInitialized();
-        Gdal.AllRegister();
         _ = SpiceManager.Singleton;
         return await action();
     }
