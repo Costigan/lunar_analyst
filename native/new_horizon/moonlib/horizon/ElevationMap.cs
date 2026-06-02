@@ -363,6 +363,13 @@ namespace moonlib.horizon
 
             // Get elevation at this pixel
             double elev = GetElevation(pt_pixel.X, pt_pixel.Y); // meters above lunar datum
+            //double elev = GetElevationClipped(pt_pixel.X, pt_pixel.Y); // meters above lunar datum
+
+            //if (double.IsNaN(elev))
+            //{
+            //    // Handle no-data by returning a point on the sphere at the given lat/lon
+            //    elev = 0;
+            //}
 
             // Use the sphere radius from the SRS descriptor
             double R = srs.R;

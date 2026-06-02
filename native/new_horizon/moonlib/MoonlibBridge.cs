@@ -373,7 +373,7 @@ namespace moonlib
 
             ThrowIfCancelled();
             Report(10.0, "native_execution", "Generating permanent shadow raster.");
-            var nativeProgress = new Progress<float>(percent =>
+            IProgress<float> nativeProgress = new Progress<float>(percent =>
             {
                 Report(
                     10.0 + Math.Clamp((double)percent, 0.0, 1.0) * 85.0,
@@ -383,8 +383,9 @@ namespace moonlib
             MapOperations.GeneratePermanentShadowMap(
                 context,
                 outputPath,
-                nativeProgress,
-                () => isCancellationRequested != null && isCancellationRequested()).GetAwaiter().GetResult();
+                overwrite_existing: true,
+                progress: nativeProgress,
+                isCancellationRequested: () => isCancellationRequested != null && isCancellationRequested()).GetAwaiter().GetResult();
             ThrowIfCancelled();
             Report(100.0, "complete", "Permanent shadow raster generation complete.");
         }

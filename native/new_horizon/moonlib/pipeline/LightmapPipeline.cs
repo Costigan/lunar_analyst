@@ -111,7 +111,15 @@ namespace moonlib.pipeline
         public static Task<HorizonProcessingToken> ReadHorizons(HorizonProcessingToken token)
         {
             (token.col, token.row, token.observer_elevation) = QuadTreeHorizonGenerator.ParseHorizonFilename(token.filename);
-            token.horizons = HorizonFile.ReadHorizonFile(token.filename); // Validate file can be read
+            try
+            {
+                token.horizons = HorizonFile.ReadHorizonFile(token.filename);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, $"Failed to read horizon file: {token.filename}");
+                token.horizons = null;
+            }
             return Task.FromResult(token);
         }
 
@@ -135,6 +143,11 @@ namespace moonlib.pipeline
 
         public unsafe Task<HorizonProcessingToken> GenerateShadows(HorizonProcessingToken token)
         {
+            if (token.horizons == null)
+            {
+                Log.Warning($"Skipping shadow generation for {token.filename} due to missing horizon data.");
+                return Task.FromResult(token);
+            }
             Debug.Assert(times != null && token.sunvecs_me != null && token.matrices != null && token.horizons != null && dem != null);
             int width = Width;
             int height = Height;
@@ -189,6 +202,11 @@ namespace moonlib.pipeline
 
         public Task<HorizonProcessingToken> GenerateSimulatedCameraImages(HorizonProcessingToken token)
         {
+            if (token.horizons == null)
+            {
+                Log.Warning($"Skipping canera image generation for {token.filename} due to missing horizon data.");
+                return Task.FromResult(token);
+            }
             Debug.Assert(times != null && token.sunvecs_me != null && token.matrices != null && token.resultBuffers != null && dem != null);
             int width = Width;
             int height = Height;

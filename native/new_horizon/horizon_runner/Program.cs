@@ -42,7 +42,7 @@ var dem_paths = new List<string>
     "/d/viper/maps/lola/LDEM_80S_20M-2017-06-15-processed.tif"
 };
 
-int runMode = 5;
+int runMode = 13;
 if (args.Length > 0 && int.TryParse(args[0], out var parsedMode))
 {
     runMode = parsedMode;
@@ -88,16 +88,6 @@ switch (runMode)
             // Pipeline test: Generate horizons for all patches (or filtered subset)
             Console.WriteLine("Pipeline Mode: Generating horizons for patches");
 
-            bool enableNearFieldMerge = false;
-            var mergeEnv = Environment.GetEnvironmentVariable("QUADTREE_NEARFIELD_MERGE");
-            if (!string.IsNullOrEmpty(mergeEnv))
-                enableNearFieldMerge = mergeEnv == "1" || mergeEnv.Equals("true", StringComparison.OrdinalIgnoreCase);
-
-            float nearFieldMeters = 250f;
-            var clampEnv = Environment.GetEnvironmentVariable("QUADTREE_NEARFIELD_METERS");
-            if (!string.IsNullOrEmpty(clampEnv) && float.TryParse(clampEnv, NumberStyles.Float, CultureInfo.InvariantCulture, out var clampValue) && clampValue > 0f)
-                nearFieldMeters = clampValue;
-
             // Load DEMs
             var dem_paths2 = new List<string>
             {
@@ -111,33 +101,19 @@ switch (runMode)
             var allPatches = QuadTreeHorizonGenerator.GeneratePatchList(dems[0]);
             Console.WriteLine($"Total patches available: {allPatches.Count}");
 
-            // Filter patches (adjust as needed)
-            // Examples:
-            // - First N patches: allPatches.Take(N)
-            // - Specific range: allPatches.Skip(100).Take(50)
-            // - Every 10th: allPatches.Where((p, i) => i % 10 == 0)
-            // - Region: allPatches.Where(p => p.PatchX < 20 && p.PatchY < 20)
-
-            int N = 4;  // Adjust this value
-            var patchEnv = Environment.GetEnvironmentVariable("PIPELINE_PATCH_COUNT");
-            if (!string.IsNullOrEmpty(patchEnv) && int.TryParse(patchEnv, out var patchCount) && patchCount > 0)
-                N = patchCount;
-
-            allPatches = QuadTreeHorizonGenerator.RemoveCompletedPatches(allPatches, @"/e/lunar_analyst_scenarios/polar_mosaic/lighting/horizons/", 0f);
+            allPatches = QuadTreeHorizonGenerator.RemoveCompletedPatches(allPatches, @"/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons", 0f);
             Console.WriteLine($"Processing {allPatches.Count} patches");
 
             // Create output directory
-            string outputDir = "/e/lunar_analyst_scenarios/polar_mosaic/lighting/horizons/";
+            string outputDir = "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons";
             Directory.CreateDirectory(outputDir);
 
             // Generate horizons for selected patches
             float observerElevation = 0f;
             using (var generator = new QuadTreeHorizonGenerator(
-                disableHierarchy: false,
-                enableNearFieldReferenceMerge: enableNearFieldMerge,
-                nearFieldClampMeters: nearFieldMeters))
+                disableHierarchy: false))
             {
-                await generator.GenerateHorizonsForPatches(outputDir, dems, allPatches, observerElevation, compressHorizons: true);
+                await generator.GenerateHorizonsForPatches(outputDir, dems, allPatches, observerElevation, compressHorizons: false);
             }
 
             Console.WriteLine($"Horizon files written to: {Path.GetFullPath(outputDir)}");
@@ -154,6 +130,36 @@ switch (runMode)
         break;
     case 8:
         {
+            var horizon_filenames = new List<string>
+            {
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_06528_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_10624_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_14720_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_18816_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_22912_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_27008_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03968/horizon_03968_36096_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_00256_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_04352_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_08448_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_12544_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_16640_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_20736_000.bin",
+                "/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/04096/horizon_04096_24832_000.bin",
+
+            };
+            var context = new AnalysisContext
+            {
+                DEM_path = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif",
+                HorizonDirectory = @"/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/"
+            };
+            MapOperations.GeneratePermanentShadowMap(context,
+                @"/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/psr.tif",
+                horizon_filenames: horizon_filenames).Wait();
+        }
+        break;
+    case 9:
+        {
             var dem_path = @"/e/lunar_analyst_scenarios/haworth/dem.tif";
             var horizon_dir = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/";
             var haven_dir = @"/e/lunar_analyst_scenarios/haworth/lighting/safe_havens/";
@@ -165,7 +171,7 @@ switch (runMode)
             MapOperations.GenerateSafeHavenDurations(context, haven_dir, start_time, stop_time).Wait();
         }
         break;
-    case 9:
+    case 10:
         {
             var dem_path = @"/e/lunar_analyst_scenarios/haworth/dem.tif";
             var horizon_dir = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/";
@@ -184,7 +190,7 @@ switch (runMode)
             pipeline.ExecuteAsync(timestamps, sun_dir, camera_dir, dem, horizon_dir).Wait();
         }
         break;
-    case 10:
+    case 11:
         {
             // Pipeline test: Generate horizons for all patches (or filtered subset)
             Console.WriteLine("Pipeline Mode: Generating horizons for patches");
@@ -231,7 +237,7 @@ switch (runMode)
             Console.WriteLine($"Horizon files written to: {Path.GetFullPath(outputDir)}");
         }
         break;
-    case 11:
+    case 12:
         {
             var context = new AnalysisContext
             {
@@ -242,6 +248,20 @@ switch (runMode)
             var time_step_hrs = 2f;
             var times = new List<List<DateTime>> { ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2028, 3, 1), TimeSpan.FromHours(time_step_hrs)).ToList() };
             var reduce_lightcurve = MapOperations.MaxHoursOverThreshold(0.25f, time_step_hrs);
+            MapOperations.GenerateLightingFunction(context, filenames, times, reduce_lightcurve).Wait();
+        }
+        break;
+    case 13:
+        {
+            var context = new AnalysisContext
+            {
+                DEM_path = @"/workspace/polar_mosaic/dems/dem.tif",
+                HorizonDirectory = @"/workspace/polar_mosaic/horizons/"
+            };
+            var filenames = new List<string> { @"/workspace/polar_mosaic/max_landed_mission_duration_2027_2032.tif" };
+            var time_step_hrs = 6f;
+            var times = new List<List<DateTime>> { ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2032, 1, 1), TimeSpan.FromHours(time_step_hrs)).ToList() };
+            var reduce_lightcurve = MapOperations.MaxHoursOverThreshold(0.5f, time_step_hrs);
             MapOperations.GenerateLightingFunction(context, filenames, times, reduce_lightcurve).Wait();
         }
         break;

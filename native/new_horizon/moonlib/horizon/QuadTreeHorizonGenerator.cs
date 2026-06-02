@@ -457,7 +457,7 @@ namespace moonlib.horizon
             var oclAnyDevice = _context.Devices.FirstOrDefault(d => d.AcceleratorType == AcceleratorType.OpenCL);
             var chosenDevice = cudaDevice ?? oclNvidiaDevice ?? oclAnyDevice ?? _context.GetPreferredDevice(preferCPU: true);
 
-            Log.Error("QuadTreeHorizonGenerator using device: {DeviceName} ({AcceleratorType})", chosenDevice.Name, chosenDevice.AcceleratorType);
+            Log.Information("QuadTreeHorizonGenerator using device: {DeviceName} ({AcceleratorType})", chosenDevice.Name, chosenDevice.AcceleratorType);
             _accelerator = chosenDevice.CreateAccelerator(_context);
             _bufferPool = new BufferPool(_accelerator);
             
@@ -907,7 +907,7 @@ namespace moonlib.horizon
                 path = Path.Combine(outputDirectory, resolvedName);
                 Utilities.WriteBinaryArray(path, horizonData.Degrees);
             }
-            Log.Error($"Written horizons (deg) to {path}");
+            Log.Information($"Written horizons (deg) to {path}");
         }
 
         /// <summary>
@@ -1058,9 +1058,9 @@ namespace moonlib.horizon
             int patchCount = patches.Count;
             ThrowIfCancelled();
             ReportProgress(0, patchCount, 10.0, "prepare_pyramids", "Building or loading DEM pyramids.");
-            Log.Error($"Starting pipelined horizon generation for {patchCount} patches");
-            Log.Error($"Primary DEM dimensions: {primaryDem.Width}x{primaryDem.Height}");
-            Log.Error($"Output directory: {Path.GetFullPath(outputDirectory)}");
+            Log.Information($"Starting pipelined horizon generation for {patchCount} patches");
+            Log.Information($"Primary DEM dimensions: {primaryDem.Width}x{primaryDem.Height}");
+            Log.Information($"Output directory: {Path.GetFullPath(outputDirectory)}");
 
             var totalStopwatch = Stopwatch.StartNew();
 
@@ -1071,7 +1071,7 @@ namespace moonlib.horizon
             {
                 pyramids[i] = BuildOrLoadPyramid(dems[i]);
             });
-            Log.Error("Pyramids ready in {Elapsed:F2}s", totalStopwatch.Elapsed.TotalSeconds);
+            Log.Information("Pyramids ready in {Elapsed:F2}s", totalStopwatch.Elapsed.TotalSeconds);
             ThrowIfCancelled();
             ReportProgress(0, patchCount, 15.0, "process_patches", "Starting horizon patch generation.");
 
@@ -1301,7 +1301,7 @@ namespace moonlib.horizon
                                     string etaStr = eta.ToString("HH:mm:ss").PadRight(10);
                                     string remainStr = FormatTimeSpan(TimeSpan.FromSeconds(estimatedRemainingTime)).PadRight(10);
 
-                                    Log.Error("Progress: {Current}/{Total} ({Percent,5:F1}%) | Avg: {AvgTime,7:F2}s/patch | ETA: {ETA} | Remain: {Remain} | File: {FileName}",
+                                    Log.Information("Progress: {Current}/{Total} ({Percent,5:F1}%) | Avg: {AvgTime,7:F2}s/patch | ETA: {ETA} | Remain: {Remain} | File: {FileName}",
                                         processedCount, patchCount,
                                         percent,
                                         avgTimePerPatch,
@@ -1335,7 +1335,7 @@ namespace moonlib.horizon
             // Wait for producer and all GPU workers to complete
             await Task.WhenAll(producer, Task.WhenAll(gpuWorkerTasks));
 
-            Log.Error("Pipeline processing completed in {Elapsed:F2}s", pipelineStopwatch.Elapsed.TotalSeconds);
+            Log.Information("Pipeline processing completed in {Elapsed:F2}s", pipelineStopwatch.Elapsed.TotalSeconds);
             LogPipelineAggregateSummary(patchCount, pipelineStopwatch.Elapsed);
 
             // Cleanup
@@ -1343,7 +1343,7 @@ namespace moonlib.horizon
                 p.Dispose();
 
             totalStopwatch.Stop();
-            Log.Error("Total pipeline time: {Elapsed:F2}s for {Count} patches ({AvgTime:F2}s per patch)", 
+            Log.Information("Total pipeline time: {Elapsed:F2}s for {Count} patches ({AvgTime:F2}s per patch)", 
                 totalStopwatch.Elapsed.TotalSeconds, patchCount, totalStopwatch.Elapsed.TotalSeconds / patchCount);
         }
 
@@ -1850,7 +1850,7 @@ namespace moonlib.horizon
                     if (demStartDistMeters >= maxDist) break;
                 }
             });
-            Log.Error($"Segment creation (compact) took {compactStopwatch.Elapsed.TotalSeconds:F2} sec");
+            Log.Information($"Segment creation (compact) took {compactStopwatch.Elapsed.TotalSeconds:F2} sec");
             return (segments, true, gcInfo);
         }
 
@@ -2260,7 +2260,7 @@ namespace moonlib.horizon
                     }
                     else
                     {
-                        Log.Error("Cache size mismatch or invalid. Rebuilding.");
+                        Log.Warning("Cache size mismatch or invalid. Rebuilding.");
                         cacheExists = false;
                     }
                 } catch (Exception ex) {
@@ -2280,7 +2280,7 @@ namespace moonlib.horizon
             if (!cacheExists) // Rebuild logic for Mips
             {
                 if (cachePath != null)
-                    Log.Error("Building pyramid for {DemPath}...", Path.GetFileName(dem.Path!));
+                    Log.Information("Building pyramid for {DemPath}...", Path.GetFileName(dem.Path!));
 
                 // Allocate Mips on GPU
                 pyramid.DataMips = _accelerator.Allocate1D<float>(mipsOffset);

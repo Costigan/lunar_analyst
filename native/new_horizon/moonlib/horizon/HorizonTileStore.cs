@@ -39,6 +39,7 @@ namespace moonlib.horizon
             ReadLegacyFlatFiles = readLegacyFlatFiles;
         }
 
+        public bool IsPartitioned => WriteLayout == HorizonTileLayout.PartitionedByY;
         public string RootDirectory { get; }
         public HorizonTileLayout WriteLayout { get; }
         public bool ReadLegacyFlatFiles { get; }
@@ -133,6 +134,10 @@ namespace moonlib.horizon
 
             foreach (var candidate in EnumerateCandidateFiles())
             {
+                // Debugging
+                //if (!"/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/03328/horizon_03328_10624_000.cbin".Equals(candidate, StringComparison.OrdinalIgnoreCase))
+                //    continue;
+
                 if (!TryParseFileName(candidate, out var key))
                     continue;
                 if (elevationDm.HasValue && key.ObserverElevationDecimeters != elevationDm.Value)

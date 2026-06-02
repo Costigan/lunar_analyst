@@ -29,6 +29,11 @@ internal static class Program
         string DemPath,
         string OutputPath);
 
+    private sealed record LightmapOptions(
+        string HorizonsDirectory,
+        string DemPath,
+        string OutputPath);
+
     private sealed record PartitionOptions(
         string HorizonsDirectory);
 
@@ -52,6 +57,7 @@ internal static class Program
                 "make" => await RunWithNativeRuntimeAsync(() => RunMakeAsync(args)),
                 "psr" => await RunWithNativeRuntimeAsync(() => RunPsrAsync(args)),
                 "partition-horizons" => RunPartitionHorizons(args),
+                "lightmap" => RunLightmapAsync(args).GetAwaiter().GetResult(),
                 _ => UnknownVerb(verb),
             };
         }
@@ -148,6 +154,36 @@ internal static class Program
 
         await MapOperations.GeneratePermanentShadowMap(context, options.OutputPath);
         Log.Information("PSR file written to: {OutputPath}", Path.GetFullPath(options.OutputPath));
+        return 0;
+    }
+
+    private static async Task<int> RunLightmapAsync(string[] args)
+    {
+        var options = ParseLightmapArgs(args);
+        if (options is null)
+        {
+            return 1;
+        }
+
+        var context = new AnalysisContext
+        {
+            DEM_path = options.DemPath,
+            HorizonDirectory = options.HorizonsDirectory,
+        };
+
+        var outputDir = Path.GetDirectoryName(options.OutputPath);
+        if (!string.IsNullOrWhiteSpace(outputDir))
+        {
+            Directory.CreateDirectory(outputDir);
+        }
+
+        var filenames = new List<string> { options.OutputPath };
+        var time_step_hrs = 6f;
+        var times = new List<List<DateTime>> { ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2029, 1, 1), TimeSpan.FromHours(time_step_hrs)).ToList() };
+        var reduce_lightcurve = MapOperations.MaxHoursOverThreshold(0.5f, time_step_hrs);
+        await MapOperations.GenerateLightingFunction(context, filenames, times, reduce_lightcurve);
+
+        Log.Information("Lightmap file written to: {OutputPath}", Path.GetFullPath(options.OutputPath));
         return 0;
     }
 
@@ -375,6 +411,39 @@ internal static class Program
         }
 
         return new PsrOptions(horizonsDirectory, demPath, outputPath);
+    }
+
+    private static LightmapOptions? ParseLightmapArgs(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            Log.Error("Expected exactly 4 arguments for 'lightmap'.");
+            PrintUsage();
+            return null;
+        }
+
+        var horizonsDirectory = args[1];
+        if (!Directory.Exists(horizonsDirectory))
+        {
+            Log.Error("Horizon directory must already exist: {HorizonsDirectory}", horizonsDirectory);
+            return null;
+        }
+
+        var demPath = args[2];
+        if (!File.Exists(demPath))
+        {
+            Log.Error("DEM file does not exist: {DemPath}", demPath);
+            return null;
+        }
+
+        var outputPath = args[3];
+        if (string.IsNullOrWhiteSpace(outputPath))
+        {
+            Log.Error("Output path for 'lightmap' must be provided.");
+            return null;
+        }
+
+        return new LightmapOptions(horizonsDirectory, demPath, outputPath);
     }
 
     private static PartitionOptions? ParsePartitionArgs(string[] args)

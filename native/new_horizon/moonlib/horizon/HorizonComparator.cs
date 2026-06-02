@@ -14,7 +14,7 @@ namespace moonlib.horizon
         {
             if (!Directory.Exists(outputDir)) Directory.CreateDirectory(outputDir);
 
-            Log.Error("Starting Comparison for {NumPoints} points...", NumTestPoints);
+            Log.Information("Starting Comparison for {NumPoints} points...", NumTestPoints);
 
             // 1. Setup Reference Generator (Global Config)
             ReferenceHorizonGenerator.DEM_names = ReferenceHorizonGenerator.DEM_names
@@ -33,7 +33,7 @@ namespace moonlib.horizon
             var mainDem = dems[0];
             int width = mainDem.Width;
             int height = mainDem.Height;
-            Log.Error("DEM Size: {Width}x{Height}", width, height);
+            Log.Information("DEM Size: {Width}x{Height}", width, height);
 
             // 2. Generate Test Points
             var rand = new Random(54321); // Fixed seed for reproducibility, was 12345
@@ -51,8 +51,8 @@ namespace moonlib.horizon
             var observer_m = 2f; // Default observer height
 
             // 3. Prepare Table Header
-            Log.Error("| {Col1,-15} | {Col2,-10} | {Col3,-10} | {Col4,-15} | {Col5,-15} |", "Point (X, Y)", "Max Diff", "MSE", "Ref Range", "QT Range");
-            Log.Error("|{Sep1}|{Sep2}|{Sep3}|{Sep4}|{Sep5}|", new string('-', 17), new string('-', 12), new string('-', 12), new string('-', 17), new string('-', 17));
+            Log.Information("| {Col1,-15} | {Col2,-10} | {Col3,-10} | {Col4,-15} | {Col5,-15} |", "Point (X, Y)", "Max Diff", "MSE", "Ref Range", "QT Range");
+            Log.Information("|{Sep1}|{Sep2}|{Sep3}|{Sep4}|{Sep5}|", new string('-', 17), new string('-', 12), new string('-', 12), new string('-', 17), new string('-', 17));
 
             // 4. Run Tests
             string qtOutputDir = Path.Combine(outputDir, "qt_out");
@@ -87,7 +87,7 @@ namespace moonlib.horizon
             }
             catch (Exception ex)
             {
-                Log.Error("| {TestX,5}, {TestY,5}   | Error Ref: {ErrorMessage}", testX, testY, ex.Message);
+                Log.Information("| {TestX,5}, {TestY,5}   | Error Ref: {ErrorMessage}", testX, testY, ex.Message);
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace moonlib.horizon
             }
             catch (Exception ex)
             {
-                Log.Error("| {TestX,5}, {TestY,5}   | Error QT: {ErrorMessage}", testX, testY, ex.Message);
+                Log.Information("| {TestX,5}, {TestY,5}   | Error QT: {ErrorMessage}", testX, testY, ex.Message);
                 qtGen.DiagnosticsCallback = null;
                 return;
             }
@@ -150,7 +150,7 @@ namespace moonlib.horizon
 
             if (farFieldDegs == null)
             {
-                Log.Error("| {TestX,5}, {TestY,5}   | Error: FarField buffer missing from diagnostics callback", testX, testY);
+                Log.Information("| {TestX,5}, {TestY,5}   | Error: FarField buffer missing from diagnostics callback", testX, testY);
                 return;
             }
 
@@ -192,7 +192,7 @@ namespace moonlib.horizon
             string refRange = validCount > 0 ? $"[{minRef:F1}, {maxRef:F1}]" : "N/A";
             string qtRange = validCount > 0 ? $"[{minQt:F1}, {maxQt:F1}]" : "N/A";
 
-            Log.Error("| {TestX,5}, {TestY,5}   | {MaxDiff,10:F4} | {MSE,10:F4} | {RefRange,-15} | {QtRange,-15} |", testX, testY, maxDiff, mse, refRange, qtRange);
+            Log.Information("| {TestX,5}, {TestY,5}   | {MaxDiff,10:F4} | {MSE,10:F4} | {RefRange,-15} | {QtRange,-15} |", testX, testY, maxDiff, mse, refRange, qtRange);
 
             // --- D. Plot ---
             PlotHorizons(refDegs, farFieldDegs, Path.Combine(mainOutputDir, $"comparison_{testX}_{testY}.png"), demSeries, nearFieldDegs);
@@ -358,7 +358,7 @@ namespace moonlib.horizon
 
             path = Path.GetFullPath(path);
             bmp.Save(path, ImageFormat.Png);
-            Log.Error("Comparison plot saved to {OutputPath}", path);
+            Log.Information("Comparison plot saved to {OutputPath}", path);
         }
 
         private static float[] RemapReferenceSeries(float[] refH)

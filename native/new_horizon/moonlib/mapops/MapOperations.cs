@@ -31,8 +31,10 @@ namespace moonlib.mapops
         public static async Task GeneratePermanentShadowMap(
             AnalysisContext context,
             string output_path,
+            bool overwrite_existing = false,
             IProgress<float>? progress = null,
-            Func<bool>? isCancellationRequested = null)
+            Func<bool>? isCancellationRequested = null,
+            List<string>? horizon_filenames = null)
         {
             void ThrowIfCancelled()
             {
@@ -54,10 +56,9 @@ namespace moonlib.mapops
 
             // Initialize GDAL if not already (assuming calling app does, but safe to check)
             // In a library, we might assume the app has configured GDAL.
-            var geotiff_driver = Gdal.GetDriverByName("GTiff");
-            if (geotiff_driver == null) throw new Exception("GDAL GTiff driver not found.");
-
-            if (File.Exists(output_path))
+            var geotiff_driver = Gdal.GetDriverByName("GTiff") ?? throw new Exception("GDAL GTiff driver not found.");
+            
+            if (overwrite_existing & File.Exists(output_path))
                 File.Delete(output_path);
 
             var psr_image = LightmapPipeline.OpenDataset(geotiff_driver, output_path, DataType.GDT_Byte, -1, dem.Width, dem.Height, dem.Projection, dem.GeoTransform);
@@ -127,21 +128,28 @@ namespace moonlib.mapops
                 }, maxDegreeOfParallelism: 4, boundedCapacity: 40);
 
                 Debug.Assert(context.HorizonDirectory != null, "HorizonDirectory must be set in context for PSR generation.");
-                var horizon_filenames = new HorizonTileStore(context.HorizonDirectory!)
-                    .EnumerateFiles(observerElevationMeters: 0f)
-                    .ToList();
-                totalCount = horizon_filenames.Count;
+                List<string> _horizon_filenames;
+                if (horizon_filenames != null)
+                    _horizon_filenames = horizon_filenames;
+                else
+                    _horizon_filenames = new HorizonTileStore(context.HorizonDirectory!)
+                        .EnumerateFiles(observerElevationMeters: 0f)
+                        .ToList();
 
-                Log.Information($"Found {horizon_filenames.Count} horizon files for lightmap generation.");
+                totalCount = _horizon_filenames.Count;
+
+                Log.Information($"Found {_horizon_filenames.Count} horizon files for lightmap generation.");
 
                 ThrowIfCancelled();
-                await pipeline.ProcessAsync(horizon_filenames.Select(f => new HorizonProcessingToken { filename = f }));
+                await pipeline.ProcessAsync(_horizon_filenames.Select(f => new HorizonProcessingToken { filename = f }));
 
                 psr_image.Close();
             }
 
             unsafe Task<HorizonProcessingToken> GeneratePermanentShadow(HorizonProcessingToken token)
             {
+                if (token.horizons == null)
+                    return Task.FromResult(token); // Skip if horizons failed to load for this tile
                 ThrowIfCancelled();
                 var col = token.col;
                 var row = token.row;
@@ -508,7 +516,15 @@ namespace moonlib.mapops
             ArgumentNullException.ThrowIfNull(times);
             ArgumentNullException.ThrowIfNull(reduce_lightcurve);
 
-            progress ??= new Progress<float>(percent => Log.Information($"Progress: {100 * percent}%"));
+            var start_time = ViperDate.Now();
+            progress ??= new Progress<float>(percent => 
+            {
+                var log_time = ViperDate.Now();
+                var elapsed = (log_time - start_time).TotalSeconds;
+                var estimated_total_time = elapsed / percent;
+                var estimated_finish_time = start_time + TimeSpan.FromSeconds(estimated_total_time);
+                Log.Information($"Progress: {100 * percent}%, ETA: {estimated_finish_time}");
+            });
 
             if (filenames.Count < 1)
                 throw new Exception($"filenames.Count ({filenames.Count}) must be at least 1");
