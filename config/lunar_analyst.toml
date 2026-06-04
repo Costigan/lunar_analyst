@@ -54,9 +54,9 @@ level = "INFO"
 [backend.native]
 # Optional. Relative paths are resolved from this file's directory.
 # If unset, bootstrap resolves moonlib from standard build outputs.
-moonlib_dll_path = "../native/new_horizon/moonlib/bin/Debug/net9.0/linux-x64/moonlib.dll"
-# dotnet_runtime_config_path = "../native/new_horizon/moonlib/bin/Debug/net9.0/moonlib.runtimeconfig.json"
-expected_target_framework = "net9.0"
+moonlib_dll_path = "../native/new_horizon/moonlib/bin/Debug/net10.0/linux-x64/moonlib.dll"
+# dotnet_runtime_config_path = "../native/new_horizon/moonlib/bin/Debug/net10.0/moonlib.runtimeconfig.json"
+expected_target_framework = "net10.0"
 # `debug` | `release` | `auto_newest`
 build_profile = "auto_newest"
 
@@ -65,7 +65,7 @@ build_profile = "auto_newest"
 mode = "strict"
 # Optional native library search roots used before loading moonlib.
 search_dirs = [
-  "../native/new_horizon/moonlib/bin/Debug/net9.0/linux-x64",
+  "../native/new_horizon/moonlib/bin/Debug/net10.0/linux-x64",
   "../native/third_party/cspice/linux-x64",
 ]
 

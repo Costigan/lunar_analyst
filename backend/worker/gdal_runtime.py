@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+import ctypes.util
 import logging
 import os
 import sys
@@ -7,6 +9,27 @@ from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _preload_system_libxml2() -> None:
+    """Preload the system libxml2 so that the newer system version is
+    loaded before any moonlib-bundled older libxml2 can claim the
+    ``libxml2.so.2`` SONAME.  This avoids ``undefined symbol:
+    xmlNanoHTTPCleanup`` errors from system libspatialite when the
+    moonlib LD_LIBRARY_PATH entries are active."""
+    system_paths = [
+        "/lib/x86_64-linux-gnu/libxml2.so.2",
+        "/usr/lib/x86_64-linux-gnu/libxml2.so.2",
+        "/usr/lib/libxml2.so.2",
+    ]
+    for path in system_paths:
+        try:
+            ctypes.CDLL(path)
+            logger.debug("Preloaded system libxml2: %s", path)
+            return
+        except OSError:
+            continue
+    logger.debug("Could not preload system libxml2 (not found at expected paths)")
 
 
 def import_rasterio() -> Any:
@@ -161,6 +184,7 @@ def ensure_proj_data() -> Path:
 
 def configure_gdal_runtime() -> None:
     """Initialize GDAL runtime defaults for the backend process."""
+    _preload_system_libxml2()
     from osgeo import gdal
 
     gdal.UseExceptions()
