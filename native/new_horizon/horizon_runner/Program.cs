@@ -268,16 +268,34 @@ switch (runMode)
     case 14:
         {
 
-            var DEM_path = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif";
-            var HorizonDirectory = @"/e/lunar_analyst_scenarios/polar_mosaic/horizons/";
+            var DEM_path = @"/e/lunar_analyst_scenarios/haworth/dem.tif";
+            var HorizonDirectory = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/";
+
+            //var DEM_path = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif";
+            //var HorizonDirectory = @"/e/lunar_analyst_scenarios/polar_mosaic/horizons/";
+
             var time_step_hrs = 6f;
-            var times = ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2028, 1, 1), TimeSpan.FromHours(time_step_hrs)).ToList();
+            var times = ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2027, 2, 1), TimeSpan.FromHours(time_step_hrs)).ToList();
             
             var count = 0;
             var lm = new Lightmaps(4);
-            foreach (var r in lm.GenerateElevationArray(DEM_path, times))
+            //foreach (var r in lm.StreamElevationPatches(DEM_path, times))
+            //    Console.WriteLine($"Generated lightmap patch {++count}");
+            Console.WriteLine("[Main] Calling StreamElevationOverTerrainPatches...");
+            Console.Out.Flush();
+            var queue = lm.StreamElevationOverTerrainPatches(DEM_path, HorizonDirectory, times);
+            foreach (var r in queue.GetConsumingEnumerable())
             {
                 Console.WriteLine($"Generated lightmap patch {++count}");
+                Console.Out.Flush();
+            }
+            Console.WriteLine("[Main] Foreach completed.");
+            Console.Out.Flush();
+            if (lm.BackgroundTaskError is not null)
+            {
+                Console.WriteLine($"FATAL BACKGROUND ERROR: {lm.BackgroundTaskError}");
+                Console.Out.Flush();
+                throw new Exception("Background task failed", lm.BackgroundTaskError);
             }
         }
         break;

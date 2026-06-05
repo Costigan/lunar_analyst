@@ -2402,8 +2402,6 @@ namespace moonlib.horizon
                 : (-1, -1, float.NaN);
         }
 
-
-
         private HorizonAngles GenerateHorizonsInternal(List<ElevationMap> dems, int tileX, int tileY, int width, int height, float observerElevation, bool captureIntermediate, string? diagnosticsDirectory = null)
         {
             if (dems == null || dems.Count == 0)
