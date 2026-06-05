@@ -1,0 +1,134 @@
+"""
+Example script for Lunar Analyst using notebook_helper APIs.
+This file can be run standalone or debugged in VS Code.
+
+To run this script:
+1. Ensure your .venv is active.
+2. Set environment variables if you want to target a specific scenario:
+   export LUNAR_NOTEBOOK_SCENARIO_ID="my_scenario"
+   export LUNAR_NOTEBOOK_SCENARIO_ROOT="/path/to/my_scenario"
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Add project root to sys.path so 'backend' can be imported
+repo_root = Path(__file__).resolve().parents[1]
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+import ctypes
+import os
+import numpy as np
+import backend.notebook.notebook_helper as notebook_helper
+from backend.notebook.notebook_helper import LightmapRunConfig
+from backend.worker.gdal_runtime import configure_gdal_runtime
+
+# -----------------------------------------------------------------
+# Preload correct shared-library versions BEFORE any GDAL import.
+#
+# Two SONAME collisions exist between the system-installed GDAL
+# libraries and the moonlib-bundled ones:
+#
+#   libtiff.so.6  – system v4.5.1  vs. moonlib (needs LIBTIFF_4.6.1)
+#   libxml2.so.2  – system v2.9.14 vs. moonlib (missing xmlNanoHTTPCleanup)
+#
+# .NET GDAL (moonlib) requires the newer libtiff, while Python GDAL's
+# libspatialite requires the newer (system) libxml2.  Preload the
+# "right" version of each before any dlopen can load the wrong one.
+# The libxml2 preload is also handled inside configure_gdal_runtime(),
+# but the libtiff preload must happen first, before that call.
+# -----------------------------------------------------------------
+
+
+def _find_moonlib_linux_dir() -> Path | None:
+    """Return the linux-x64 output directory inside moonlib's build tree."""
+    moonlib_project = repo_root / "native" / "new_horizon" / "moonlib"
+    if not moonlib_project.is_dir():
+        return None
+    candidates = sorted(
+        moonlib_project.glob("bin/*/net*/linux-x64"), reverse=True
+    )
+    for d in candidates:
+        if (d / "libtiff.so.6").exists():
+            return d
+    return None
+
+
+_moonlib_dir = _find_moonlib_linux_dir()
+if _moonlib_dir is not None:
+    ctypes.CDLL(str(_moonlib_dir / "libtiff.so.6"))
+# -----------------------------------------------------------------
+
+def example_transform(tile_3d: np.ndarray) -> np.ndarray:
+    """
+    Example tile transform: computes the mean over the time axis.
+    Input shape: [time, height, width]
+    Output shape: [height, width]
+    """
+    # Compute mean and normalize if necessary
+    tile_2d = tile_3d.mean(axis=0, dtype=np.float32)
+
+    # Example normalization: assuming input is uint8 (0-255)
+    tile_2d = (tile_2d / 255.0).astype(np.float32, copy=False)
+
+    return tile_2d
+
+
+def main():
+    # Initialize Python GDAL runtime (PROJ/GDAL_DATA config).
+    # configure_gdal_runtime() now also preloads the system libxml2 to
+    # prevent SONAME collisions with moonlib-bundled libraries.
+    configure_gdal_runtime()
+
+    # 1. Resolve the scenario context.
+    # This will look at LUNAR_NOTEBOOK_SCENARIO_ID/ROOT env vars,
+    # or infer them if run within a scenario directory.
+    scenario_id, scenario_root = notebook_helper.resolve_scenario_identity_and_root(
+        default_scenario_id="mons-malapert",
+        default_scenario_parent_dir="/e/lunar_analyst_scenarios",
+    )
+
+    print(f"Active Scenario: {scenario_id}")
+    print(f"Scenario Root:   {scenario_root}")
+
+    # --- NATIVE BRIDGE SECTION ---
+    # 2. Bootstrap native (.NET) runtime and create the MoonlibBridge.
+    # This is how you access C# classes like horizon generators and lightmap engines.
+    print("\nInitializing native moonlib bridge...")
+    bridge = notebook_helper.create_moonlib_bridge(verify_bridge_smoke=True)
+
+    # Example of calling a C# method on the bridge:
+    try:
+        version = bridge.GetVersion()
+        print(f"Moonlib Version: {version}")
+    except Exception as e:
+        print(f"Could not get Moonlib version: {e}")
+
+    # -----------------------------
+
+
+
+    print("\nStarting lightmap streaming job...")
+
+    # Note: This requires a valid DEM and horizons in the scenario root to run successfully.
+    try:
+
+        # 3. Insert code to call GenerateLightingFunction here
+
+
+        print("\nJob completed successfully!")
+
+    except FileNotFoundError as e:
+        print(f"\nError: {e}")
+        print("Make sure the scenario root contains the expected DEM and horizons.")
+    except Exception as e:
+        print(f"\nAn unexpected error occurred: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+if __name__ == "__main__":
+    main()
