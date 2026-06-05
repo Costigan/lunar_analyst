@@ -42,7 +42,7 @@ var dem_paths = new List<string>
     "/d/viper/maps/lola/LDEM_80S_20M-2017-06-15-processed.tif"
 };
 
-int runMode = 13;
+int runMode = 14;
 if (args.Length > 0 && int.TryParse(args[0], out var parsedMode))
 {
     runMode = parsedMode;
@@ -263,6 +263,22 @@ switch (runMode)
             var times = new List<List<DateTime>> { ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2032, 1, 1), TimeSpan.FromHours(time_step_hrs)).ToList() };
             var reduce_lightcurve = MapOperations.MaxHoursOverThreshold(0.5f, time_step_hrs);
             MapOperations.GenerateLightingFunction(context, filenames, times, reduce_lightcurve).Wait();
+        }
+        break;
+    case 14:
+        {
+
+            var DEM_path = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif";
+            var HorizonDirectory = @"/e/lunar_analyst_scenarios/polar_mosaic/horizons/";
+            var time_step_hrs = 6f;
+            var times = ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2028, 1, 1), TimeSpan.FromHours(time_step_hrs)).ToList();
+            
+            var count = 0;
+            var lm = new Lightmaps(4);
+            foreach (var r in lm.GenerateElevationArray(DEM_path, times))
+            {
+                Console.WriteLine($"Generated lightmap patch {++count}");
+            }
         }
         break;
     default:
