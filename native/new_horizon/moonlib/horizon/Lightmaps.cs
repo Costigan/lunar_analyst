@@ -111,18 +111,107 @@ namespace moonlib.horizon
         >? _elevationAboveHorizonKernel;
 
         // -----------------------------------------------------------------
+        // Shared per-pixel ENU reference frame, computed once per kernel
+        // invocation and re-used across all time steps.
+        // -----------------------------------------------------------------
+        private struct PixelEnuFrame
+        {
+            public int pixelIdx;   // lineInPatch * PatchSize + sampleInPatch
+            public float r00, r01, r02;
+            public float r10, r11, r12;
+            public float r20, r21, r22;
+            public float tX, tY, tZ;
+        }
+
+        // -----------------------------------------------------------------
+        // Steps 1–5 common to every Lightmaps kernel: pixel → CRS → lon/lat
+        // → Moon‑ME Cartesian → ENU basis → float conversion.
+        // -----------------------------------------------------------------
+        private static PixelEnuFrame ComputePixelEnuFrame(
+            int absSample, int absLine,
+            int sampleInPatch, int lineInPatch,
+            GeoTransformD geotransform,
+            ProjectionParamsDouble proj,
+            ArrayView<float> demElevation,
+            int demWidth)
+        {
+            // ---- Step 1 — PixelToCRS (double) ----------------------------
+            double crsX = geotransform.T0
+                        + geotransform.T1 * (double)absSample
+                        + geotransform.T2 * (double)absLine;
+            double crsY = geotransform.T3
+                        + geotransform.T4 * (double)absSample
+                        + geotransform.T5 * (double)absLine;
+
+            // ---- Step 2 — Stereographic → lon/lat (radians) (double) -----
+            double xp = crsX - proj.FalseEasting;
+            double yp = crsY - proj.FalseNorthing;
+            double rho = Math.Sqrt(xp * xp + yp * yp);
+
+            double lonRad, latRad;
+            if (rho <= 1e-12)
+            {
+                lonRad = proj.Lon0;
+                latRad = proj.Lat0;
+            }
+            else
+            {
+                double c = 2.0 * Math.Atan2(rho, 2.0 * proj.K0 * proj.R);
+                double sinC = Math.Sin(c);
+                double cosC = Math.Cos(c);
+                double cosLat0 = Math.Cos(proj.Lat0);
+                double sinLat0 = Math.Sin(proj.Lat0);
+
+                latRad = Math.Asin(
+                    cosC * sinLat0 + (yp * sinC * cosLat0) / rho);
+                lonRad = proj.Lon0 + Math.Atan2(
+                    xp * sinC,
+                    rho * cosLat0 * cosC - yp * sinLat0 * sinC);
+            }
+
+            // ---- Step 3 — Elevation + Moon‑ME Cartesian (double) ---------
+            double elev = (double)demElevation[lineInPatch * demWidth + sampleInPatch];
+            double r = proj.R + elev;
+
+            double cosLat = Math.Cos(latRad);
+            double sinLat = Math.Sin(latRad);
+            double cosLon = Math.Cos(lonRad);
+            double sinLon = Math.Sin(lonRad);
+
+            double moonMeX = r * cosLat * cosLon;
+            double moonMeY = r * cosLat * sinLon;
+            double moonMeZ = r * sinLat;
+
+            // ---- Step 4 — GetMoonMEToENU rotation basis (double) ---------
+            double upX = cosLat * cosLon;
+            double upY = cosLat * sinLon;
+            double upZ = sinLat;
+            double eastX = -sinLon;
+            double eastY = cosLon;
+            double eastZ = 0.0;
+            double northX = -sinLat * cosLon;
+            double northY = -sinLat * sinLon;
+            double northZ = cosLat;
+
+            double transX = -(moonMeX * eastX + moonMeY * eastY + moonMeZ * eastZ);
+            double transY = -(moonMeX * northX + moonMeY * northY + moonMeZ * northZ);
+            double transZ = -(moonMeX * upX + moonMeY * upY + moonMeZ * upZ);
+
+            // ---- Step 5 — double → float conversion ----------------------
+            return new PixelEnuFrame
+            {
+                pixelIdx = lineInPatch * PatchSize + sampleInPatch,
+                r00 = (float)eastX, r01 = (float)northX, r02 = (float)upX,
+                r10 = (float)eastY, r11 = (float)northY, r12 = (float)upY,
+                r20 = (float)eastZ, r21 = (float)northZ, r22 = (float)upZ,
+                tX = (float)transX,
+                tY = (float)transY,
+                tZ = (float)transZ,
+            };
+        }
+        // -----------------------------------------------------------------
         // Kernel: compute solar elevation angles for one 128×128 patch.
-        //
-        // Launched with Index2D(PatchSize, PatchSize) — one thread per
-        // pixel.  Each thread:
-        //   1. Computes the GetMoonMEToENU matrix in double precision.
-        //   2. Converts the matrix components to single precision.
-        //   3. For every time step, transforms the Moon‑ME sun vector into
-        //      local ENU and writes the elevation angle (degrees) into the
-        //      output buffer.
-        //
-        // Output layout: output[ pixelIdx * timeCount + timeIdx ]
-        //   where pixelIdx = lineInPatch * 128 + sampleInPatch.
+        // Output: elevation (degrees) per pixel per time step.
         // -----------------------------------------------------------------
         private static void ComputeElevationAnglesKernel(
             Index2D index,
@@ -143,82 +232,10 @@ namespace moonlib.horizon
             if (sampleInPatch >= PatchSize || lineInPatch >= PatchSize)
                 return;
 
-            int absSample = tileColBase + sampleInPatch;
-            int absLine = tileRowBase + lineInPatch;
-
-            // ---- Step 1 — PixelToCRS (double) ----------------------------
-            double crsX = geotransform.T0
-                        + geotransform.T1 * (double)absSample
-                        + geotransform.T2 * (double)absLine;
-            double crsY = geotransform.T3
-                        + geotransform.T4 * (double)absSample
-                        + geotransform.T5 * (double)absLine;
-
-            // ---- Step 2 — Stereographic → lon/lat (radians) (double) -----
-            double xp = crsX - proj.FalseEasting;
-            double yp = crsY - proj.FalseNorthing;
-            double rho = Math.Sqrt(xp * xp + yp * yp);
-
-            double lonRad, latRad;
-            if (rho <= 1e-12)
-            {
-                lonRad = proj.Lon0;
-                latRad = proj.Lat0;
-            }
-            else
-            {
-                double c = 2.0 * Math.Atan2(rho, 2.0 * proj.K0 * proj.R);
-                double sinC = Math.Sin(c);
-                double cosC = Math.Cos(c);
-                double cosLat0 = Math.Cos(proj.Lat0);
-                double sinLat0 = Math.Sin(proj.Lat0);
-
-                latRad = Math.Asin(
-                    cosC * sinLat0 + (yp * sinC * cosLat0) / rho);
-                lonRad = proj.Lon0 + Math.Atan2(
-                    xp * sinC,
-                    rho * cosLat0 * cosC - yp * sinLat0 * sinC);
-            }
-
-            // ---- Step 3 — Elevation + Moon‑ME Cartesian (double) ---------
-            // Read from the 128×128 per‑patch sub‑buffer using local coords.
-            double elev = (double)demElevation[lineInPatch * demWidth + sampleInPatch];
-            double r = proj.R + elev;
-
-            double cosLat = Math.Cos(latRad);
-            double sinLat = Math.Sin(latRad);
-            double cosLon = Math.Cos(lonRad);
-            double sinLon = Math.Sin(lonRad);
-
-            double moonMeX = r * cosLat * cosLon;
-            double moonMeY = r * cosLat * sinLon;
-            double moonMeZ = r * sinLat;
-
-            // ---- Step 4 — GetMoonMEToENU rotation basis (double) ---------
-            double upX = cosLat * cosLon;
-            double upY = cosLat * sinLon;
-            double upZ = sinLat;
-            double eastX = -sinLon;
-            double eastY = cosLon;
-            double eastZ = 0.0;
-            double northX = -sinLat * cosLon;
-            double northY = -sinLat * sinLon;
-            double northZ = cosLat;
-
-            double transX = -(moonMeX * eastX + moonMeY * eastY + moonMeZ * eastZ);
-            double transY = -(moonMeX * northX + moonMeY * northY + moonMeZ * northZ);
-            double transZ = -(moonMeX * upX + moonMeY * upY + moonMeZ * upZ);
-
-            // ---- Step 5 — double → float conversion ----------------------
-            float r00 = (float)eastX; float r01 = (float)northX; float r02 = (float)upX;
-            float r10 = (float)eastY; float r11 = (float)northY; float r12 = (float)upY;
-            float r20 = (float)eastZ; float r21 = (float)northZ; float r22 = (float)upZ;
-            float tX = (float)transX;
-            float tY = (float)transY;
-            float tZ = (float)transZ;
-
-            // ---- Step 6 — Per‑time‑step: sun vector → elevation ----------
-            int pixelIdx = lineInPatch * PatchSize + sampleInPatch;
+            var frame = ComputePixelEnuFrame(
+                tileColBase + sampleInPatch, tileRowBase + lineInPatch,
+                sampleInPatch, lineInPatch,
+                geotransform, proj, demElevation, demWidth);
 
             for (int t = 0; t < timeCount; t++)
             {
@@ -226,31 +243,20 @@ namespace moonlib.horizon
                 float svY = sunVectors[t * 3 + 1];
                 float svZ = sunVectors[t * 3 + 2];
 
-                float enuX = svX * r00 + svY * r10 + svZ * r20 + tX;
-                float enuY = svX * r01 + svY * r11 + svZ * r21 + tY;
-                float enuZ = svX * r02 + svY * r12 + svZ * r22 + tZ;
+                float enuX = svX * frame.r00 + svY * frame.r10 + svZ * frame.r20 + frame.tX;
+                float enuY = svX * frame.r01 + svY * frame.r11 + svZ * frame.r21 + frame.tY;
+                float enuZ = svX * frame.r02 + svY * frame.r12 + svZ * frame.r22 + frame.tZ;
 
                 float horizontal = XMath.Sqrt(enuX * enuX + enuY * enuY);
-                float elevationRad = XMath.Atan2(enuZ, horizontal);
-                float elevationDeg = elevationRad * RadiansToDegrees;
+                float elevationDeg = XMath.Atan2(enuZ, horizontal) * RadiansToDegrees;
 
-                output[pixelIdx * timeCount + t] = elevationDeg;
+                output[frame.pixelIdx * timeCount + t] = elevationDeg;
             }
         }
 
         // -----------------------------------------------------------------
-        // Kernel: compute solar elevation angles above the horizon for one 128×128 patch.
-        //
-        // Launched with Index2D(PatchSize, PatchSize) — one thread per
-        // pixel.  Each thread:
-        //   1. Computes the GetMoonMEToENU matrix in double precision.
-        //   2. Converts the matrix components to single precision.
-        //   3. For every time step, transforms the Moon‑ME sun vector into
-        //      local ENU and writes the elevation angle (degrees) into the
-        //      output buffer.
-        //
-        // Output layout: output[ pixelIdx * timeCount + timeIdx ]
-        //   where pixelIdx = lineInPatch * 128 + sampleInPatch.
+        // Kernel: compute solar elevation above the local horizon.
+        // Output: (solar elevation − horizon elevation) per pixel per time step.
         // -----------------------------------------------------------------
         private static void ComputeElevationAnglesAboveHorizonKernel(
             Index2D index,
@@ -260,7 +266,7 @@ namespace moonlib.horizon
             GeoTransformD geotransform,
             ProjectionParamsDouble proj,
             ArrayView<float> sunVectors,
-        ArrayView<float> horizons,
+            ArrayView<float> horizons,
             int timeCount,
             int tileColBase,
             int tileRowBase,
@@ -272,83 +278,10 @@ namespace moonlib.horizon
             if (sampleInPatch >= PatchSize || lineInPatch >= PatchSize)
                 return;
 
-            int absSample = tileColBase + sampleInPatch;
-            int absLine = tileRowBase + lineInPatch;
-
-            // ---- Step 1 — PixelToCRS (double) ----------------------------
-            double crsX = geotransform.T0
-                        + geotransform.T1 * (double)absSample
-                        + geotransform.T2 * (double)absLine;
-            double crsY = geotransform.T3
-                        + geotransform.T4 * (double)absSample
-                        + geotransform.T5 * (double)absLine;
-
-            // ---- Step 2 — Stereographic → lon/lat (radians) (double) -----
-            double xp = crsX - proj.FalseEasting;
-            double yp = crsY - proj.FalseNorthing;
-            double rho = Math.Sqrt(xp * xp + yp * yp);
-
-            double lonRad, latRad;
-            if (rho <= 1e-12)
-            {
-                lonRad = proj.Lon0;
-                latRad = proj.Lat0;
-            }
-            else
-            {
-                double c = 2.0 * Math.Atan2(rho, 2.0 * proj.K0 * proj.R);
-                double sinC = Math.Sin(c);
-                double cosC = Math.Cos(c);
-                double cosLat0 = Math.Cos(proj.Lat0);
-                double sinLat0 = Math.Sin(proj.Lat0);
-
-                latRad = Math.Asin(
-                    cosC * sinLat0 + (yp * sinC * cosLat0) / rho);
-                lonRad = proj.Lon0 + Math.Atan2(
-                    xp * sinC,
-                    rho * cosLat0 * cosC - yp * sinLat0 * sinC);
-            }
-
-            // ---- Step 3 — Elevation + Moon‑ME Cartesian (double) ---------
-            // Read from the 128×128 per‑patch sub‑buffer using local coords.
-            double elev = (double)demElevation[lineInPatch * demWidth + sampleInPatch];
-            double r = proj.R + elev;
-
-            double cosLat = Math.Cos(latRad);
-            double sinLat = Math.Sin(latRad);
-            double cosLon = Math.Cos(lonRad);
-            double sinLon = Math.Sin(lonRad);
-
-            double moonMeX = r * cosLat * cosLon;
-            double moonMeY = r * cosLat * sinLon;
-            double moonMeZ = r * sinLat;
-
-            // ---- Step 4 — GetMoonMEToENU rotation basis (double) ---------
-            double upX = cosLat * cosLon;
-            double upY = cosLat * sinLon;
-            double upZ = sinLat;
-            double eastX = -sinLon;
-            double eastY = cosLon;
-            double eastZ = 0.0;
-            double northX = -sinLat * cosLon;
-            double northY = -sinLat * sinLon;
-            double northZ = cosLat;
-
-            double transX = -(moonMeX * eastX + moonMeY * eastY + moonMeZ * eastZ);
-            double transY = -(moonMeX * northX + moonMeY * northY + moonMeZ * northZ);
-            double transZ = -(moonMeX * upX + moonMeY * upY + moonMeZ * upZ);
-
-            // ---- Step 5 — double → float conversion ----------------------
-            float r00 = (float)eastX; float r01 = (float)northX; float r02 = (float)upX;
-            float r10 = (float)eastY; float r11 = (float)northY; float r12 = (float)upY;
-            float r20 = (float)eastZ; float r21 = (float)northZ; float r22 = (float)upZ;
-            float tX = (float)transX;
-            float tY = (float)transY;
-            float tZ = (float)transZ;
-
-            // ---- Step 6 — Per‑time‑step: sun vector → elevation ----------
-            int pixelIdx = lineInPatch * PatchSize + sampleInPatch;
-            int horizonBase = pixelIdx * 1440;
+            var frame = ComputePixelEnuFrame(
+                tileColBase + sampleInPatch, tileRowBase + lineInPatch,
+                sampleInPatch, lineInPatch,
+                geotransform, proj, demElevation, demWidth);
 
             for (int t = 0; t < timeCount; t++)
             {
@@ -356,13 +289,12 @@ namespace moonlib.horizon
                 float svY = sunVectors[t * 3 + 1];
                 float svZ = sunVectors[t * 3 + 2];
 
-                float enuX = svX * r00 + svY * r10 + svZ * r20 + tX;
-                float enuY = svX * r01 + svY * r11 + svZ * r21 + tY;
-                float enuZ = svX * r02 + svY * r12 + svZ * r22 + tZ;
+                float enuX = svX * frame.r00 + svY * frame.r10 + svZ * frame.r20 + frame.tX;
+                float enuY = svX * frame.r01 + svY * frame.r11 + svZ * frame.r21 + frame.tY;
+                float enuZ = svX * frame.r02 + svY * frame.r12 + svZ * frame.r22 + frame.tZ;
 
                 float horizontal = XMath.Sqrt(enuX * enuX + enuY * enuY);
-                float elevationRad = XMath.Atan2(enuZ, horizontal);
-                float elevationDeg = elevationRad * RadiansToDegrees;
+                float elevationDeg = XMath.Atan2(enuZ, horizontal) * RadiansToDegrees;
 
                 float azimuthRad = XMath.Atan2(enuX, enuY);
                 if (azimuthRad < 0f) azimuthRad += XMath.PI * 2f;
@@ -375,13 +307,11 @@ namespace moonlib.horizon
                 if (horizonIndex2 >= 1440)
                     horizonIndex2 = 0;
 
-                float horizon_elevation1 = horizons[horizonIndex1];
-                float horizon_elevation2 = horizons[horizonIndex2];
-                float horizon_elevation = horizon_elevation1 * horizonFrac * (horizon_elevation2 - horizon_elevation1);
+                float h1 = horizons[horizonIndex1];
+                float h2 = horizons[horizonIndex2];
+                float horizonElev = h1 + horizonFrac * (h2 - h1);
 
-                float elevation_above_horizon = elevationDeg - horizon_elevation;
-
-                output[pixelIdx * timeCount + t] = elevation_above_horizon;
+                output[frame.pixelIdx * timeCount + t] = elevationDeg - horizonElev;
             }
         }
 

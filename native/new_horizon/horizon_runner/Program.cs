@@ -279,22 +279,19 @@ switch (runMode)
             
             var count = 0;
             var lm = new Lightmaps(4);
+
             //foreach (var r in lm.StreamElevationPatches(DEM_path, times))
             //    Console.WriteLine($"Generated lightmap patch {++count}");
-            Console.WriteLine("[Main] Calling StreamElevationOverTerrainPatches...");
-            Console.Out.Flush();
+
             var queue = lm.StreamElevationOverTerrainPatches(DEM_path, HorizonDirectory, times);
             foreach (var r in queue.GetConsumingEnumerable())
             {
                 Console.WriteLine($"Generated lightmap patch {++count}");
                 Console.Out.Flush();
             }
-            Console.WriteLine("[Main] Foreach completed.");
-            Console.Out.Flush();
+
             if (lm.BackgroundTaskError is not null)
             {
-                Console.WriteLine($"FATAL BACKGROUND ERROR: {lm.BackgroundTaskError}");
-                Console.Out.Flush();
                 throw new Exception("Background task failed", lm.BackgroundTaskError);
             }
         }
