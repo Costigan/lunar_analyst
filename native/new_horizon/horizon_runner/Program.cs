@@ -268,7 +268,6 @@ switch (runMode)
         break;
     case 14:
         {
-
             var DEM_path = @"/e/lunar_analyst_scenarios/haworth/dem.tif";
             var HorizonDirectory = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/";
             var psr_path = @"/e/lunar_analyst_scenarios/haworth/new_psr.tif";
@@ -276,16 +275,13 @@ switch (runMode)
             //var DEM_path = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif";
             //var HorizonDirectory = @"/e/lunar_analyst_scenarios/polar_mosaic/horizons/";
 
-            var time_step_hrs = 6f;
-            var times = ViperDate.GetTimes(ViperDate.New(2027, 1, 1), ViperDate.New(2027, 2, 1), TimeSpan.FromHours(time_step_hrs)).ToList();
-            
             var count = 0;
             var lm = new Lightmaps(4);
 
             var dem = new ElevationMap(DEM_path, loadRaster: false);
             using var outputDs = TiledGeotiffWriter.OpenTiled<byte>(psr_path, dem.Width, dem.Height, 1, -9999, dem.Projection, dem.GeoTransform);
 
-            var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory, times);
+            var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory);
             foreach (var r in queue.GetConsumingEnumerable())
             {
                 outputDs.WritePatch(r.PatchCol, r.PatchRow, r.Data);

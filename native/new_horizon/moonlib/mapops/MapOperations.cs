@@ -57,7 +57,7 @@ namespace moonlib.mapops
             // Initialize GDAL if not already (assuming calling app does, but safe to check)
             // In a library, we might assume the app has configured GDAL.
             var geotiff_driver = Gdal.GetDriverByName("GTiff") ?? throw new Exception("GDAL GTiff driver not found.");
-            
+
             if (overwrite_existing & File.Exists(output_path))
                 File.Delete(output_path);
 
@@ -65,46 +65,6 @@ namespace moonlib.mapops
             progress ??= new Progress<float>(percent => Console.WriteLine($"Progress: {100 * percent}%"));
 
             await ExecuteAsync(context, output_path, progress);
-
-            // Filter the long list of sun vectors to a smaller set.  Keep only those that are the highest elevation in their azimuth bin
-            // for at least one of 5 points on the map (the 4 corners and the center).  This is a heuristic to reduce the number of sun
-            // vectors we need to consider for permanent shadow calculation.
-            List<math.Vector3d> GenerateReducedSunVectorListForPermanentShadowCalculation(ElevationMap dem, List<math.Vector3d> input_sunvecs_me)
-            {
-                var matrices = new math.Matrix4d[5]
-                {
-                    dem.GetMoonMEToENU(0, 0),
-                    dem.GetMoonMEToENU(0, dem.Width - 1),
-                    dem.GetMoonMEToENU(dem.Height - 1, 0),
-                    dem.GetMoonMEToENU(dem.Height - 1, dem.Width - 1),
-                    dem.GetMoonMEToENU(dem.Height / 2, dem.Width / 2)
-                };
-
-                var maximum_elevation = Enumerable.Range(0, 5).Select(u => Utilities.PreloadArray(1440, float.NegativeInfinity)).ToArray();
-                var vector_indices = Enumerable.Range(0, 5).Select(u => Utilities.PreloadArray(1440, (int)-1)).ToArray();
-
-                for (var i = 0; i < input_sunvecs_me.Count; i++)
-                {
-                    var sunvec = input_sunvecs_me[i];
-                    for (var u = 0; u < 5; u++)
-                    {
-                        var (az_rad, el_rad) = dem.GetAzEl(sunvec, matrices[u]);
-                        float az_deg = az_rad * 57.2957795f;
-                        float el_deg = el_rad * 57.2957795f;
-                        int az_bin = (int)(az_deg / 360f * HorizonSamples) % HorizonSamples;
-                        if (el_deg > maximum_elevation[u][az_bin])
-                        {
-                            maximum_elevation[u][az_bin] = el_deg;
-                            vector_indices[u][az_bin] = i;
-                        }
-                    }
-                }
-
-                var unique_indices = new HashSet<int>(vector_indices.SelectMany(arr => arr).Where(idx => idx >= 0));
-                var sunvecs_me = unique_indices.Select(idx => input_sunvecs_me[idx]).ToList();
-
-                return sunvecs_me;
-            }
 
             async Task ExecuteAsync(AnalysisContext context, string output_path, IProgress<float>? progress = null)
             {
@@ -204,6 +164,46 @@ namespace moonlib.mapops
 
                 return Task.FromResult(token);
             }
+        }
+
+        // Filter the long list of sun vectors to a smaller set.  Keep only those that are the highest elevation in their azimuth bin
+        // for at least one of 5 points on the map (the 4 corners and the center).  This is a heuristic to reduce the number of sun
+        // vectors we need to consider for permanent shadow calculation.
+        public static List<math.Vector3d> GenerateReducedSunVectorListForPermanentShadowCalculation(ElevationMap dem, List<math.Vector3d> input_sunvecs_me)
+        {
+            var matrices = new math.Matrix4d[5]
+            {
+                    dem.GetMoonMEToENU(0, 0),
+                    dem.GetMoonMEToENU(0, dem.Width - 1),
+                    dem.GetMoonMEToENU(dem.Height - 1, 0),
+                    dem.GetMoonMEToENU(dem.Height - 1, dem.Width - 1),
+                    dem.GetMoonMEToENU(dem.Height / 2, dem.Width / 2)
+            };
+
+            var maximum_elevation = Enumerable.Range(0, 5).Select(u => Utilities.PreloadArray(1440, float.NegativeInfinity)).ToArray();
+            var vector_indices = Enumerable.Range(0, 5).Select(u => Utilities.PreloadArray(1440, (int)-1)).ToArray();
+
+            for (var i = 0; i < input_sunvecs_me.Count; i++)
+            {
+                var sunvec = input_sunvecs_me[i];
+                for (var u = 0; u < 5; u++)
+                {
+                    var (az_rad, el_rad) = dem.GetAzEl(sunvec, matrices[u]);
+                    float az_deg = az_rad * 57.2957795f;
+                    float el_deg = el_rad * 57.2957795f;
+                    int az_bin = (int)(az_deg / 360f * HorizonSamples) % HorizonSamples;
+                    if (el_deg > maximum_elevation[u][az_bin])
+                    {
+                        maximum_elevation[u][az_bin] = el_deg;
+                        vector_indices[u][az_bin] = i;
+                    }
+                }
+            }
+
+            var unique_indices = new HashSet<int>(vector_indices.SelectMany(arr => arr).Where(idx => idx >= 0));
+            var sunvecs_me = unique_indices.Select(idx => input_sunvecs_me[idx]).ToList();
+
+            return sunvecs_me;
         }
 
         /// <summary>
@@ -517,7 +517,7 @@ namespace moonlib.mapops
             ArgumentNullException.ThrowIfNull(reduce_lightcurve);
 
             var start_time = ViperDate.Now();
-            progress ??= new Progress<float>(percent => 
+            progress ??= new Progress<float>(percent =>
             {
                 var log_time = ViperDate.Now();
                 var elapsed = (log_time - start_time).TotalSeconds;

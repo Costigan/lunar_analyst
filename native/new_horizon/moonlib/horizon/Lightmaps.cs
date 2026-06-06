@@ -1,9 +1,12 @@
 using ILGPU;
 using ILGPU.Algorithms;
+using ILGPU.IR.Values;
 using ILGPU.Runtime;
+using moonlib.mapops;
 using moonlib.math;
 using moonlib.pipeline;
 using moonlib.spice;
+using moonlib.util;
 using Serilog;
 using System;
 using System.Collections.Concurrent;
@@ -330,6 +333,8 @@ namespace moonlib.horizon
                 sampleInPatch, lineInPatch,
                 geotransform, proj, demElevation, demWidth);
 
+            int horizonOffset = frame.pixelIdx * 1440;
+
             for (int t = 0; t < timeCount; t++)
             {
                 float svX = sunVectors[t * 3 + 0];
@@ -354,8 +359,8 @@ namespace moonlib.horizon
                 if (horizonIndex2 >= 1440)
                     horizonIndex2 = 0;
 
-                float h1 = horizons[horizonIndex1];
-                float h2 = horizons[horizonIndex2];
+                float h1 = horizons[horizonOffset + horizonIndex1];
+                float h2 = horizons[horizonOffset + horizonIndex2];
                 float horizonElev = h1 + horizonFrac * (h2 - h1);
 
                 output[frame.pixelIdx * timeCount + t] = elevationDeg - horizonElev;
@@ -363,8 +368,7 @@ namespace moonlib.horizon
         }
 
         // -----------------------------------------------------------------
-        // Kernel: compute solar elevation above the local horizon.
-        // Output: (solar elevation − horizon elevation) per pixel per time step.
+        // Kernel: one byte per pixel — 255 if never lit (PSR), 0 otherwise.
         // -----------------------------------------------------------------
         static void ComputePSRKernel(
             Index2D index,
@@ -393,6 +397,7 @@ namespace moonlib.horizon
 
             // a value of 255 indicates permanent shadow.  Initialize to that.
             byte is_psr = 255;
+            int horizonOffset = frame.pixelIdx * 1440;
 
             for (int t = 0; t < timeCount; t++)
             {
@@ -418,8 +423,8 @@ namespace moonlib.horizon
                 if (horizonIndex2 >= 1440)
                     horizonIndex2 = 0;
 
-                float h1 = horizons[horizonIndex1];
-                float h2 = horizons[horizonIndex2];
+                float h1 = horizons[horizonOffset + horizonIndex1];
+                float h2 = horizons[horizonOffset + horizonIndex2];
                 float horizonElev = h1 + horizonFrac * (h2 - h1);
 
                 const float sun_angular_size_deg = 0.545f;
@@ -599,8 +604,20 @@ namespace moonlib.horizon
             IProgress<float>? progress = null,
             Func<bool>? isCancellationRequested = null)
         {
+            if (demPath == null) throw new ArgumentNullException(nameof(demPath));
+            var dem = new ElevationMap(demPath);
+
+            var time_step_hrs = 6f;
+            var all_sunvecs_me = ViperDate
+                .GetTimes(ViperDate.New(1970, 1, 1), ViperDate.New(2044, 1, 1), TimeSpan.FromHours(time_step_hrs))
+                .Select(t => SpiceManager.SunPosition_meters(t)).ToList();
+
+            var sunvecs_me = MapOperations.GenerateReducedSunVectorListForPermanentShadowCalculation(dem, all_sunvecs_me);
+            Console.WriteLine($"Generated reduced sun vector list for permanent shadow calculation. From {all_sunvecs_me.Count} to {sunvecs_me.Count}");
+
+            var session = PrepareSession(dem: dem, sunVecsD: sunvecs_me);
             var queue = new BlockingCollection<PatchElevationResult>(boundedCapacity: 32);
-            var session = PrepareSession(demPath, times);
+
 
             var workerThread = new Thread(() =>
             {
@@ -716,7 +733,7 @@ namespace moonlib.horizon
         {
             var queue = new BlockingCollection<PatchElevationResult>(boundedCapacity: 32);
             EnsureHorizonBuffers();
-            var session = PrepareSession(demPath, times);
+            var session = PrepareSession(demPath: demPath, times: times);
 
             var horizon_filenames = new HorizonTileStore(horizonPath)
                 .EnumerateFiles(observerElevationMeters: 0f)
@@ -829,13 +846,23 @@ namespace moonlib.horizon
         public BlockingCollection<PatchPSRResult> StreamPSRPatches(
             string demPath,
             string horizonPath,
-            List<DateTime> times,
             IProgress<float>? progress = null,
             Func<bool>? isCancellationRequested = null)
         {
+            var dem = new ElevationMap(demPath);
+
+            var time_step_hrs = 6f;
+            var all_sunvecs_me = ViperDate
+                .GetTimes(ViperDate.New(1970, 1, 1), ViperDate.New(2044, 1, 1), TimeSpan.FromHours(time_step_hrs))
+                .Select(t => SpiceManager.SunPosition_meters(t)).ToList();
+
+            var sunvecs_me = MapOperations.GenerateReducedSunVectorListForPermanentShadowCalculation(dem, all_sunvecs_me);
+            Console.WriteLine($"Generated reduced sun vector list for permanent shadow calculation. From {all_sunvecs_me.Count} to {sunvecs_me.Count}");
+
             var queue = new BlockingCollection<PatchPSRResult>(boundedCapacity: 32);
+
+            var session = PrepareSession(dem: dem, sunVecsD: sunvecs_me);
             EnsureHorizonBuffers();
-            var session = PrepareSession(demPath, times);
 
             var horizon_filenames = new HorizonTileStore(horizonPath)
                 .EnumerateFiles(observerElevationMeters: 0f)
@@ -907,9 +934,6 @@ namespace moonlib.horizon
                             gpuOutput.CopyToCPU(flat);
                             token.byte_results = flat;
 
-                            var c = flat.Count(v => v > 0);
-                            Console.WriteLine(c);
-
                             progress?.Report((float)patchesProcessed / totalCount);
                             ThrowIfCancelled(isCancellationRequested);
 
@@ -930,13 +954,36 @@ namespace moonlib.horizon
                 }
                 finally
                 {
-                    session.GpuEarthVectors.Dispose();
-                    session.GpuSunVectors.Dispose();
+                    session.GpuEarthVectors?.Dispose();
+                    session.GpuSunVectors?.Dispose();
                     queue.CompleteAdding();
                 }
             });
             workerThread.Start();
             return queue;
+        }
+
+        public void GeneratePSRGeotiff(string DEM_path, string HorizonDirectory, string psr_path)
+        {
+            var count = 0;
+            var lm = new Lightmaps(4);
+
+            var dem = new ElevationMap(DEM_path, loadRaster: false);
+            using var outputDs = TiledGeotiffWriter.OpenTiled<byte>(psr_path, dem.Width, dem.Height, 1, -9999, dem.Projection, dem.GeoTransform);
+
+            var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory);
+            foreach (var r in queue.GetConsumingEnumerable())
+            {
+                outputDs.WritePatch(r.PatchCol, r.PatchRow, r.Data);
+                Console.WriteLine($"Generated lightmap patch {++count} col={r.PatchCol} row={r.PatchRow}");
+            }
+
+            outputDs.FlushCache();
+
+            if (lm.BackgroundTaskError is not null)
+            {
+                throw new Exception("Background task failed", lm.BackgroundTaskError);
+            }
         }
 
         // =================================================================
@@ -958,8 +1005,6 @@ namespace moonlib.horizon
             return data;
         }
 
-
-
         /// <summary>
         /// Holds the pre-computed data shared by every patch processed
         /// within a single streaming session.
@@ -980,13 +1025,18 @@ namespace moonlib.horizon
         /// and returns a LightmapSession with everything needed by per‑patch
         /// processing.  The caller must dispose GpuSunVectors / GpuEarthVectors.
         /// </summary>
-        private LightmapSession PrepareSession(string demPath, List<DateTime> times)
+        LightmapSession PrepareSession(string? demPath = null, ElevationMap? dem = null, List<DateTime>? times = null, List<Vector3d>? sunVecsD = null, List<Vector3d>? earthVecsD = null)
         {
             EnsureInitialized();
             EnsureStreamPool();
             EnsureDemBuffers();
 
-            var dem = new ElevationMap(demPath, loadRaster: true);
+            if (dem == null)
+            {
+                if (demPath == null) throw new ArgumentNullException(nameof(demPath));
+                dem = new ElevationMap(demPath, loadRaster: true);
+            }
+
             if (dem.Elevation is null)
                 throw new InvalidOperationException("DEM raster data is null.");
 
@@ -994,32 +1044,53 @@ namespace moonlib.horizon
                 throw new ArgumentException(
                     $"DEM dimensions ({dem.Width}×{dem.Height}) must be multiples of {PatchSize}.");
 
-            int timeCount = times.Count;
-            var sunVecsD = new Vector3d[timeCount];
-            var earthVecsD = new Vector3d[timeCount];
-            for (int t = 0; t < timeCount; t++)
+            int timeCount = times != null ? times.Count : sunVecsD != null ? sunVecsD.Count : earthVecsD != null ? earthVecsD.Count : 0;
+            if (timeCount == 0) new ArgumentException("One of times, sunVecsD or earthVecsD must be non-null");
+
+            if (times != null)
             {
-                sunVecsD[t] = SpiceManager.SunPosition_meters(times[t]);
-                earthVecsD[t] = SpiceManager.EarthPosition_meters(times[t]);
+                sunVecsD = new List<Vector3d>(timeCount);
+                earthVecsD = new List<Vector3d>(timeCount);
+                for (int t = 0; t < timeCount; t++)
+                {
+                    sunVecsD.Add(SpiceManager.SunPosition_meters(times[t]));
+                    earthVecsD.Add(SpiceManager.EarthPosition_meters(times[t]));
+                }
             }
 
-            float[] sunVecsFlat = new float[timeCount * 3];
-            float[] earthVecsFlat = new float[timeCount * 3];
-            for (int t = 0; t < timeCount; t++)
+            float[] sunVecsFlat = null;
+            float[] earthVecsFlat = null;
+
+            MemoryBuffer1D<float, Stride1D.Dense> gpuSunVectors = null;
+            MemoryBuffer1D<float, Stride1D.Dense> gpuEarthVectors = null;
+
+            if (sunVecsD != null)
             {
-                int off = t * 3;
-                sunVecsFlat[off + 0] = (float)sunVecsD[t].X;
-                sunVecsFlat[off + 1] = (float)sunVecsD[t].Y;
-                sunVecsFlat[off + 2] = (float)sunVecsD[t].Z;
-                earthVecsFlat[off + 0] = (float)earthVecsD[t].X;
-                earthVecsFlat[off + 1] = (float)earthVecsD[t].Y;
-                earthVecsFlat[off + 2] = (float)earthVecsD[t].Z;
+                sunVecsFlat = new float[timeCount * 3];
+                for (int t = 0; t < timeCount; t++)
+                {
+                    int off = t * 3;
+                    sunVecsFlat[off + 0] = (float)sunVecsD[t].X;
+                    sunVecsFlat[off + 1] = (float)sunVecsD[t].Y;
+                    sunVecsFlat[off + 2] = (float)sunVecsD[t].Z;
+                }
+                gpuSunVectors = _accelerator!.Allocate1D<float>(sunVecsFlat.Length);
+                gpuSunVectors.CopyFromCPU(sunVecsFlat);
             }
 
-            var gpuSunVectors = _accelerator!.Allocate1D<float>(sunVecsFlat.Length);
-            var gpuEarthVectors = _accelerator.Allocate1D<float>(earthVecsFlat.Length);
-            gpuSunVectors.CopyFromCPU(sunVecsFlat);
-            gpuEarthVectors.CopyFromCPU(earthVecsFlat);
+            if (earthVecsD != null)
+            {
+                earthVecsFlat = new float[timeCount * 3];
+                for (int t = 0; t < timeCount; t++)
+                {
+                    int off = t * 3;
+                    earthVecsFlat[off + 0] = (float)earthVecsD[t].X;
+                    earthVecsFlat[off + 1] = (float)earthVecsD[t].Y;
+                    earthVecsFlat[off + 2] = (float)earthVecsD[t].Z;
+                }
+                gpuEarthVectors = _accelerator!.Allocate1D<float>(earthVecsFlat.Length);
+                gpuEarthVectors.CopyFromCPU(earthVecsFlat);
+            }
 
             return new LightmapSession
             {
