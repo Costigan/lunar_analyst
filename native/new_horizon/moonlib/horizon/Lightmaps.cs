@@ -201,9 +201,15 @@ namespace moonlib.horizon
             return new PixelEnuFrame
             {
                 pixelIdx = lineInPatch * PatchSize + sampleInPatch,
-                r00 = (float)eastX, r01 = (float)northX, r02 = (float)upX,
-                r10 = (float)eastY, r11 = (float)northY, r12 = (float)upY,
-                r20 = (float)eastZ, r21 = (float)northZ, r22 = (float)upZ,
+                r00 = (float)eastX,
+                r01 = (float)northX,
+                r02 = (float)upX,
+                r10 = (float)eastY,
+                r11 = (float)northY,
+                r12 = (float)upY,
+                r20 = (float)eastZ,
+                r21 = (float)northZ,
+                r22 = (float)upZ,
                 tX = (float)transX,
                 tY = (float)transY,
                 tZ = (float)transZ,
@@ -400,6 +406,7 @@ namespace moonlib.horizon
 
         void EnsureStreamPool()
         {
+            EnsureInitialized();
             if (_streamPool != null)
                 return;
             _streamPool = new ConcurrentStack<AcceleratorStream>();
@@ -417,6 +424,7 @@ namespace moonlib.horizon
 
         void EnsureDemBuffers()
         {
+            EnsureInitialized();
             if (_patchDemBuffers != null)
                 return;
             int patchPixels = PatchSize * PatchSize;
@@ -435,6 +443,7 @@ namespace moonlib.horizon
 
         void EnsureHorizonBuffers()
         {
+            EnsureInitialized();
             if (_patchHorizonBuffers != null)
                 return;
             int horizon_buffer_size = PatchSize * PatchSize * 1440;
@@ -452,207 +461,112 @@ namespace moonlib.horizon
         }
 
         /// <summary>
-        /// Compute per‑pixel solar elevation angles for every 128×128 patch
-        /// of the DEM.  Results are yielded as each batch of GPU work
-        /// completes so the caller can start consuming them without waiting
-        /// for every patch to finish.
+        /// Stream per‑pixel solar elevation angles for every 128×128 patch
+        /// of the DEM via a producer–consumer BlockingCollection.
         /// </summary>
-        /// <param name="demPath">Path to a GeoTIFF DEM readable by ElevationMap.</param>
-        /// <param name="times">UTC DateTimes for which sun positions are computed.</param>
-        /// <returns>One PatchElevationResult per 128×128 patch, streamed batch‑by‑batch.</returns>
-        public IEnumerable<PatchElevationResult> StreamElevationPatches(
+        public BlockingCollection<PatchElevationResult> StreamElevationPatches(
             string demPath,
             List<DateTime> times,
             IProgress<float>? progress = null,
             Func<bool>? isCancellationRequested = null)
         {
-            EnsureInitialized();
-            EnsureStreamPool();
-            EnsureDemBuffers();
+            var queue = new BlockingCollection<PatchElevationResult>(boundedCapacity: 32);
+            var session = PrepareSession(demPath, times);
 
-            // ---- 1. Load DEM -------------------------------------------------
-            var dem = new ElevationMap(demPath, loadRaster: true);
-            if (dem.Elevation is null)
-                throw new InvalidOperationException("DEM raster data is null.");
-
-            int demWidth = dem.Width;
-            int demHeight = dem.Height;
-
-            if (demWidth % PatchSize != 0 || demHeight % PatchSize != 0)
-                throw new ArgumentException(
-                    $"DEM dimensions ({demWidth}×{demHeight}) must be multiples of {PatchSize}.");
-
-            // ---- 2. Generate sun vectors (Moon‑ME, metres) --------------------
-            int timeCount = times.Count;
-            var sunVecsD = new Vector3d[timeCount];
-            var earthVecsD = new Vector3d[timeCount];
-            for (int t = 0; t < timeCount; t++)
+            var workerThread = new Thread(() =>
             {
-                sunVecsD[t] = SpiceManager.SunPosition_meters(times[t]);
-                earthVecsD[t] = SpiceManager.EarthPosition_meters(times[t]);
-            }
-
-            // ---- 3. Convert to single precision (for GPU upload) ----------------
-            float[] sunVecsFlat = new float[timeCount * 3];
-            float[] earthVecsFlat = new float[timeCount * 3];
-            for (int t = 0; t < timeCount; t++)
-            {
-                int off = t * 3;
-                sunVecsFlat[off + 0] = (float)sunVecsD[t].X;
-                sunVecsFlat[off + 1] = (float)sunVecsD[t].Y;
-                sunVecsFlat[off + 2] = (float)sunVecsD[t].Z;
-                earthVecsFlat[off + 0] = (float)earthVecsD[t].X;
-                earthVecsFlat[off + 1] = (float)earthVecsD[t].Y;
-                earthVecsFlat[off + 2] = (float)earthVecsD[t].Z;
-            }
-
-            // ---- 4. Build projection / geotransform params ---------------------
-            var projD = new ProjectionParamsDouble
-            {
-                R = dem.SrsDescriptor.R,
-                Lat0 = dem.SrsDescriptor.lat0,
-                Lon0 = dem.SrsDescriptor.lon0,
-                K0 = dem.SrsDescriptor.k0,
-                FalseEasting = dem.SrsDescriptor.FalseEasting,
-                FalseNorthing = dem.SrsDescriptor.FalseNorthing,
-            };
-
-            var gt = new GeoTransformD
-            {
-                T0 = dem.GeoTransform[0],
-                T1 = dem.GeoTransform[1],
-                T2 = dem.GeoTransform[2],
-                T3 = dem.GeoTransform[3],
-                T4 = dem.GeoTransform[4],
-                T5 = dem.GeoTransform[5],
-            };
-
-            // ---- 5. Upload sun / earth vectors to GPU once (small) -------------
-            var gpuSunVectors = _accelerator!.Allocate1D<float>(sunVecsFlat.Length);
-            var gpuEarthVectors = _accelerator.Allocate1D<float>(earthVecsFlat.Length);
-
-            try
-            {
-                gpuSunVectors.CopyFromCPU(sunVecsFlat);
-                gpuEarthVectors.CopyFromCPU(earthVecsFlat);
-
-                // ---- 6. Process patches in batched streams ---------------------
-                int patchesX = demWidth / PatchSize;
-                int patchesY = demHeight / PatchSize;
-                int totalPatches = patchesX * patchesY;
-                int perPatchOutputSize = PatchSize * PatchSize * timeCount;
-                int patchPixels = PatchSize * PatchSize;
-                int patchesProcessed = 0;
-
-                //Console.WriteLine($"[Lightmaps] Processing {totalPatches} patches ({patchesX}×{patchesY}) in batches of {_maxConcurrentStreams}...");
-
-                for (int batchStart = 0;
-                     batchStart < totalPatches;
-                     batchStart += _maxConcurrentStreams)
+                try
                 {
-                    int batchSize = Math.Min(_maxConcurrentStreams,
-                                             totalPatches - batchStart);
-                    var batchTasks = new Task<PatchElevationResult>[batchSize];
+                    int patchesX = session.Dem.Width / PatchSize;
+                    int patchesY = session.Dem.Height / PatchSize;
+                    int totalPatches = patchesX * patchesY;
+                    int patchesProcessed = 0;
 
-                    for (int i = 0; i < batchSize; i++)
+                    var tokens = new List<LightmapProcessingToken>(totalPatches);
+                    for (int py = 0; py < patchesY; py++)
+                        for (int px = 0; px < patchesX; px++)
+                            tokens.Add(new LightmapProcessingToken { col = px, row = py });
+
+                    var pipeline = new Pipeline<LightmapProcessingToken>();
+                    pipeline.AddStep(ProcessElevationPatch, maxDegreeOfParallelism: _maxConcurrentStreams);
+                    pipeline.AddTerminalStep(async token =>
                     {
-                        int patchIdx = batchStart + i;
-                        int patchRow = patchIdx / patchesX;
-                        int patchCol = patchIdx % patchesX;
+                        var data = ConvertFlatTo3D(token.results!, session.TimeCount);
+                        queue.Add(new PatchElevationResult { PatchCol = token.col, PatchRow = token.row, Data = data });
 
-                        int tileColBase = patchCol * PatchSize;
-                        int tileRowBase = patchRow * PatchSize;
-
-                        // Extract this patch's 128×128 DEM sub‑rectangle on CPU.
-                        float[] patchDem = new float[patchPixels];
-                        var elev = dem.Elevation;
-                        for (int y = 0; y < PatchSize; y++)
+                        if (progress != null)
                         {
-                            int srcRow = tileRowBase + y;
-                            int dstOff = y * PatchSize;
-                            for (int x = 0; x < PatchSize; x++)
-                                patchDem[dstOff + x] = elev[srcRow, tileColBase + x];
+                            int current = Interlocked.Increment(ref patchesProcessed);
+                            progress.Report((float)current / totalPatches);
                         }
+                    }, maxDegreeOfParallelism: _maxConcurrentStreams);
 
-                        batchTasks[i] = Task.Run(() =>
-                        {
-                            var stream = GetStreamFromPool();
-                            var gpuPatchDem = GetDemBufferFromPool();
+                    pipeline.ProcessAsync(tokens).GetAwaiter().GetResult();
 
-                            try
-                            {
-                                // Upload this patch's DEM data into the reusable buffer.
-                                gpuPatchDem.CopyFromCPU(patchDem);
+                    return;
 
-                                using var gpuOutput =
-                                    _accelerator.Allocate1D<float>(perPatchOutputSize);
-
-                                _elevationKernel!(
-                                    stream,
-                                    new Index2D(PatchSize, PatchSize),
-                                    gpuPatchDem.View,
-                                    PatchSize,
-                                    PatchSize,
-                                    gt,
-                                    projD,
-                                    gpuSunVectors.View,
-                                    timeCount,
-                                    tileColBase,
-                                    tileRowBase,
-                                    gpuOutput.View);
-
-                                stream.Synchronize();
-
-                                float[] flat = new float[perPatchOutputSize];
-                                gpuOutput.CopyToCPU(flat);
-
-                                var data = new float[PatchSize, PatchSize, timeCount];
-                                for (int y = 0; y < PatchSize; y++)
-                                {
-                                    for (int x = 0; x < PatchSize; x++)
-                                    {
-                                        int bufOff = (y * PatchSize + x)
-                                                     * timeCount;
-                                        for (int t = 0; t < timeCount; t++)
-                                            data[y, x, t] = flat[bufOff + t];
-                                    }
-                                }
-
-                                //Console.WriteLine($"[Lightmaps] Completed patch ({patchCol}, {patchRow})");
-
-                                return new PatchElevationResult
-                                {
-                                    PatchCol = patchCol,
-                                    PatchRow = patchRow,
-                                    Data = data,
-                                };
-                            }
-                            finally
-                            {
-                                _streamPool!.Push(stream);
-                                _patchDemBuffers!.Push(gpuPatchDem);
-                            }
-                        });
-
-                        ThrowIfCancelled(isCancellationRequested);
-                    }
-
-                    Task.WaitAll(batchTasks);
-
-                    for (int i = 0; i < batchSize; i++)
+                    Task<LightmapProcessingToken> ProcessElevationPatch(LightmapProcessingToken token)
                     {
-                        yield return batchTasks[i].Result;
-                        patchesProcessed++;
-                    }
+                        int tileColBase = token.col * PatchSize;
+                        int tileRowBase = token.row * PatchSize;
 
-                    progress?.Report((float)patchesProcessed / totalPatches);
+                        float[] patchDem = ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
+
+                        var stream = GetStreamFromPool();
+                        var gpuPatchDem = GetDemBufferFromPool();
+
+                        try
+                        {
+                            gpuPatchDem.CopyFromCPU(patchDem);
+
+                            using var gpuOutput = _accelerator.Allocate1D<float>(session.PerPatchOutputSize);
+
+                            _elevationKernel!(
+                                stream,
+                                new Index2D(PatchSize, PatchSize),
+                                gpuPatchDem.View,
+                                PatchSize,
+                                PatchSize,
+                                session.Gt,
+                                session.ProjD,
+                                session.GpuSunVectors.View,
+                                session.TimeCount,
+                                tileColBase,
+                                tileRowBase,
+                                gpuOutput.View);
+
+                            stream.Synchronize();
+
+                            float[] flat = new float[session.PerPatchOutputSize];
+                            gpuOutput.CopyToCPU(flat);
+                            token.results = flat;
+
+                            progress?.Report((float)patchesProcessed / totalPatches);
+                            ThrowIfCancelled(isCancellationRequested);
+
+                            return Task.FromResult(token);
+                        }
+                        finally
+                        {
+                            _streamPool!.Push(stream);
+                            _patchDemBuffers!.Push(gpuPatchDem);
+                        }
+                    }
                 }
-            }
-            finally
-            {
-                gpuEarthVectors.Dispose();
-                gpuSunVectors.Dispose();
-            }
+                catch (Exception ex)
+                {
+                    BackgroundTaskError = ex;
+                    Log.Fatal(ex, "StreamElevationPatches background task failed");
+                }
+                finally
+                {
+                    session.GpuEarthVectors.Dispose();
+                    session.GpuSunVectors.Dispose();
+                    queue.CompleteAdding();
+                }
+            });
+            workerThread.Start();
+            return queue;
         }
 
         /// <summary>
@@ -672,190 +586,90 @@ namespace moonlib.horizon
             Func<bool>? isCancellationRequested = null)
         {
             var queue = new BlockingCollection<PatchElevationResult>(boundedCapacity: 32);
-
-            EnsureInitialized();
-            EnsureStreamPool();
-            EnsureDemBuffers();
             EnsureHorizonBuffers();
+            var session = PrepareSession(demPath, times);
+
+            var horizon_filenames = new HorizonTileStore(horizonPath)
+                .EnumerateFiles(observerElevationMeters: 0f)
+                .ToList();
+            var totalCount = horizon_filenames.Count;
+            Log.Information($"Found {totalCount} horizon files for lightmap generation.");
 
             var workerThread = new Thread(() =>
             {
-                Console.WriteLine("[Lightmaps] WORKER THREAD ENTERED");
-                Console.Out.Flush();
                 try
                 {
-                    // ---- 1. Load DEM -------------------------------------------------
-                    var dem = new ElevationMap(demPath, loadRaster: true);
-                    if (dem.Elevation is null)
-                        throw new InvalidOperationException("DEM raster data is null.");
+                    int patchesProcessed = 0;
 
-                    int demWidth = dem.Width;
-                    int demHeight = dem.Height;
-
-                    if (demWidth % PatchSize != 0 || demHeight % PatchSize != 0)
-                        throw new ArgumentException(
-                            $"DEM dimensions ({demWidth}×{demHeight}) must be multiples of {PatchSize}.");
-
-                    // ---- 2. Generate sun vectors (Moon‑ME, metres) --------------------
-                    int timeCount = times.Count;
-                    var sunVecsD = new Vector3d[timeCount];
-                    var earthVecsD = new Vector3d[timeCount];
-                    for (int t = 0; t < timeCount; t++)
+                    var pipeline = new Pipeline<LightmapProcessingToken>();
+                    pipeline.AddStep(ReadHorizons, maxDegreeOfParallelism: _maxConcurrentStreams);
+                    pipeline.AddStep(ProcessPatch, maxDegreeOfParallelism: _maxConcurrentStreams);
+                    pipeline.AddTerminalStep(async token =>
                     {
-                        sunVecsD[t] = SpiceManager.SunPosition_meters(times[t]);
-                        earthVecsD[t] = SpiceManager.EarthPosition_meters(times[t]);
-                    }
+                        var data = ConvertFlatTo3D(token.results!, session.TimeCount);
+                        queue.Add(new PatchElevationResult { PatchCol = token.col, PatchRow = token.row, Data = data });
 
-                    // ---- 3. Convert to single precision (for GPU upload) ----------------
-                    float[] sunVecsFlat = new float[timeCount * 3];
-                    float[] earthVecsFlat = new float[timeCount * 3];
-                    for (int t = 0; t < timeCount; t++)
-                    {
-                        int off = t * 3;
-                        sunVecsFlat[off + 0] = (float)sunVecsD[t].X;
-                        sunVecsFlat[off + 1] = (float)sunVecsD[t].Y;
-                        sunVecsFlat[off + 2] = (float)sunVecsD[t].Z;
-                        earthVecsFlat[off + 0] = (float)earthVecsD[t].X;
-                        earthVecsFlat[off + 1] = (float)earthVecsD[t].Y;
-                        earthVecsFlat[off + 2] = (float)earthVecsD[t].Z;
-                    }
-
-                    // ---- 4. Build projection / geotransform params ---------------------
-                    var projD = new ProjectionParamsDouble
-                    {
-                        R = dem.SrsDescriptor.R,
-                        Lat0 = dem.SrsDescriptor.lat0,
-                        Lon0 = dem.SrsDescriptor.lon0,
-                        K0 = dem.SrsDescriptor.k0,
-                        FalseEasting = dem.SrsDescriptor.FalseEasting,
-                        FalseNorthing = dem.SrsDescriptor.FalseNorthing,
-                    };
-
-                    var gt = new GeoTransformD
-                    {
-                        T0 = dem.GeoTransform[0],
-                        T1 = dem.GeoTransform[1],
-                        T2 = dem.GeoTransform[2],
-                        T3 = dem.GeoTransform[3],
-                        T4 = dem.GeoTransform[4],
-                        T5 = dem.GeoTransform[5],
-                    };
-
-                    // ---- 5. Upload sun / earth vectors to GPU once (small) -------------
-                    var gpuSunVectors = _accelerator!.Allocate1D<float>(sunVecsFlat.Length);
-                    var gpuEarthVectors = _accelerator.Allocate1D<float>(earthVecsFlat.Length);
-
-                    var horizon_filenames = new HorizonTileStore(horizonPath)
-                        .EnumerateFiles(observerElevationMeters: 0f)
-                        .ToList();
-                    var totalCount = horizon_filenames.Count;
-
-                    Log.Information($"Found {totalCount} horizon files for lightmap generation.");
-
-                    try
-                    {
-                        gpuSunVectors.CopyFromCPU(sunVecsFlat);
-                        gpuEarthVectors.CopyFromCPU(earthVecsFlat);
-
-                        // ---- 6. Process patches in batched streams ---------------------
-                        int perPatchOutputSize = PatchSize * PatchSize * timeCount;
-                        int patchPixels = PatchSize * PatchSize;
-                        int patchesProcessed = 0;
-
-                        var pipeline = new Pipeline<LightmapProcessingToken>();
-
-                        pipeline.AddStep(ReadHorizons, maxDegreeOfParallelism: 4);
-                        pipeline.AddStep(ProcessPatch, maxDegreeOfParallelism: 4);
-                        pipeline.AddTerminalStep(async token =>
+                        if (progress != null)
                         {
-                            var flat = token.results!;
-                            var data = new float[PatchSize, PatchSize, timeCount];
-                            for (int y = 0; y < PatchSize; y++)
-                            {
-                                for (int x = 0; x < PatchSize; x++)
-                                {
-                                    int bufOff = (y * PatchSize + x)
-                                                 * timeCount;
-                                    for (int t = 0; t < timeCount; t++)
-                                        data[y, x, t] = flat[bufOff + t];
-                                }
-                            }
-
-                            queue.Add(new PatchElevationResult { PatchCol = token.col, PatchRow = token.row, Data = data });
-
-                            if (progress != null)
-                            {
-                                int current = Interlocked.Increment(ref patchesProcessed);
-                                progress.Report((float)current / totalCount);
-                            }
-                        }, maxDegreeOfParallelism: 4);
-
-                        pipeline.ProcessAsync(horizon_filenames.Select(f => new LightmapProcessingToken { filename = f })).GetAwaiter().GetResult();
-
-                        Task<LightmapProcessingToken> ProcessPatch(LightmapProcessingToken token)
-                        {
-                            int tileColBase = token.col;
-                            int tileRowBase = token.row;
-
-                            float[] patchDem = new float[patchPixels];
-                            var elev = dem.Elevation;
-                            for (int y = 0; y < PatchSize; y++)
-                            {
-                                int srcRow = tileRowBase + y;
-                                int dstOff = y * PatchSize;
-                                for (int x = 0; x < PatchSize; x++)
-                                    patchDem[dstOff + x] = elev[srcRow, tileColBase + x];
-                            }
-
-                            var stream = GetStreamFromPool();
-                            var gpuPatchDem = GetDemBufferFromPool();
-                            var gpuHorizons = GetHorizonBufferFromPool();
-
-                            try
-                            {
-                                gpuPatchDem.CopyFromCPU(patchDem);
-                                gpuHorizons.CopyFromCPU(token.horizons);
-
-                                using var gpuOutput = _accelerator.Allocate1D<float>(perPatchOutputSize);
-
-                                _elevationAboveHorizonKernel!(
-                                    stream,
-                                    new Index2D(PatchSize, PatchSize),
-                                    gpuPatchDem.View,
-                                    PatchSize,
-                                    PatchSize,
-                                    gt,
-                                    projD,
-                                    gpuSunVectors.View,
-                                    gpuHorizons.View,
-                                    timeCount,
-                                    tileColBase,
-                                    tileRowBase,
-                                    gpuOutput.View);
-
-                                stream.Synchronize();
-
-                                float[] flat = new float[perPatchOutputSize];
-                                gpuOutput.CopyToCPU(flat);
-                                token.results = flat;
-
-                                progress?.Report((float)patchesProcessed / totalCount);
-                                ThrowIfCancelled(isCancellationRequested);
-
-                                return Task.FromResult(token);
-                            }
-                            finally
-                            {
-                                _streamPool!.Push(stream);
-                                _patchDemBuffers.Push(gpuPatchDem);
-                                _patchHorizonBuffers!.Push(gpuHorizons);
-                            }
+                            int current = Interlocked.Increment(ref patchesProcessed);
+                            progress.Report((float)current / totalCount);
                         }
-                    }
-                    finally
+                    }, maxDegreeOfParallelism: _maxConcurrentStreams);
+
+                    pipeline.ProcessAsync(horizon_filenames.Select(f => new LightmapProcessingToken { filename = f })).GetAwaiter().GetResult();
+
+                    return;
+
+                    Task<LightmapProcessingToken> ProcessPatch(LightmapProcessingToken token)
                     {
-                        gpuEarthVectors.Dispose();
-                        gpuSunVectors.Dispose();
+                        int tileColBase = token.col;
+                        int tileRowBase = token.row;
+
+                        float[] patchDem = ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
+
+                        var stream = GetStreamFromPool();
+                        var gpuPatchDem = GetDemBufferFromPool();
+                        var gpuHorizons = GetHorizonBufferFromPool();
+
+                        try
+                        {
+                            gpuPatchDem.CopyFromCPU(patchDem);
+                            gpuHorizons.CopyFromCPU(token.horizons);
+
+                            using var gpuOutput = _accelerator.Allocate1D<float>(session.PerPatchOutputSize);
+
+                            _elevationAboveHorizonKernel!(
+                                stream,
+                                new Index2D(PatchSize, PatchSize),
+                                gpuPatchDem.View,
+                                PatchSize,
+                                PatchSize,
+                                session.Gt,
+                                session.ProjD,
+                                session.GpuSunVectors.View,
+                                gpuHorizons.View,
+                                session.TimeCount,
+                                tileColBase,
+                                tileRowBase,
+                                gpuOutput.View);
+
+                            stream.Synchronize();
+
+                            float[] flat = new float[session.PerPatchOutputSize];
+                            gpuOutput.CopyToCPU(flat);
+                            token.results = flat;
+
+                            progress?.Report((float)patchesProcessed / totalCount);
+                            ThrowIfCancelled(isCancellationRequested);
+
+                            return Task.FromResult(token);
+                        }
+                        finally
+                        {
+                            _streamPool!.Push(stream);
+                            _patchDemBuffers!.Push(gpuPatchDem);
+                            _patchHorizonBuffers!.Push(gpuHorizons);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -865,6 +679,8 @@ namespace moonlib.horizon
                 }
                 finally
                 {
+                    session.GpuEarthVectors.Dispose();
+                    session.GpuSunVectors.Dispose();
                     queue.CompleteAdding();
                 }
             });
@@ -875,6 +691,123 @@ namespace moonlib.horizon
         // =================================================================
         // Helpers
         // =================================================================
+
+        private static float[,,] ConvertFlatTo3D(float[] flat, int timeCount)
+        {
+            var data = new float[PatchSize, PatchSize, timeCount];
+            for (int y = 0; y < PatchSize; y++)
+            {
+                for (int x = 0; x < PatchSize; x++)
+                {
+                    int bufOff = (y * PatchSize + x) * timeCount;
+                    for (int t = 0; t < timeCount; t++)
+                        data[y, x, t] = flat[bufOff + t];
+                }
+            }
+            return data;
+        }
+
+        private static float[] ExtractPatchDem(float[,] elev, int tileColBase, int tileRowBase)
+        {
+            var patchDem = new float[PatchSize * PatchSize];
+            for (int y = 0; y < PatchSize; y++)
+            {
+                int srcRow = tileRowBase + y;
+                int dstOff = y * PatchSize;
+                for (int x = 0; x < PatchSize; x++)
+                    patchDem[dstOff + x] = elev[srcRow, tileColBase + x];
+            }
+            return patchDem;
+        }
+
+        /// <summary>
+        /// Holds the pre-computed data shared by every patch processed
+        /// within a single streaming session.
+        /// </summary>
+        private sealed class LightmapSession
+        {
+            public ElevationMap Dem = null!;
+            public int TimeCount;
+            public int PerPatchOutputSize;
+            public GeoTransformD Gt;
+            public ProjectionParamsDouble ProjD;
+            public MemoryBuffer1D<float, Stride1D.Dense> GpuSunVectors = null!;
+            public MemoryBuffer1D<float, Stride1D.Dense> GpuEarthVectors = null!;
+        }
+
+        /// <summary>
+        /// Loads the DEM, generates sun/earth vectors, uploads them to the GPU,
+        /// and returns a LightmapSession with everything needed by per‑patch
+        /// processing.  The caller must dispose GpuSunVectors / GpuEarthVectors.
+        /// </summary>
+        private LightmapSession PrepareSession(string demPath, List<DateTime> times)
+        {
+            EnsureInitialized();
+            EnsureStreamPool();
+            EnsureDemBuffers();
+
+            var dem = new ElevationMap(demPath, loadRaster: true);
+            if (dem.Elevation is null)
+                throw new InvalidOperationException("DEM raster data is null.");
+
+            if (dem.Width % PatchSize != 0 || dem.Height % PatchSize != 0)
+                throw new ArgumentException(
+                    $"DEM dimensions ({dem.Width}×{dem.Height}) must be multiples of {PatchSize}.");
+
+            int timeCount = times.Count;
+            var sunVecsD = new Vector3d[timeCount];
+            var earthVecsD = new Vector3d[timeCount];
+            for (int t = 0; t < timeCount; t++)
+            {
+                sunVecsD[t] = SpiceManager.SunPosition_meters(times[t]);
+                earthVecsD[t] = SpiceManager.EarthPosition_meters(times[t]);
+            }
+
+            float[] sunVecsFlat = new float[timeCount * 3];
+            float[] earthVecsFlat = new float[timeCount * 3];
+            for (int t = 0; t < timeCount; t++)
+            {
+                int off = t * 3;
+                sunVecsFlat[off + 0] = (float)sunVecsD[t].X;
+                sunVecsFlat[off + 1] = (float)sunVecsD[t].Y;
+                sunVecsFlat[off + 2] = (float)sunVecsD[t].Z;
+                earthVecsFlat[off + 0] = (float)earthVecsD[t].X;
+                earthVecsFlat[off + 1] = (float)earthVecsD[t].Y;
+                earthVecsFlat[off + 2] = (float)earthVecsD[t].Z;
+            }
+
+            var gpuSunVectors = _accelerator!.Allocate1D<float>(sunVecsFlat.Length);
+            var gpuEarthVectors = _accelerator.Allocate1D<float>(earthVecsFlat.Length);
+            gpuSunVectors.CopyFromCPU(sunVecsFlat);
+            gpuEarthVectors.CopyFromCPU(earthVecsFlat);
+
+            return new LightmapSession
+            {
+                Dem = dem,
+                TimeCount = timeCount,
+                PerPatchOutputSize = PatchSize * PatchSize * timeCount,
+                Gt = new GeoTransformD
+                {
+                    T0 = dem.GeoTransform[0],
+                    T1 = dem.GeoTransform[1],
+                    T2 = dem.GeoTransform[2],
+                    T3 = dem.GeoTransform[3],
+                    T4 = dem.GeoTransform[4],
+                    T5 = dem.GeoTransform[5],
+                },
+                ProjD = new ProjectionParamsDouble
+                {
+                    R = dem.SrsDescriptor.R,
+                    Lat0 = dem.SrsDescriptor.lat0,
+                    Lon0 = dem.SrsDescriptor.lon0,
+                    K0 = dem.SrsDescriptor.k0,
+                    FalseEasting = dem.SrsDescriptor.FalseEasting,
+                    FalseNorthing = dem.SrsDescriptor.FalseNorthing,
+                },
+                GpuSunVectors = gpuSunVectors,
+                GpuEarthVectors = gpuEarthVectors,
+            };
+        }
 
         public static Task<LightmapProcessingToken> ReadHorizons(LightmapProcessingToken token)
         {
@@ -927,7 +860,7 @@ namespace moonlib.horizon
 
     public class LightmapProcessingToken
     {
-        public required string filename { get; set; }
+        public string? filename { get; set; }
         public int row { get; set; }
         public int col { get; set; }
         public float observer_elevation { get; set; }
