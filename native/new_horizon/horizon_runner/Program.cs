@@ -9,6 +9,7 @@ using System.Globalization;
 using moonlib.pipeline.streaming;
 using moonlib.util;
 using moonlib.pipeline;
+using ILGPU.Runtime.Cuda;
 
 // Configure Serilog
 var exeDir = AppContext.BaseDirectory;
@@ -270,6 +271,7 @@ switch (runMode)
 
             var DEM_path = @"/e/lunar_analyst_scenarios/haworth/dem.tif";
             var HorizonDirectory = @"/e/lunar_analyst_scenarios/haworth/lighting/horizons/";
+            var psr_path = @"/e/lunar_analyst_scenarios/haworth/new_psr.tif";
 
             //var DEM_path = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif";
             //var HorizonDirectory = @"/e/lunar_analyst_scenarios/polar_mosaic/horizons/";
@@ -280,15 +282,17 @@ switch (runMode)
             var count = 0;
             var lm = new Lightmaps(4);
 
-            //foreach (var r in lm.StreamElevationPatches(DEM_path, times))
-            //    Console.WriteLine($"Generated lightmap patch {++count}");
+            var dem = new ElevationMap(DEM_path, loadRaster: false);
+            using var outputDs = TiledGeotiffWriter.OpenTiled<byte>(psr_path, dem.Width, dem.Height, 1, -9999, dem.Projection, dem.GeoTransform);
 
             var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory, times);
             foreach (var r in queue.GetConsumingEnumerable())
             {
-                Console.WriteLine($"Generated lightmap patch {++count}");
-                Console.Out.Flush();
+                outputDs.WritePatch(r.PatchCol, r.PatchRow, r.Data);
+                Console.WriteLine($"Generated lightmap patch {++count} col={r.PatchCol} row={r.PatchRow}");
             }
+
+            outputDs.FlushCache();
 
             if (lm.BackgroundTaskError is not null)
             {

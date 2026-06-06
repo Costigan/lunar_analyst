@@ -639,7 +639,7 @@ namespace moonlib.horizon
                         int tileColBase = token.col * PatchSize;
                         int tileRowBase = token.row * PatchSize;
 
-                        float[] patchDem = ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
+                        float[] patchDem = TiledGeotiffWriter.ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
 
                         var stream = GetStreamFromPool();
                         var gpuPatchDem = GetDemBufferFromPool();
@@ -754,7 +754,7 @@ namespace moonlib.horizon
                         int tileColBase = token.col;
                         int tileRowBase = token.row;
 
-                        float[] patchDem = ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
+                        float[] patchDem = TiledGeotiffWriter.ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
 
                         var stream = GetStreamFromPool();
                         var gpuPatchDem = GetDemBufferFromPool();
@@ -873,7 +873,7 @@ namespace moonlib.horizon
                         int tileColBase = token.col;
                         int tileRowBase = token.row;
 
-                        float[] patchDem = ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
+                        float[] patchDem = TiledGeotiffWriter.ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
 
                         var stream = GetStreamFromPool();
                         var gpuPatchDem = GetDemBufferFromPool();
@@ -884,9 +884,9 @@ namespace moonlib.horizon
                             gpuPatchDem.CopyFromCPU(patchDem);
                             gpuHorizons.CopyFromCPU(token.horizons);
 
-                            using var gpuOutput = _accelerator.Allocate1D<float>(session.PerPatchOutputSize);
+                            using var gpuOutput = _accelerator.Allocate1D<byte>(session.PerPatchOutputSize);
 
-                            _elevationAboveHorizonKernel!(
+                            _PSRKernel!(
                                 stream,
                                 new Index2D(PatchSize, PatchSize),
                                 gpuPatchDem.View,
@@ -903,9 +903,12 @@ namespace moonlib.horizon
 
                             stream.Synchronize();
 
-                            float[] flat = new float[session.PerPatchOutputSize];
+                            byte[] flat = new byte[session.PerPatchOutputSize];
                             gpuOutput.CopyToCPU(flat);
-                            token.float_results = flat;
+                            token.byte_results = flat;
+
+                            var c = flat.Count(v => v > 0);
+                            Console.WriteLine(c);
 
                             progress?.Report((float)patchesProcessed / totalCount);
                             ThrowIfCancelled(isCancellationRequested);
@@ -955,18 +958,7 @@ namespace moonlib.horizon
             return data;
         }
 
-        static float[] ExtractPatchDem(float[,] elev, int tileColBase, int tileRowBase)
-        {
-            var patchDem = new float[PatchSize * PatchSize];
-            for (int y = 0; y < PatchSize; y++)
-            {
-                int srcRow = tileRowBase + y;
-                int dstOff = y * PatchSize;
-                for (int x = 0; x < PatchSize; x++)
-                    patchDem[dstOff + x] = elev[srcRow, tileColBase + x];
-            }
-            return patchDem;
-        }
+
 
         /// <summary>
         /// Holds the pre-computed data shared by every patch processed
