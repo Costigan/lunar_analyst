@@ -11,6 +11,7 @@ using Serilog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -142,7 +143,7 @@ namespace moonlib.horizon
         // -----------------------------------------------------------------
         private Action<
             AcceleratorStream,
-        Index2D,
+        Index1D,
         ArrayView<float>,                     // demElevation  (128*128 patch)
         int,                                  // demWidth      (always 128)
         int,                                  // demHeight     (always 128)
@@ -355,8 +356,10 @@ namespace moonlib.horizon
                 float azimuthDeg = azimuthRad * RadiansToDegrees;
 
                 float azimuthIndexF = azimuthDeg * 4f;
+                if (azimuthIndexF >= 1440f)
+                    azimuthIndexF = 0f;
                 int horizonIndex1 = (int)azimuthIndexF;
-                float horizonFrac = azimuthIndexF - horizonIndex1;
+                float horizonFrac = azimuthIndexF - (float)horizonIndex1;
                 int horizonIndex2 = horizonIndex1 + 1;
                 if (horizonIndex2 >= 1440)
                     horizonIndex2 = 0;
@@ -373,7 +376,7 @@ namespace moonlib.horizon
         // Kernel: one byte per pixel — 255 if never lit (PSR), 0 otherwise.
         // -----------------------------------------------------------------
         static void ComputePSRKernel(
-            Index2D index,
+            Index1D index,
             ArrayView<float> demElevation,
             int demWidth,
             int demHeight,
@@ -386,8 +389,8 @@ namespace moonlib.horizon
             int tileRowBase,
             ArrayView<byte> output)
         {
-            int sampleInPatch = index.X;
-            int lineInPatch = index.Y;
+            int sampleInPatch = index % PatchSize;
+            int lineInPatch = index / PatchSize;
 
             if (sampleInPatch >= PatchSize || lineInPatch >= PatchSize)
                 return;
@@ -419,8 +422,10 @@ namespace moonlib.horizon
                 float azimuthDeg = azimuthRad * RadiansToDegrees;
 
                 float azimuthIndexF = azimuthDeg * 4f;
+                if (azimuthIndexF >= 1440f)
+                    azimuthIndexF = 0f;
                 int horizonIndex1 = (int)azimuthIndexF;
-                float horizonFrac = azimuthIndexF - horizonIndex1;
+                float horizonFrac = azimuthIndexF - (float)horizonIndex1;
                 int horizonIndex2 = horizonIndex1 + 1;
                 if (horizonIndex2 >= 1440)
                     horizonIndex2 = 0;
@@ -523,7 +528,7 @@ namespace moonlib.horizon
                 ArrayView<float>>(ComputeElevationAnglesAboveHorizonKernel);
 
             _PSRKernel = _accelerator.LoadAutoGroupedKernel<
-                    Index2D,
+                    Index1D,
                     ArrayView<float>,
                     int,
                     int,
@@ -889,8 +894,31 @@ namespace moonlib.horizon
             var horizon_filenames = new HorizonTileStore(horizonPath)
                 .EnumerateFiles(observerElevationMeters: 0f)
                 .ToList();
+
+            //var first_filename = horizon_filenames[0];
+
+            // Debugging: will this change where the illegal memory accesses occur?
+            //horizon_filenames.Reverse();
+            //horizon_filenames = horizon_filenames.Skip(8700).ToList();
+
+            // debugging.  The first failure occurrs with 
+            //var bad_patches = new[] { (3712, 34304), (3712, 34176), (3712, 34048) };
+            //horizon_filenames = horizon_filenames.Where(fn =>
+            //{
+            //    var (col, row, observer_elevation) = QuadTreeHorizonGenerator.ParseHorizonFilename(fn);
+            //    return bad_patches.Contains((row, col));
+            //}).ToList();
+
+            //horizon_filenames.Insert(0, first_filename);
+
             var totalCount = horizon_filenames.Count;
             Log.Information($"Found {totalCount} horizon files for lightmap generation.");
+
+            if (progress == null)
+            {
+                var stopwatch = Stopwatch.StartNew();
+                progress = MapOperations.MakeProgress(stopwatch: stopwatch, stride: 50);
+            }
 
             var workerThread = new Thread(() =>
             {
@@ -899,7 +927,7 @@ namespace moonlib.horizon
                     int patchesProcessed = 0;
 
                     var pipeline = new Pipeline<LightmapProcessingToken>();
-                    pipeline.AddStep(ReadHorizons, maxDegreeOfParallelism: _maxConcurrentStreams);
+                    pipeline.AddStep(ReadHorizons, maxDegreeOfParallelism: 8);
                     pipeline.AddStep(ProcessPatch, maxDegreeOfParallelism: _maxConcurrentStreams);
                     pipeline.AddTerminalStep(async token =>
                     {
@@ -919,9 +947,9 @@ namespace moonlib.horizon
 
                     Task<LightmapProcessingToken> ProcessPatch(LightmapProcessingToken token)
                     {
-                        if (token.horizons is null)
+                        if (token.horizons is null || token.horizons.Length != PatchSize * PatchSize * 1440)
                         {
-                            Log.Warning($"Skipping {token.filename}: horizon data is null");
+                            Log.Warning($"Skipping {token.filename}: horizon data invalid (null={token.horizons is null}, len={token.horizons?.Length ?? 0})");
                             return Task.FromResult(token);
                         }
 
@@ -945,7 +973,7 @@ namespace moonlib.horizon
 
                             _PSRKernel!(
                                 stream,
-                                new Index2D(PatchSize, PatchSize),
+                                new Index1D(PatchSize * PatchSize),
                                 gpuPatchDem.View,
                                 PatchSize,
                                 PatchSize,
@@ -993,6 +1021,9 @@ namespace moonlib.horizon
                 {
                     session.GpuEarthVectors?.Dispose();
                     session.GpuSunVectors?.Dispose();
+                    if (_patchByteOutputBuffers != null)
+                        foreach (var buffer in _patchByteOutputBuffers)
+                            buffer?.Dispose();
                     queue.CompleteAdding();
                 }
             });
@@ -1005,7 +1036,7 @@ namespace moonlib.horizon
             var dem = new ElevationMap(DEM_path, loadRaster: false);
             using var outputDs = TiledGeotiffWriter.OpenTiled<byte>(psr_path, dem.Width, dem.Height, 1, -9999, dem.Projection, dem.GeoTransform);
 
-            var lm = new Lightmaps(4);
+            var lm = new Lightmaps(8);
             var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory);
             foreach (var r in queue.GetConsumingEnumerable())
                 outputDs.WritePatch(r.PatchCol, r.PatchRow, r.Data);

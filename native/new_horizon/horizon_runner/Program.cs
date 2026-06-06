@@ -279,6 +279,11 @@ switch (runMode)
             Lightmaps.GeneratePSRGeotiff(DEM_path, HorizonDirectory, psr_path);
         }
         break;
+    case 15:
+        {
+            DiagnoseBadPatches();
+        }
+        break;
     default:
         throw new ArgumentOutOfRangeException();
 }
@@ -288,3 +293,112 @@ if (elapsed.TotalMinutes < 1.0)
     Console.WriteLine($"Time taken: {elapsed.TotalSeconds:F2} sec");
 else
     Console.WriteLine($"Time taken: {elapsed.TotalMinutes:F2} min");
+
+static void DiagnoseBadPatches()
+{
+    var demPath = @"/e/lunar_analyst_scenarios/polar_mosaic/dem.tif";
+    var horizonDir = @"/media/mhs/BEB8-5B41/new_datasets/polar_mosaic/horizons/";
+
+    var dem = new ElevationMap(demPath, loadRaster: true);
+    if (dem.Elevation is null) { Console.WriteLine("DEM raster is null!"); return; }
+
+    var badPatches = new[] { (3712, 34304), (3712, 34176), (3712, 34048) };
+    var goodPatch = (5000, 5000);
+
+    Console.WriteLine($"DEM size: {dem.Width} x {dem.Height}");
+    Console.Out.Flush();
+
+    ScanPatch(dem, horizonDir, goodPatch.Item1, goodPatch.Item2, isGood: true);
+
+    foreach (var (row, col) in badPatches)
+        ScanPatch(dem, horizonDir, row, col, isGood: false);
+
+    static void ScanPatch(ElevationMap dem, string horizonDir, int row, int col, bool isGood)
+    {
+        const int PatchSize = 128;
+        const float MaxReasonableElevation = 10000f;
+        const float MinReasonableElevation = -9000f;
+        const float MaxReasonableHorizon = 90f;
+
+        var label = isGood ? "GOOD" : "BAD";
+        Console.WriteLine($"\n=== {label} patch at row={row}, col={col} ===");
+        Console.Out.Flush();
+
+        // --- DEM scan ---
+        float demMin = float.MaxValue, demMax = float.MinValue;
+        int demNaN = 0, demInf = 0, demOutOfRange = 0;
+        var sampleValues = new List<float>();
+
+        for (int y = 0; y < PatchSize; y++)
+        {
+            for (int x = 0; x < PatchSize; x++)
+            {
+                float v = dem.Elevation[row + y, col + x];
+                if (float.IsNaN(v)) { demNaN++; continue; }
+                if (float.IsInfinity(v)) { demInf++; continue; }
+                if (v < MinReasonableElevation || v > MaxReasonableElevation) demOutOfRange++;
+                if (v < demMin) demMin = v;
+                if (v > demMax) demMax = v;
+                if (sampleValues.Count < 5) sampleValues.Add(v);
+            }
+        }
+
+        Console.WriteLine($"  DEM: min={demMin:F2} max={demMax:F2} NaN={demNaN} Inf={demInf} outOfRange={demOutOfRange}");
+        Console.WriteLine($"  DEM sample values: [{string.Join(", ", sampleValues.Select(v => v.ToString("F2")))}]");
+        Console.Out.Flush();
+
+        // --- Horizon scan ---
+        var horizonPath = System.IO.Path.Combine(horizonDir, $"{row:D5}", $"horizon_{row:D5}_{col:D5}_000.cbin");
+        float[]? horizons = null;
+        try
+        {
+            horizons = HorizonFile.ReadHorizonFile(horizonPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  HORIZON: failed to read {horizonPath}: {ex.Message}");
+            Console.Out.Flush();
+            return;
+        }
+
+        if (horizons is null || horizons.Length == 0)
+        {
+            Console.WriteLine($"  HORIZON: null or empty ({horizons?.Length ?? 0} elements)");
+            Console.Out.Flush();
+            return;
+        }
+
+        Console.WriteLine($"  HORIZON file: {horizonPath}");
+        Console.WriteLine($"  HORIZON length: {horizons.Length} (expected {PatchSize * PatchSize * 1440})");
+        Console.Out.Flush();
+
+        float hMin = float.MaxValue, hMax = float.MinValue;
+        int hNaN = 0, hInf = 0, hOutOfRange = 0;
+        var hSampleValues = new List<(int idx, float val)>();
+
+        for (int i = 0; i < horizons.Length; i++)
+        {
+            float v = horizons[i];
+            if (float.IsNaN(v)) { hNaN++; continue; }
+            if (float.IsInfinity(v)) { hInf++; continue; }
+            if (v < -MaxReasonableHorizon || v > MaxReasonableHorizon) hOutOfRange++;
+            if (v < hMin) hMin = v;
+            if (v > hMax) hMax = v;
+            if (hSampleValues.Count < 10) hSampleValues.Add((i, v));
+        }
+
+        Console.WriteLine($"  HORIZON: min={hMin:F4} max={hMax:F4} NaN={hNaN} Inf={hInf} outOfRange={hOutOfRange}");
+        Console.WriteLine($"  HORIZON samples: [{string.Join(", ", hSampleValues.Take(5).Select(s => $"({s.idx},{s.val:F4})"))}]");
+        Console.Out.Flush();
+
+        if (hNaN == 0 && hInf == 0)
+        {
+            for (int p = 0; p < 4; p++)
+            {
+                int baseOffset = p * 1440;
+                Console.WriteLine($"    pixel {p} (off {baseOffset}): [{horizons[baseOffset]:F4}, {horizons[baseOffset + 1]:F4}, ..., {horizons[baseOffset + 1439]:F4}]");
+            }
+            Console.Out.Flush();
+        }
+    }
+}

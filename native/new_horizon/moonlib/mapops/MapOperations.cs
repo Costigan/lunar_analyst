@@ -662,5 +662,26 @@ namespace moonlib.mapops
             };
         }
 
+        public static Progress<float> MakeProgress(Stopwatch? stopwatch = null, int stride = 1)
+        {
+            int progress_count = 0;
+            if (stopwatch == null)
+                return new Progress<float>(completion_fraction =>
+                    {
+                        if (++progress_count % stride == 0)
+                            Log.Information($"Progress: {100 * completion_fraction:F2}%");
+                    });
+            return new Progress<float>(completion_fraction =>
+            {
+                if (completion_fraction == 0f) return;
+                var elapsed_minutes = stopwatch.Elapsed.TotalMinutes;
+                var total_minutes = elapsed_minutes * (1f / completion_fraction);
+                var remaining_minutes = total_minutes - elapsed_minutes;
+                var eta = DateTime.Now.AddMinutes(remaining_minutes);
+                if (++progress_count % stride == 0)
+                    Log.Information($"Progress: {100 * completion_fraction:F2}% minutes_remaining: {remaining_minutes:F2} eta={eta}");
+            });
+        }
+
     }
 }

@@ -147,11 +147,12 @@ internal static class Program
 
         var outputDir = Path.GetDirectoryName(options.OutputPath);
         if (!string.IsNullOrWhiteSpace(outputDir))
-        {
             Directory.CreateDirectory(outputDir);
-        }
 
-        await MapOperations.GeneratePermanentShadowMap(context, options.OutputPath);
+        //await MapOperations.GeneratePermanentShadowMap(context, options.OutputPath);
+
+        Lightmaps.GeneratePSRGeotiff(options.DemPath, options.HorizonsDirectory, options.OutputPath);
+
         Log.Information("PSR file written to: {OutputPath}", Path.GetFullPath(options.OutputPath));
         return 0;
     }
