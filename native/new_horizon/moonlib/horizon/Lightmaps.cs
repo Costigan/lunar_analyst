@@ -42,7 +42,25 @@ namespace moonlib.horizon
         /// Elevation (degrees) for every pixel and every time step.
         /// Dimensions: [128, 128, timeCount].
         /// </summary>
-        public float[,,] Data { get; init; }
+        public float[] Data { get; init; }
+    }
+
+    /// <summary>
+    /// Result of processing one 128×128 patch.
+    /// </summary>
+    public readonly struct PatchPSRResult
+    {
+        /// <summary>Zero-based column index of the patch within the DEM grid.</summary>
+        public int PatchCol { get; init; }
+
+        /// <summary>Zero-based row index of the patch within the DEM grid.</summary>
+        public int PatchRow { get; init; }
+
+        /// <summary>
+        /// Elevation (degrees) for every pixel and every time step.
+        /// Dimensions: [128, 128, timeCount].
+        /// </summary>
+        public byte[] Data { get; init; }
     }
 
     /// <summary>
@@ -111,6 +129,29 @@ namespace moonlib.horizon
         >? _elevationAboveHorizonKernel;
 
         // -----------------------------------------------------------------
+        // Pre-compiled kernel delegate (stream-based).
+        //
+        // demElevation is a per‑patch 128×128 sub‑rectangle of the full DEM.
+        // tileColBase / tileRowBase give the absolute pixel origin of that
+        // sub‑rectangle so the kernel can compute CRS coordinates.
+        // -----------------------------------------------------------------
+        private Action<
+            AcceleratorStream,
+        Index2D,
+        ArrayView<float>,                     // demElevation  (128*128 patch)
+        int,                                  // demWidth      (always 128)
+        int,                                  // demHeight     (always 128)
+        GeoTransformD,                        // geotransform
+        ProjectionParamsDouble,               // projection parameters
+        ArrayView<float>,                     // sunVectors    (flat, 3*timeCount)
+        ArrayView<float>,                     // horizons      (flat, 1440 * 128 * 128)
+        int,                                  // timeCount
+        int,                                  // tileColBase   (absolute sample)
+        int,                                  // tileRowBase   (absolute line)
+        ArrayView<byte>                       // output        (128*128)
+        >? _PSRKernel;
+
+        // -----------------------------------------------------------------
         // Shared per-pixel ENU reference frame, computed once per kernel
         // invocation and re-used across all time steps.
         // -----------------------------------------------------------------
@@ -127,7 +168,7 @@ namespace moonlib.horizon
         // Steps 1–5 common to every Lightmaps kernel: pixel → CRS → lon/lat
         // → Moon‑ME Cartesian → ENU basis → float conversion.
         // -----------------------------------------------------------------
-        private static PixelEnuFrame ComputePixelEnuFrame(
+        static PixelEnuFrame ComputePixelEnuFrame(
             int absSample, int absLine,
             int sampleInPatch, int lineInPatch,
             GeoTransformD geotransform,
@@ -219,7 +260,7 @@ namespace moonlib.horizon
         // Kernel: compute solar elevation angles for one 128×128 patch.
         // Output: elevation (degrees) per pixel per time step.
         // -----------------------------------------------------------------
-        private static void ComputeElevationAnglesKernel(
+        static void ComputeElevationAnglesKernel(
             Index2D index,
             ArrayView<float> demElevation,
             int demWidth,
@@ -264,7 +305,7 @@ namespace moonlib.horizon
         // Kernel: compute solar elevation above the local horizon.
         // Output: (solar elevation − horizon elevation) per pixel per time step.
         // -----------------------------------------------------------------
-        private static void ComputeElevationAnglesAboveHorizonKernel(
+        static void ComputeElevationAnglesAboveHorizonKernel(
             Index2D index,
             ArrayView<float> demElevation,
             int demWidth,
@@ -319,6 +360,80 @@ namespace moonlib.horizon
 
                 output[frame.pixelIdx * timeCount + t] = elevationDeg - horizonElev;
             }
+        }
+
+        // -----------------------------------------------------------------
+        // Kernel: compute solar elevation above the local horizon.
+        // Output: (solar elevation − horizon elevation) per pixel per time step.
+        // -----------------------------------------------------------------
+        static void ComputePSRKernel(
+            Index2D index,
+            ArrayView<float> demElevation,
+            int demWidth,
+            int demHeight,
+            GeoTransformD geotransform,
+            ProjectionParamsDouble proj,
+            ArrayView<float> sunVectors,
+            ArrayView<float> horizons,
+            int timeCount,
+            int tileColBase,
+            int tileRowBase,
+            ArrayView<byte> output)
+        {
+            int sampleInPatch = index.X;
+            int lineInPatch = index.Y;
+
+            if (sampleInPatch >= PatchSize || lineInPatch >= PatchSize)
+                return;
+
+            var frame = ComputePixelEnuFrame(
+                tileColBase + sampleInPatch, tileRowBase + lineInPatch,
+                sampleInPatch, lineInPatch,
+                geotransform, proj, demElevation, demWidth);
+
+            // a value of 255 indicates permanent shadow.  Initialize to that.
+            byte is_psr = 255;
+
+            for (int t = 0; t < timeCount; t++)
+            {
+                float svX = sunVectors[t * 3 + 0];
+                float svY = sunVectors[t * 3 + 1];
+                float svZ = sunVectors[t * 3 + 2];
+
+                float enuX = svX * frame.r00 + svY * frame.r10 + svZ * frame.r20 + frame.tX;
+                float enuY = svX * frame.r01 + svY * frame.r11 + svZ * frame.r21 + frame.tY;
+                float enuZ = svX * frame.r02 + svY * frame.r12 + svZ * frame.r22 + frame.tZ;
+
+                float horizontal = XMath.Sqrt(enuX * enuX + enuY * enuY);
+                float elevationDeg = XMath.Atan2(enuZ, horizontal) * RadiansToDegrees;
+
+                float azimuthRad = XMath.Atan2(enuX, enuY);
+                if (azimuthRad < 0f) azimuthRad += XMath.PI * 2f;
+                float azimuthDeg = azimuthRad * RadiansToDegrees;
+
+                float azimuthIndexF = azimuthDeg * 4f;
+                int horizonIndex1 = (int)azimuthIndexF;
+                float horizonFrac = azimuthIndexF - horizonIndex1;
+                int horizonIndex2 = horizonIndex1 + 1;
+                if (horizonIndex2 >= 1440)
+                    horizonIndex2 = 0;
+
+                float h1 = horizons[horizonIndex1];
+                float h2 = horizons[horizonIndex2];
+                float horizonElev = h1 + horizonFrac * (h2 - h1);
+
+                const float sun_angular_size_deg = 0.545f;
+                const float limb_threshold = -sun_angular_size_deg / 2f;
+
+                // If the sun is high enough that its upper limb is above the horizon, then
+                // set is_psr to 0 indicating that this pixel is not in permanent shadow.
+                if (elevationDeg - horizonElev > limb_threshold)
+                    is_psr = 0;
+
+                // Do not exit early so as to keep the threads in sync
+            }
+
+            output[frame.pixelIdx] = is_psr;
         }
 
         // =================================================================
@@ -399,6 +514,20 @@ namespace moonlib.horizon
                 int,
                 int,
                 ArrayView<float>>(ComputeElevationAnglesAboveHorizonKernel);
+
+            _PSRKernel = _accelerator.LoadAutoGroupedKernel<
+                    Index2D,
+                    ArrayView<float>,
+                    int,
+                    int,
+                    GeoTransformD,
+                    ProjectionParamsDouble,
+                    ArrayView<float>,
+                    ArrayView<float>,
+                    int,
+                    int,
+                    int,
+                    ArrayView<byte>>(ComputePSRKernel);
 
             Console.WriteLine("[Lightmaps] Kernels compiled OK.");
             Console.Out.Flush();
@@ -491,7 +620,7 @@ namespace moonlib.horizon
                     pipeline.AddStep(ProcessElevationPatch, maxDegreeOfParallelism: _maxConcurrentStreams);
                     pipeline.AddTerminalStep(async token =>
                     {
-                        var data = ConvertFlatTo3D(token.results!, session.TimeCount);
+                        var data = token.float_results;
                         queue.Add(new PatchElevationResult { PatchCol = token.col, PatchRow = token.row, Data = data });
 
                         if (progress != null)
@@ -539,7 +668,7 @@ namespace moonlib.horizon
 
                             float[] flat = new float[session.PerPatchOutputSize];
                             gpuOutput.CopyToCPU(flat);
-                            token.results = flat;
+                            token.float_results = flat;
 
                             progress?.Report((float)patchesProcessed / totalPatches);
                             ThrowIfCancelled(isCancellationRequested);
@@ -606,7 +735,7 @@ namespace moonlib.horizon
                     pipeline.AddStep(ProcessPatch, maxDegreeOfParallelism: _maxConcurrentStreams);
                     pipeline.AddTerminalStep(async token =>
                     {
-                        var data = ConvertFlatTo3D(token.results!, session.TimeCount);
+                        var data = token.float_results;
                         queue.Add(new PatchElevationResult { PatchCol = token.col, PatchRow = token.row, Data = data });
 
                         if (progress != null)
@@ -657,7 +786,126 @@ namespace moonlib.horizon
 
                             float[] flat = new float[session.PerPatchOutputSize];
                             gpuOutput.CopyToCPU(flat);
-                            token.results = flat;
+                            token.float_results = flat;
+
+                            progress?.Report((float)patchesProcessed / totalCount);
+                            ThrowIfCancelled(isCancellationRequested);
+
+                            return Task.FromResult(token);
+                        }
+                        finally
+                        {
+                            _streamPool!.Push(stream);
+                            _patchDemBuffers!.Push(gpuPatchDem);
+                            _patchHorizonBuffers!.Push(gpuHorizons);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    BackgroundTaskError = ex;
+                    Log.Fatal(ex, "StreamElevationOverTerrainPatches background task failed");
+                }
+                finally
+                {
+                    session.GpuEarthVectors.Dispose();
+                    session.GpuSunVectors.Dispose();
+                    queue.CompleteAdding();
+                }
+            });
+            workerThread.Start();
+            return queue;
+        }
+
+        /// <summary>
+        /// Compute per‑pixel solar elevation angles for every 128×128 patch
+        /// of the DEM.  Results are yielded as each batch of GPU work
+        /// completes so the caller can start consuming them without waiting
+        /// for every patch to finish.
+        /// </summary>
+        /// <param name="demPath">Path to a GeoTIFF DEM readable by ElevationMap.</param>
+        /// <param name="times">UTC DateTimes for which sun positions are computed.</param>
+        /// <returns>One PatchElevationResult per 128×128 patch, streamed batch‑by‑batch.</returns>
+        public BlockingCollection<PatchPSRResult> StreamPSRPatches(
+            string demPath,
+            string horizonPath,
+            List<DateTime> times,
+            IProgress<float>? progress = null,
+            Func<bool>? isCancellationRequested = null)
+        {
+            var queue = new BlockingCollection<PatchPSRResult>(boundedCapacity: 32);
+            EnsureHorizonBuffers();
+            var session = PrepareSession(demPath, times);
+
+            var horizon_filenames = new HorizonTileStore(horizonPath)
+                .EnumerateFiles(observerElevationMeters: 0f)
+                .ToList();
+            var totalCount = horizon_filenames.Count;
+            Log.Information($"Found {totalCount} horizon files for lightmap generation.");
+
+            var workerThread = new Thread(() =>
+            {
+                try
+                {
+                    int patchesProcessed = 0;
+
+                    var pipeline = new Pipeline<LightmapProcessingToken>();
+                    pipeline.AddStep(ReadHorizons, maxDegreeOfParallelism: _maxConcurrentStreams);
+                    pipeline.AddStep(ProcessPatch, maxDegreeOfParallelism: _maxConcurrentStreams);
+                    pipeline.AddTerminalStep(async token =>
+                    {
+                        var data = token.byte_results!;
+                        queue.Add(new PatchPSRResult { PatchCol = token.col, PatchRow = token.row, Data = data });
+
+                        if (progress != null)
+                        {
+                            int current = Interlocked.Increment(ref patchesProcessed);
+                            progress.Report((float)current / totalCount);
+                        }
+                    }, maxDegreeOfParallelism: _maxConcurrentStreams);
+
+                    pipeline.ProcessAsync(horizon_filenames.Select(f => new LightmapProcessingToken { filename = f })).GetAwaiter().GetResult();
+
+                    return;
+
+                    Task<LightmapProcessingToken> ProcessPatch(LightmapProcessingToken token)
+                    {
+                        int tileColBase = token.col;
+                        int tileRowBase = token.row;
+
+                        float[] patchDem = ExtractPatchDem(session.Dem.Elevation, tileColBase, tileRowBase);
+
+                        var stream = GetStreamFromPool();
+                        var gpuPatchDem = GetDemBufferFromPool();
+                        var gpuHorizons = GetHorizonBufferFromPool();
+
+                        try
+                        {
+                            gpuPatchDem.CopyFromCPU(patchDem);
+                            gpuHorizons.CopyFromCPU(token.horizons);
+
+                            using var gpuOutput = _accelerator.Allocate1D<float>(session.PerPatchOutputSize);
+
+                            _elevationAboveHorizonKernel!(
+                                stream,
+                                new Index2D(PatchSize, PatchSize),
+                                gpuPatchDem.View,
+                                PatchSize,
+                                PatchSize,
+                                session.Gt,
+                                session.ProjD,
+                                session.GpuSunVectors.View,
+                                gpuHorizons.View,
+                                session.TimeCount,
+                                tileColBase,
+                                tileRowBase,
+                                gpuOutput.View);
+
+                            stream.Synchronize();
+
+                            float[] flat = new float[session.PerPatchOutputSize];
+                            gpuOutput.CopyToCPU(flat);
+                            token.float_results = flat;
 
                             progress?.Report((float)patchesProcessed / totalCount);
                             ThrowIfCancelled(isCancellationRequested);
@@ -692,7 +940,7 @@ namespace moonlib.horizon
         // Helpers
         // =================================================================
 
-        private static float[,,] ConvertFlatTo3D(float[] flat, int timeCount)
+        static float[,,] ConvertFlatTo3D(float[] flat, int timeCount)
         {
             var data = new float[PatchSize, PatchSize, timeCount];
             for (int y = 0; y < PatchSize; y++)
@@ -707,7 +955,7 @@ namespace moonlib.horizon
             return data;
         }
 
-        private static float[] ExtractPatchDem(float[,] elev, int tileColBase, int tileRowBase)
+        static float[] ExtractPatchDem(float[,] elev, int tileColBase, int tileRowBase)
         {
             var patchDem = new float[PatchSize * PatchSize];
             for (int y = 0; y < PatchSize; y++)
@@ -809,7 +1057,7 @@ namespace moonlib.horizon
             };
         }
 
-        public static Task<LightmapProcessingToken> ReadHorizons(LightmapProcessingToken token)
+        static Task<LightmapProcessingToken> ReadHorizons(LightmapProcessingToken token)
         {
             (token.col, token.row, token.observer_elevation) = QuadTreeHorizonGenerator.ParseHorizonFilename(token.filename);
             try
@@ -825,7 +1073,7 @@ namespace moonlib.horizon
         }
 
 
-        private static void ThrowIfCancelled(Func<bool>? isCancellationRequested)
+        static void ThrowIfCancelled(Func<bool>? isCancellationRequested)
         {
             if (isCancellationRequested is not null && isCancellationRequested())
                 throw new OperationCanceledException("Lightmaps operation was cancelled.");
@@ -865,6 +1113,7 @@ namespace moonlib.horizon
         public int col { get; set; }
         public float observer_elevation { get; set; }
         public float[]? horizons { get; set; }
-        public float[]? results { get; set; }
+        public float[]? float_results { get; set; }
+        public byte[]? byte_results { get; set; }
     }
 }

@@ -283,7 +283,7 @@ switch (runMode)
             //foreach (var r in lm.StreamElevationPatches(DEM_path, times))
             //    Console.WriteLine($"Generated lightmap patch {++count}");
 
-            var queue = lm.StreamElevationOverTerrainPatches(DEM_path, HorizonDirectory, times);
+            var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory, times);
             foreach (var r in queue.GetConsumingEnumerable())
             {
                 Console.WriteLine($"Generated lightmap patch {++count}");
