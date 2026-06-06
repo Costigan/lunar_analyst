@@ -81,6 +81,8 @@ namespace moonlib.horizon
         private ConcurrentStack<AcceleratorStream>? _streamPool;
         private ConcurrentStack<MemoryBuffer1D<float, Stride1D.Dense>>? _patchDemBuffers;
         private ConcurrentStack<MemoryBuffer1D<float, Stride1D.Dense>>? _patchHorizonBuffers;
+        ConcurrentStack<MemoryBuffer1D<byte, Stride1D.Dense>>? _patchByteOutputBuffers;
+
         private readonly int _maxConcurrentStreams;
         private bool _disposed;
 
@@ -561,18 +563,18 @@ namespace moonlib.horizon
             EnsureInitialized();
             if (_patchDemBuffers != null)
                 return;
-            int patchPixels = PatchSize * PatchSize;
+            int buffer_size = PatchSize * PatchSize;
             _patchDemBuffers = new ConcurrentStack<MemoryBuffer1D<float, Stride1D.Dense>>();
             for (int i = 0; i < _maxConcurrentStreams; i++)
-                _patchDemBuffers.Push(_accelerator.Allocate1D<float>(patchPixels));
+                _patchDemBuffers.Push(_accelerator.Allocate1D<float>(buffer_size));
         }
 
         MemoryBuffer1D<float, Stride1D.Dense> GetDemBufferFromPool()
         {
-            MemoryBuffer1D<float, Stride1D.Dense> gpuPatchDem;
-            while (!_patchDemBuffers!.TryPop(out gpuPatchDem))
+            MemoryBuffer1D<float, Stride1D.Dense> buffer;
+            while (!_patchDemBuffers!.TryPop(out buffer))
                 Task.Delay(1).Wait();
-            return gpuPatchDem;
+            return buffer;
         }
 
         void EnsureHorizonBuffers()
@@ -580,18 +582,38 @@ namespace moonlib.horizon
             EnsureInitialized();
             if (_patchHorizonBuffers != null)
                 return;
-            int horizon_buffer_size = PatchSize * PatchSize * 1440;
+            int buffer_size = PatchSize * PatchSize * 1440;
             _patchHorizonBuffers = new ConcurrentStack<MemoryBuffer1D<float, Stride1D.Dense>>();
             for (int i = 0; i < _maxConcurrentStreams; i++)
-                _patchHorizonBuffers.Push(_accelerator.Allocate1D<float>(horizon_buffer_size));
+                _patchHorizonBuffers.Push(_accelerator.Allocate1D<float>(buffer_size));
         }
 
         MemoryBuffer1D<float, Stride1D.Dense> GetHorizonBufferFromPool()
         {
-            MemoryBuffer1D<float, Stride1D.Dense> gpuHorizons;
-            while (!_patchHorizonBuffers!.TryPop(out gpuHorizons))
+            MemoryBuffer1D<float, Stride1D.Dense> buffer;
+            while (!_patchHorizonBuffers!.TryPop(out buffer))
                 Task.Delay(1).Wait();
-            return gpuHorizons;
+            return buffer;
+        }
+
+        void EnsureByteOutputBuffers(int buffer_size)
+        {
+            EnsureInitialized();
+            if (_patchByteOutputBuffers != null)
+                return;
+            _patchByteOutputBuffers = new ConcurrentStack<MemoryBuffer1D<byte, Stride1D.Dense>>();
+            for (int i = 0; i < _maxConcurrentStreams; i++)
+                _patchByteOutputBuffers.Push(_accelerator.Allocate1D<byte>(buffer_size));
+        }
+
+        MemoryBuffer1D<byte, Stride1D.Dense> GetByteOutputBufferFromPool(int buffer_size)
+        {
+            MemoryBuffer1D<byte, Stride1D.Dense> buffer;
+            while (!_patchByteOutputBuffers!.TryPop(out buffer))
+                Task.Delay(1).Wait();
+            if (buffer.Length != buffer_size)
+                throw new Exception($"GetByteOutputBufferFromPool fetch a buffer of size {buffer.Length} that should have been {buffer_size}");
+            return buffer;
         }
 
         /// <summary>
@@ -617,7 +639,6 @@ namespace moonlib.horizon
 
             var session = PrepareSession(dem: dem, sunVecsD: sunvecs_me);
             var queue = new BlockingCollection<PatchElevationResult>(boundedCapacity: 32);
-
 
             var workerThread = new Thread(() =>
             {
@@ -863,6 +884,7 @@ namespace moonlib.horizon
 
             var session = PrepareSession(dem: dem, sunVecsD: sunvecs_me);
             EnsureHorizonBuffers();
+            EnsureByteOutputBuffers(PatchSize * PatchSize);
 
             var horizon_filenames = new HorizonTileStore(horizonPath)
                 .EnumerateFiles(observerElevationMeters: 0f)
@@ -897,6 +919,12 @@ namespace moonlib.horizon
 
                     Task<LightmapProcessingToken> ProcessPatch(LightmapProcessingToken token)
                     {
+                        if (token.horizons is null)
+                        {
+                            Log.Warning($"Skipping {token.filename}: horizon data is null");
+                            return Task.FromResult(token);
+                        }
+
                         int tileColBase = token.col;
                         int tileRowBase = token.row;
 
@@ -905,13 +933,15 @@ namespace moonlib.horizon
                         var stream = GetStreamFromPool();
                         var gpuPatchDem = GetDemBufferFromPool();
                         var gpuHorizons = GetHorizonBufferFromPool();
+                        var gpuOutput = GetByteOutputBufferFromPool(PatchSize * PatchSize);
 
+                        var location = 0;
                         try
                         {
                             gpuPatchDem.CopyFromCPU(patchDem);
+                            location = 1;
                             gpuHorizons.CopyFromCPU(token.horizons);
-
-                            using var gpuOutput = _accelerator.Allocate1D<byte>(session.PerPatchOutputSize);
+                            location = 2;
 
                             _PSRKernel!(
                                 stream,
@@ -927,10 +957,11 @@ namespace moonlib.horizon
                                 tileColBase,
                                 tileRowBase,
                                 gpuOutput.View);
+                            location = 3;
 
                             stream.Synchronize();
 
-                            byte[] flat = new byte[session.PerPatchOutputSize];
+                            byte[] flat = new byte[PatchSize * PatchSize];
                             gpuOutput.CopyToCPU(flat);
                             token.byte_results = flat;
 
@@ -939,11 +970,17 @@ namespace moonlib.horizon
 
                             return Task.FromResult(token);
                         }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"Error occurred in the kernel item: {ex.Message} location={location} r={token.row} c={token.col}");
+                            throw;
+                        }
                         finally
                         {
                             _streamPool!.Push(stream);
                             _patchDemBuffers!.Push(gpuPatchDem);
                             _patchHorizonBuffers!.Push(gpuHorizons);
+                            _patchByteOutputBuffers!.Push(gpuOutput);
                         }
                     }
                 }
@@ -963,27 +1000,20 @@ namespace moonlib.horizon
             return queue;
         }
 
-        public void GeneratePSRGeotiff(string DEM_path, string HorizonDirectory, string psr_path)
+        public static void GeneratePSRGeotiff(string DEM_path, string HorizonDirectory, string psr_path)
         {
-            var count = 0;
-            var lm = new Lightmaps(4);
-
             var dem = new ElevationMap(DEM_path, loadRaster: false);
             using var outputDs = TiledGeotiffWriter.OpenTiled<byte>(psr_path, dem.Width, dem.Height, 1, -9999, dem.Projection, dem.GeoTransform);
 
+            var lm = new Lightmaps(4);
             var queue = lm.StreamPSRPatches(DEM_path, HorizonDirectory);
             foreach (var r in queue.GetConsumingEnumerable())
-            {
                 outputDs.WritePatch(r.PatchCol, r.PatchRow, r.Data);
-                Console.WriteLine($"Generated lightmap patch {++count} col={r.PatchCol} row={r.PatchRow}");
-            }
 
             outputDs.FlushCache();
 
             if (lm.BackgroundTaskError is not null)
-            {
                 throw new Exception("Background task failed", lm.BackgroundTaskError);
-            }
         }
 
         // =================================================================
