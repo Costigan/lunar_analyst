@@ -1,0 +1,66 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bug_report_id": {
+      "title": "Bug Report Id",
+      "type": "string"
+    },
+    "created_at_utc": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+      "title": "Created At Utc",
+      "type": "string"
+    },
+    "report_text": {
+      "title": "Report Text",
+      "type": "string"
+    },
+    "assistant_session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assistant Session Id"
+    },
+    "assistant_turn_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Assistant Turn Id"
+    },
+    "scenario_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scenario Id"
+    },
+    "bundle_path": {
+      "title": "Bundle Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bug_report_id",
+    "created_at_utc",
+    "report_text",
+    "bundle_path"
+  ],
+  "title": "AssistantBugReportSummary",
+  "type": "object"
+}

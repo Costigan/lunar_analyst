@@ -74,6 +74,31 @@ def test_session_store_roundtrip(tmp_path: Path) -> None:
     assert any(item.session_id == session.session_id for item in sessions)
 
 
+def test_session_store_creates_missing_parent_directory(tmp_path: Path) -> None:
+    db_path = tmp_path / "workspace" / ".assistant" / "assistant_sessions.db"
+
+    store = AssistantSessionStore(db_path)
+    try:
+        assert db_path.exists()
+        assert db_path.parent.is_dir()
+    finally:
+        store.close()
+
+
+def test_session_store_initialization_error_includes_database_path(tmp_path: Path) -> None:
+    db_path = tmp_path / "assistant_store_dir"
+    db_path.mkdir()
+
+    try:
+        AssistantSessionStore(db_path)
+    except RuntimeError as exc:
+        message = str(exc)
+        assert str(db_path.resolve()) in message
+        assert "failed to initialize assistant session store" in message
+    else:  # pragma: no cover - sqlite should not open a directory as a database
+        raise AssertionError("expected assistant store initialization to fail for a directory path")
+
+
 def test_session_store_migrates_legacy_json(tmp_path: Path) -> None:
     legacy_path = tmp_path / "assistant_sessions.json"
     legacy_path.write_text(

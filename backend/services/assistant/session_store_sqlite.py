@@ -67,15 +67,24 @@ class AssistantSessionStore:
         self._db_path = Path(db_path).expanduser().resolve()
         self._legacy_json_path = legacy_json_path.expanduser().resolve() if legacy_json_path is not None else None
         self._lock = threading.RLock()
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._conn = sqlite3.connect(
-            str(self._db_path),
-            timeout=30.0,
-            isolation_level=None,
-            check_same_thread=False,
-        )
-        self._conn.row_factory = sqlite3.Row
-        self._initialize()
+        try:
+            self._db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._conn = sqlite3.connect(
+                str(self._db_path),
+                timeout=30.0,
+                isolation_level=None,
+                check_same_thread=False,
+            )
+            self._conn.row_factory = sqlite3.Row
+            self._initialize()
+        except sqlite3.Error as exc:
+            conn = getattr(self, "_conn", None)
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            raise RuntimeError(f"failed to initialize assistant session store at {self._db_path}: {exc}") from exc
 
     def close(self) -> None:
         with self._lock:

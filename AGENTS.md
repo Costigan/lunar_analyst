@@ -17,7 +17,7 @@ Lunar Analyst is a project-based toolkit for lunar south pole mission analysis. 
 
 ## 2. Architecture Invariants (Must Hold)
 
-- **Runtime Baseline:** Python 3.11 + .NET 9.0 via `pythonnet`.
+- **Runtime Baseline:** Python 3.11 + .NET 10.0 via `pythonnet`.
 - **Process Topology:**
   1. **FastAPI Service:** Authoritative control plane; owns scenario lifecycle, API contracts, and asset serving.
   2. **Compute Worker:** Separate Python process hosting `pythonnet` + `moonlib` for heavy compute (horizon, lightmap).

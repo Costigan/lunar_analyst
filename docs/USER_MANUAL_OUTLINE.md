@@ -4,7 +4,7 @@
 *   Overview of Lunar Analyst
 *   Mission & Scope: Lunar South Pole analysis
 *   Platform Support: Linux (Host-native and Container)
-*   Key Technologies: FastAPI, React, .NET 9.0 (moonlib)
+*   Key Technologies: FastAPI, React, .NET 10.0 (moonlib)
 
 ## 2. Getting Started
 *   System Requirements

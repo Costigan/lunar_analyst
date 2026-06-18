@@ -25,7 +25,7 @@ This document is intentionally self-contained so a new session can execute witho
 - Scenario path safety rules remain enforced (normalized path, in-root validation).
 - JobHandlers-centered compute rule remains intact (`backend/jobs/handlers.py` signatures define routed contracts).
 - Additive API evolution only in `/api/v1` unless explicitly approved otherwise.
-- Windows 11 / Python 3.11 / .NET 9 baseline remains unchanged.
+- Linux / Python 3.11 / .NET 10 baseline remains unchanged.
 
 ## 3. Current State Snapshot
 

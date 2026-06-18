@@ -27,7 +27,7 @@
 ## Slide 3: System Architecture: The Four-Process Model
 - **Topology:**
   1. **FastAPI Backend:** Authoritative control plane; owns scenario lifecycle, API contracts, and asset serving.
-  2. **Compute Worker:** Dedicated Python process hosting `pythonnet` + `.NET 9` `moonlib.dll` for heavy compute (CPU/GPU).
+  2. **Compute Worker:** Dedicated Python process hosting `pythonnet` + `.NET 10` `moonlib.dll` for heavy compute (CPU/GPU).
   3. **Marimo Notebooks:** Interactive exploration; uses the same REST/WS contracts as the UI.
   4. **React Client:** OpenLayers-based GIS visualization (Desktop-class performance in the browser).
 - **[DIAGRAM PLACEHOLDER]:** Process topology diagram showing communication paths (HTTP/WS) between API, Worker, Marimo, and Client.
@@ -44,7 +44,7 @@
 ---
 
 ## Slide 5: The Compute Engine (Native Bridge)
-- **Hybrid Execution:** Why we use `pythonnet` to bridge Python's ecosystem with optimized `.NET 9` analysis libraries.
+- **Hybrid Execution:** Why we use `pythonnet` to bridge Python's ecosystem with optimized `.NET 10` analysis libraries.
 - **Job Management:** 
   - Queued vs. Immediate async jobs.
   - Structured progress events and cancellation support.

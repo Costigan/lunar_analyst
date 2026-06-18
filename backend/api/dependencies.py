@@ -2680,6 +2680,7 @@ class SharedHorizonStoreService:
         compress_horizons: bool,
     ) -> None:
         repo_root = _repo_root()
+        timeout_seconds = self._shared_horizon_native_timeout_seconds()
         with tempfile.TemporaryDirectory(prefix="shared_horizon_native_") as run_dir_text:
             run_dir = Path(run_dir_text).resolve()
             paths = build_worker_protocol_paths(run_dir)
@@ -2719,6 +2720,7 @@ class SharedHorizonStoreService:
                     stderr=stderr_handle,
                     text=True,
                     check=False,
+                    timeout=timeout_seconds,
                 )
             if not paths.result_path.exists():
                 stderr = paths.stderr_log_path.read_text(encoding="utf-8", errors="replace").strip()
@@ -2733,6 +2735,20 @@ class SharedHorizonStoreService:
                 stderr = paths.stderr_log_path.read_text(encoding="utf-8", errors="replace").strip()
                 stdout = paths.stdout_log_path.read_text(encoding="utf-8", errors="replace").strip()
                 raise RuntimeError(error or stderr or stdout or "Native horizon worker failed.")
+
+    def _shared_horizon_native_timeout_seconds(self) -> float | None:
+        raw = os.getenv("LUNAR_ANALYST_SHARED_HORIZON_NATIVE_TIMEOUT_SECONDS", "").strip()
+        if not raw:
+            return None
+        try:
+            value = float(raw)
+        except ValueError:
+            logger.warning("invalid LUNAR_ANALYST_SHARED_HORIZON_NATIVE_TIMEOUT_SECONDS=%r", raw)
+            return None
+        if value <= 0:
+            logger.warning("LUNAR_ANALYST_SHARED_HORIZON_NATIVE_TIMEOUT_SECONDS must be > 0: %s", value)
+            return None
+        return value
 
     def _upsert_horizon_set(
         self,

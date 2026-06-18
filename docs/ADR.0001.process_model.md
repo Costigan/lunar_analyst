@@ -8,7 +8,7 @@
 ## Context
 Lunar Analyst is moving to a browser-first architecture and must combine:
 - authoritative scenario/API state management,
-- native heavy compute via `pythonnet` + `.NET 9` (`moonlib.dll`), and
+- native heavy compute via `pythonnet` + `.NET 10` (`moonlib.dll`), and
 - exploratory notebook workflows (Marimo).
 
 A process model decision is required to reduce crash blast radius, avoid contract drift, and preserve data safety for scenario roots and file serving.

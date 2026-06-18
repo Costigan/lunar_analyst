@@ -6,7 +6,7 @@ This document is the canonical repo-managed installation recipe for Lunar Analys
 
 - Linux is the maintained runtime baseline.
 - Python `3.11.x` is required.
-- .NET `9.0` is required for native `moonlib` development and tests.
+- .NET `10.0` is required for native `moonlib` development and tests.
 - Node.js and npm are required for frontend builds.
 - `spaCy` is required. The assistant segmenter depends on it, and the managed setup installs the `en_core_web_sm` model.
 

@@ -34,7 +34,7 @@ After bootstrap completes, these commands will get you running:
 Lunar Analyst is built with a multi-process, multi-language architecture:
 
 -   **Backend Control Plane:** Python 3.11 + FastAPI.
--   **Heavy Compute:** Python Worker + `pythonnet` + .NET 9.0 (`moonlib.dll`).
+-   **Heavy Compute:** Python Worker + `pythonnet` + .NET 10.0 (`moonlib.dll`).
 -   **Native Engines:** C# / CUDA / ILGPU for high-performance terrain analysis.
 -   **Web Client:** React + Vite + OpenLayers + Blueprint JS 6.
 -   **Notebook Integration:** Marimo + `moonlayers_pkg` (anywidget).
@@ -62,7 +62,7 @@ Lunar Analyst is built with a multi-process, multi-language architecture:
     -   `moonlayers_pkg/`: OpenLayers widget for notebooks.
 
 ### 3.3 Native Backend (.NET)
--   **Version:** .NET 9.0 SDK.
+-   **Version:** .NET 10.0 SDK.
 -   **Assemblies:** Native code is compiled into `moonlib.dll` located in `native/new_horizon/`.
 
 ---

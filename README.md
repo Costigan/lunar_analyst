@@ -40,7 +40,7 @@ Important invariant:
 - Host-native Linux is the maintained baseline runtime.
 - Host-native Pop!_OS is the active day-to-day development baseline, with Ubuntu container parity for deployment-style validation.
 - Python `3.11`
-- .NET `9.0`
+- .NET `10.0`
 - Node.js / npm (for frontend builds/tests)
 
 ## Repository Layout

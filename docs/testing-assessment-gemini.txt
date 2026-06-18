@@ -21,7 +21,7 @@ The Lunar Analyst application employs a multi-layered testing strategy across it
 - **Location**: `backend/web/lunar_analyst/src/__tests__/`
 - **Strategy**: Component-level and service-level unit tests. Covers workspace layout, layer management, assistant service, and WebSocket clients.
 
-### 1.3 Native Engine (C# / .NET 9)
+### 1.3 Native Engine (C# / .NET 10)
 - **Framework**: `MSTest`
 - **Location**: `native/new_horizon/tests/HorizonGen.Tests/`
 - **Strategy**: Extremely extensive suite covering mathematical rigor (ray-casting, geodetic math), GPU kernel validity, and pipeline performance. Includes reference comparisons between CPU and GPU modes.

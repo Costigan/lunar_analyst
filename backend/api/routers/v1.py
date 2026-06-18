@@ -280,12 +280,12 @@ def _resolve_ws_cursor(raw_cursor: str | None, events: Any) -> int:
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
+async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
 @router.get("/health/native")
-def native_health(probe: bool = False) -> dict[str, object]:
+async def native_health(probe: bool = False) -> dict[str, object]:
     diagnostics: dict[str, object] = {"status": "ok", "native": bootstrap_status()}
     if not probe:
         return diagnostics

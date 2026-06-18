@@ -17,7 +17,7 @@ Lunar Analyst is a specialized toolkit for high-fidelity lunar south pole missio
 ### System Baseline
 - **Operating System:** Host-native Linux (Pop!_OS or Ubuntu) is the required environment.
 - **Hardware:** An NVIDIA GPU is strongly recommended for accelerated horizon and viewshed calculations.
-- **Runtime:** Python 3.11+ and .NET 9.0.
+- **Runtime:** Python 3.11+ and .NET 10.0.
 
 ### Launching the Application
 The application is typically launched via a host-native script or Docker Compose:

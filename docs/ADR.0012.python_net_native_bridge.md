@@ -4,7 +4,7 @@
 Accepted
 
 ## Context
-Lunar Analyst performs high-fidelity lunar terrain and lighting analysis (e.g., horizon generation, hillshading, PSR mapping) that requires high-performance compute kernels. While the application control plane is written in Python (FastAPI), the heavy lifting is handled by a `.NET 9` compute library (`moonlib`) using `ILGPU` and `CUDA`.
+Lunar Analyst performs high-fidelity lunar terrain and lighting analysis (e.g., horizon generation, hillshading, PSR mapping) that requires high-performance compute kernels. While the application control plane is written in Python (FastAPI), the heavy lifting is handled by a `.NET 10` compute library (`moonlib`) using `ILGPU` and `CUDA`.
 
 A reliable, high-performance bridge was needed to:
 1.  **Orchestrate Compute:** Launch C# compute kernels from Python job handlers.
@@ -16,7 +16,7 @@ We adopted **`pythonnet`** (Python for .NET) as the primary bridge technology, c
 
 ### 1. Explicit Native Bootstrapping
 To avoid common `DLLNotFoundException` and runtime initialization errors, we implemented a custom `native_bootstrap.py` layer.
--   **Runtime Selection:** Explicitly loads the `.NET 9` `coreclr` runtime using a resolved `moonlib.runtimeconfig.json`.
+-   **Runtime Selection:** Explicitly loads the `.NET 10` `coreclr` runtime using a resolved `moonlib.runtimeconfig.json`.
 -   **DLL Resolver:** A strict custom resolver (`_configure_native_dll_search_paths`) preloads critical native dependencies (GDAL, PROJ, GEOS, CSPICE) in a deterministic order using `os.add_dll_directory` and `ctypes.WinDLL`.
 -   **Dependency Preloading:** Managed assemblies are pre-registered using `clr.AddReference` to ensure all interop types are available before use.
 

@@ -43,6 +43,7 @@ def _best_effort_native_preflight_before_backend_imports() -> None:
 
 _best_effort_native_preflight_before_backend_imports()
 from backend.api.dependencies import get_services, shutdown_services
+from backend.api.dependencies_constants import REQUIRE_NOTEBOOK_SESSION_ENV
 from backend.api.errors import ApiError
 from backend.api.routers.assistant import router as assistant_router
 from backend.api.routers.lunar_analyst import router as lunar_analyst_router
@@ -62,6 +63,68 @@ VALID_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
 DEFAULT_WEB_MOUNT_PATH = "/lunar_analyst"
 _SIGNAL_HANDLER_LOCK = threading.Lock()
 _INSTALLED_SIGNAL_HANDLERS: dict[signal.Signals, object] = {}
+
+
+class RequestIdASGIMiddleware:
+    def __init__(self, app) -> None:  # noqa: ANN001
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:  # noqa: ANN001
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = dict(scope.get("headers") or [])
+        request_id = headers.get(b"x-request-id", b"").decode("latin-1").strip() or str(uuid4())
+        scope.setdefault("state", {})["request_id"] = request_id
+
+        async def send_with_request_id(message) -> None:  # noqa: ANN001
+            if message.get("type") == "http.response.start":
+                raw_headers = list(message.get("headers") or [])
+                raw_headers.append((b"x-request-id", request_id.encode("latin-1")))
+                message = dict(message)
+                message["headers"] = raw_headers
+            await send(message)
+
+        await self.app(scope, receive, send_with_request_id)
+
+
+class NotebookAuthASGIMiddleware:
+    def __init__(self, app) -> None:  # noqa: ANN001
+        self.app = app
+
+    async def __call__(self, scope, receive, send) -> None:  # noqa: ANN001
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        method = str(scope.get("method") or "").upper()
+        path = str(scope.get("path") or "")
+        guarded_methods = {"POST", "PATCH", "PUT", "DELETE"}
+        exempt_paths = {"/api/v1/notebook/sessions", "/api/v1/health", "/api/v1/health/native"}
+        if method not in guarded_methods or not path.startswith("/api/v1") or path in exempt_paths:
+            await self.app(scope, receive, send)
+            return
+        if not _notebook_session_auth_required():
+            await self.app(scope, receive, send)
+            return
+
+        request = Request(scope, receive=receive)
+        services = get_services()
+        token = request.headers.get("x-lunar-session-token")
+        session = services.notebook_session_service.validate_token(token)
+        if session is None:
+            response = JSONResponse(
+                status_code=401,
+                content=_envelope(
+                    request,
+                    code="unauthorized",
+                    message="Notebook session token is required.",
+                    details={"header": "x-lunar-session-token"},
+                ),
+            )
+            await response(scope, receive, send)
+            return
+        scope.setdefault("state", {})["notebook_session_id"] = session.session_id
+        await self.app(scope, receive, send)
 
 
 def _run_startup_task_in_background(name: str, target: Callable[[], None]) -> None:
@@ -188,6 +251,20 @@ def _config_logger_overrides() -> dict[str, str]:
         if level in VALID_LOG_LEVELS:
             overrides[name.strip()] = level
     return overrides
+
+
+def _notebook_session_auth_required() -> bool:
+    env = os.getenv(REQUIRE_NOTEBOOK_SESSION_ENV)
+    if env is not None and env.strip():
+        return env.strip().lower() in {"1", "true", "yes", "on"}
+    payload = core_load_app_config()
+    backend_cfg = payload.get("backend", {})
+    if not isinstance(backend_cfg, dict):
+        return False
+    notebook_cfg = backend_cfg.get("notebook", {})
+    if not isinstance(notebook_cfg, dict):
+        return False
+    return bool(notebook_cfg.get("require_session_token", False))
 
 
 def _config_auto_discover_on_startup() -> bool:
@@ -441,37 +518,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    @app.middleware("http")
-    async def request_id_middleware(request: Request, call_next):
-        request_id = request.headers.get("x-request-id") or str(uuid4())
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["x-request-id"] = request_id
-        return response
-
-    @app.middleware("http")
-    async def notebook_auth_middleware(request: Request, call_next):
-        path = request.url.path
-        method = request.method.upper()
-        guarded_methods = {"POST", "PATCH", "PUT", "DELETE"}
-        exempt_paths = {"/api/v1/notebook/sessions", "/api/v1/health", "/api/v1/health/native"}
-        if method in guarded_methods and path.startswith("/api/v1") and path not in exempt_paths:
-            services = get_services()
-            if services.notebook_session_service.is_auth_required():
-                token = request.headers.get("x-lunar-session-token")
-                session = services.notebook_session_service.validate_token(token)
-                if session is None:
-                    return JSONResponse(
-                        status_code=401,
-                        content=_envelope(
-                            request,
-                            code="unauthorized",
-                            message="Notebook session token is required.",
-                            details={"header": "x-lunar-session-token"},
-                        ),
-                    )
-                request.state.notebook_session_id = session.session_id
-        return await call_next(request)
+    app.add_middleware(NotebookAuthASGIMiddleware)
+    app.add_middleware(RequestIdASGIMiddleware)
 
     @app.get("/", include_in_schema=False)
     async def root() -> RedirectResponse:

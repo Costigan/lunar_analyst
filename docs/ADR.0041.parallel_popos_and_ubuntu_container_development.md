@@ -129,7 +129,7 @@ The base image should absorb the slow-changing parts:
 - Ubuntu base OS,
 - Python 3.11 runtime and venv tooling,
 - GDAL/PROJ and related native packages,
-- .NET 9 SDK/runtime as needed,
+- .NET 10 SDK/runtime as needed,
 - system libraries required by `pythonnet`, raster tools, and native interop,
 - any standard CLI/runtime prerequisites used by backend startup and tests.
 
@@ -163,7 +163,7 @@ Contents:
 - Ubuntu LTS base
 - Python 3.11
 - pip/venv tooling
-- .NET 9 runtime and likely SDK for Linux-native builds/tests
+- .NET 10 runtime and likely SDK for Linux-native builds/tests
 - GDAL/PROJ runtime and development packages required by Python wheels/native bindings
 - native support libraries used by `pythonnet` and CSPICE loading
 - optional Node toolchain only if frontend build must happen inside this image
@@ -223,7 +223,7 @@ Should contain only slow-moving dependencies and platform setup:
 
 - Ubuntu LTS
 - Python 3.11
-- .NET 9 SDK/runtime
+- .NET 10 SDK/runtime
 - Linux GDAL/PROJ runtime
 - Linux build tools needed for Python packages/native checks
 - any required shared libraries for `pythonnet`, CSPICE, and raster packages
@@ -959,7 +959,7 @@ Required changes:
 - add `docker/Dockerfile.base`
 - pin Ubuntu version
 - install Python 3.11
-- install .NET 9 SDK/runtime
+- install .NET 10 SDK/runtime
 - install GDAL/PROJ runtime dependencies
 - install other Linux shared libraries needed by the backend/native path
 

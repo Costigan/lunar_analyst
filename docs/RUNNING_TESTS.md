@@ -6,7 +6,7 @@ This guide shows the active Linux-only test workflow from the repo root.
 
 - Bootstrap the repo-managed environment: `./scripts/bootstrap.sh`
 - Use `.venv/bin/python` for backend Python commands.
-- Use `.NET 9` for native tests.
+- Use `.NET 10` for native tests.
 - Use `npm` for frontend tests.
 
 ## Frontend Tests

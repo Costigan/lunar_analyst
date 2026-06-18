@@ -2,7 +2,7 @@
 
 ## 1. Confirmed Decisions
 - First production release is **Windows 11 only**.
-- Runtime baseline is **Python 3.11 + .NET 9.0**.
+- Runtime baseline is **Python 3.11 + .NET 10.0**.
 - FastAPI and Marimo run as **separate processes**.
 - `new_horizon` compute is hosted in a **single .NET compute process** (internally multithreaded with TPL).
 - **SpatiaLite** is the project database.
@@ -198,7 +198,7 @@ Both modes support:
 
 ### Phase 1: Native Bridge + Artifacts
 - Implementation guardrail: actual compute logic must be implemented in `backend/jobs/handlers.py` method bodies. `JobHandlers` signatures are the single source of truth for job contracts and generated job routes; do not create parallel duplicate compute-contract layers.
-- [x] Implement pythonnet bootstrap for .NET 9 + `moonlib` on Windows 11: `backend/worker/native_bootstrap.py`, `backend/tests/worker/test_native_bootstrap.py`.
+- [x] Implement pythonnet bootstrap for .NET 10 + `moonlib`: `backend/worker/native_bootstrap.py`, `backend/tests/worker/test_native_bootstrap.py`.
 - [x] Build worker prototype that runs one job end-to-end (hillshade): generate a hillshade GeoTIFF from a DEM GeoTIFF via moonlib.MoonlibBridge.GenerateHillshade(demPath, hillshadePath). (`backend/jobs/handlers.py`, `backend/api/dependencies.py`, `backend/tests/worker/test_hillshade_job_flow.py`)
 - [x] Build worker prototype that runs one horizon job end-to-end via moonlib.MoonlibBridge.GenerateHorizons(scenarioRootDir, demPath, horizonsDir, overwriteHorizons, compressHorizons). (`backend/jobs/handlers.py`, `backend/tests/worker/test_hillshade_job_flow.py`)
 - [x] Define artifact outputs and metadata capture in SpatiaLite: `backend/services/artifact_catalog.py`, `backend/jobs/handlers.py`, `backend/tests/worker/test_hillshade_job_flow.py`.
@@ -534,5 +534,4 @@ Both modes support:
   - set `PYTHONPATH` to include in-repo package root:
   - PowerShell: `$env:PYTHONPATH='D:\projects\lunar_analyst\moonlayers_pkg'`
 - Backend notebook-job subprocesses already prepend `<repo_root>/moonlayers_pkg` to `PYTHONPATH` when present, so scenario job execution remains aligned with in-repo MoonLayers development.
-
 

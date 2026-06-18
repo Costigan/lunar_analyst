@@ -2,6 +2,37 @@
 
 This file summarizes functional behavior changes across all commits in this repository (128 commits), from `b38cd7c` to `Unreleased`.
 
+- `c0d6324` (2026-05-29): Buffered compressed horizon file writes for CephFS-backed batch generation.
+	Implemented the ready backend remediation steps and updated docs/STATUS_AND_REMEDIATION_PLAN.md
+	with checkbox progress.
+
+	What changed:
+
+	- Fixed assistant session store startup diagnostics and parent-dir handling.
+	- Forced pytest workspace roots into temp space so tests do not use /e/lunar_analyst_scenarios.
+	- Converted health routes to async and replaced app middleware with ASGI middleware to avoid
+	  problematic sync TestClient paths.
+
+	- Added a bounded timeout around shared-horizon native subprocess generation.
+	- Added focused assistant session store tests.
+	- Updated project guidance/docs to .NET 10.0.
+
+	Verification now recorded in the status doc:
+
+	- Frontend: npm run test passed, 88 tests.
+	- Native: dotnet test ...HorizonGen.Tests.csproj passed, 131 tests.
+	- Backend contract: passed, 110 tests.
+	- Backend worker: passed, 494 passed, 1 skipped.
+	- Backend integration: passed, 11 passed, 2 skipped.
+
+	Remaining open items are also tracked with unchecked boxes:
+
+	- Add an explicit watchdog-style regression test for the validation-error hang path.
+	- Add/update missing-native-probe degraded-status coverage.
+	- Resolve generated contract drift. scripts/check_contract_drift.sh still reports pending
+	  generated OpenAPI/schema changes under docs/contracts/generated/v1, including assistant bug-
+	  report schema files.
+
 - `3c6125e` (2026-05-29): Buffered compressed horizon file writes for CephFS-backed batch generation.
   - New Horizon / horizon file output:
     - Changed compressed `.cbin` horizon writes to assemble each file in a rented in-memory byte buffer and emit one large `FileStream.Write` instead of thousands of small block writes.

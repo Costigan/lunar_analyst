@@ -1,0 +1,253 @@
+{
+  "$defs": {
+    "AssistantBugReport": {
+      "additionalProperties": false,
+      "properties": {
+        "bug_report_id": {
+          "title": "Bug Report Id",
+          "type": "string"
+        },
+        "created_at_utc": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}$",
+          "title": "Created At Utc",
+          "type": "string"
+        },
+        "report_text": {
+          "title": "Report Text",
+          "type": "string"
+        },
+        "assistant_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assistant Session Id"
+        },
+        "assistant_turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assistant Turn Id"
+        },
+        "assistant_provider_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assistant Provider Id"
+        },
+        "assistant_model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assistant Model Id"
+        },
+        "provider_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Request Id"
+        },
+        "model_tool_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Tool Schema"
+        },
+        "model_tool_names": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Model Tool Names",
+          "type": "array"
+        },
+        "scenario_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scenario Id"
+        },
+        "assistant_context": {
+          "additionalProperties": true,
+          "title": "Assistant Context",
+          "type": "object"
+        },
+        "program_state": {
+          "$ref": "#/$defs/AssistantBugReportProgramState"
+        },
+        "log_excerpt": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Log Excerpt",
+          "type": "array"
+        },
+        "redactions_applied": {
+          "default": true,
+          "title": "Redactions Applied",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bug_report_id",
+        "created_at_utc",
+        "report_text"
+      ],
+      "title": "AssistantBugReport",
+      "type": "object"
+    },
+    "AssistantBugReportProgramState": {
+      "additionalProperties": false,
+      "properties": {
+        "active_scenario_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Scenario Id"
+        },
+        "active_assistant_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Assistant Session Id"
+        },
+        "active_assistant_turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Assistant Turn Id"
+        },
+        "active_provider_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Provider Id"
+        },
+        "active_model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Model Id"
+        },
+        "active_panel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Panel"
+        },
+        "assistant_prompt_draft": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assistant Prompt Draft"
+        },
+        "workspace_state": {
+          "additionalProperties": true,
+          "title": "Workspace State",
+          "type": "object"
+        }
+      },
+      "title": "AssistantBugReportProgramState",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "bug_report": {
+      "$ref": "#/$defs/AssistantBugReport"
+    },
+    "bundle_path": {
+      "title": "Bundle Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "bug_report",
+    "bundle_path"
+  ],
+  "title": "AssistantBugReportResponse",
+  "type": "object"
+}

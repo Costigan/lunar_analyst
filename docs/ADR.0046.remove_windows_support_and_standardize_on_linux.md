@@ -104,7 +104,7 @@ The new platform baseline is:
 The required interpreter/runtime baseline remains:
 
 - Python `3.11.x`,
-- .NET `9.0`,
+- .NET `10.0`,
 - Node/npm for frontend builds.
 
 ### 2. Documentation Policy
@@ -207,7 +207,7 @@ Risks:
 - [x] Define the exact supported Linux baseline:
   - [x] host distro contract,
   - [x] Python `3.11.x`,
-  - [x] .NET `9.0`,
+  - [x] .NET `10.0`,
   - [x] Node/npm baseline.
 
 ### Phase 1: Documentation and Guidance Cleanup

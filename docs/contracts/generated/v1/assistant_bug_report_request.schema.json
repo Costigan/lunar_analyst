@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "AssistantBugReportProgramState": {
+      "additionalProperties": false,
+      "properties": {
+        "active_scenario_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Scenario Id"
+        },
+        "active_assistant_session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Assistant Session Id"
+        },
+        "active_assistant_turn_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Assistant Turn Id"
+        },
+        "active_provider_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Provider Id"
+        },
+        "active_model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Model Id"
+        },
+        "active_panel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Active Panel"
+        },
+        "assistant_prompt_draft": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Assistant Prompt Draft"
+        },
+        "workspace_state": {
+          "additionalProperties": true,
+          "title": "Workspace State",
+          "type": "object"
+        }
+      },
+      "title": "AssistantBugReportProgramState",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "report_text": {
+      "maxLength": 4000,
+      "minLength": 1,
+      "title": "Report Text",
+      "type": "string"
+    },
+    "program_state": {
+      "$ref": "#/$defs/AssistantBugReportProgramState"
+    }
+  },
+  "required": [
+    "report_text"
+  ],
+  "title": "AssistantBugReportRequest",
+  "type": "object"
+}
